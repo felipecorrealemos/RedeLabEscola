@@ -36,11 +36,11 @@ Quando a configuração estiver correta, o dispositivo será ativado e poderá l
 
 ## Exemplo de missão inicial
 
-Uma das primeiras missões planejadas consiste em posicionar um computador em uma mesa com ponto de rede e configurar corretamente seus dados de rede.
+Uma das primeiras missões planejadas consiste em posicionar um computador em uma mesa com ponto de rede e selecionar um endereço IP válido dentro de um range disponível.
 
-Exemplo:
+Nesta etapa inicial, o foco não será configurar máscara de sub-rede ou gateway manualmente. O objetivo principal será trabalhar o conceito de **faixa de endereços IP**, mostrando que cada dispositivo conectado à rede precisa receber um IP válido e único dentro do intervalo permitido.
+
+Exemplo de range disponível:
 
 ```text
-IP: 192.168.0.20
-Máscara: 255.255.255.0
-Gateway: 192.168.0.1
+Range permitido: 192.168.0.10 até 192.168.0.50
