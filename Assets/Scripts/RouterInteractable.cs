@@ -7,19 +7,9 @@ using UnityEngine.UI;
 [DisallowMultipleComponent]
 public class RouterInteractable : MonoBehaviour
 {
-    [Serializable]
-    public class IpLease
-    {
-        public string Address;
-        public ComputerInteractable AssignedComputer;
-        public string AssignedDeviceName;
-
-        public bool IsRouter => AssignedComputer == null && Address != null && Address.EndsWith(".1");
-        public bool IsAvailable => AssignedComputer == null && string.IsNullOrWhiteSpace(AssignedDeviceName) && !IsRouter;
-    }
-
     [Header("Network")]
     [SerializeField] private string promptText = "Aperte F para interagir";
+    [SerializeField] private NetworkScope networkScope;
     [SerializeField] private string networkPrefix = "192.168.0.";
     [SerializeField] private int routerAddress = 1;
     [SerializeField] private int firstDeviceAddress = 2;
@@ -56,17 +46,17 @@ public class RouterInteractable : MonoBehaviour
     [SerializeField] private Text rangeLabel;
     [SerializeField] private ScrollRect ipScrollRect;
 
-    private readonly List<IpLease> leases = new List<IpLease>();
     private bool isOpen;
 
     public event Action OnIpPoolChanged;
     public bool IsOpen => isOpen;
-    public IReadOnlyList<IpLease> Leases => leases;
-    public string RouterIpAddress => networkPrefix + routerAddress;
+    public IReadOnlyList<NetworkScope.IpLease> Leases => ActiveNetworkScope != null ? ActiveNetworkScope.Leases : Array.Empty<NetworkScope.IpLease>();
+    public NetworkScope ActiveNetworkScope => ResolveNetworkScope(false);
+    public string RouterIpAddress => ActiveNetworkScope != null ? ActiveNetworkScope.RouterIpAddress : networkPrefix + routerAddress;
 
     private void Awake()
     {
-        RebuildLeases();
+        SetNetworkScope(ResolveNetworkScope(true));
         ResetRuntimePanel();
         isOpen = false;
         EnsureUi();
@@ -82,9 +72,17 @@ public class RouterInteractable : MonoBehaviour
 
     private void OnValidate()
     {
-        RebuildLeases();
+        ResolveNetworkScope(false);
         ApplyUiSettings();
         RefreshIpRows();
+    }
+
+    private void OnDestroy()
+    {
+        if (networkScope != null)
+        {
+            networkScope.OnIpPoolChanged -= NotifyPoolChanged;
+        }
     }
 
     [ContextMenu("Create Editable Router UI")]
@@ -147,60 +145,27 @@ public class RouterInteractable : MonoBehaviour
             return false;
         }
 
-        IpLease targetLease = leases.Find(lease => lease.Address == address);
-        if (targetLease == null || targetLease.IsRouter)
+        NetworkScope scope = ResolveNetworkScope(true);
+        if (scope == null)
         {
             return false;
         }
 
-        if (!string.IsNullOrWhiteSpace(targetLease.AssignedDeviceName) && targetLease.AssignedDeviceName != reservedDeviceName)
-        {
-            return false;
-        }
-
-        if (targetLease.AssignedComputer != null && targetLease.AssignedComputer != computer)
-        {
-            return false;
-        }
-
-        ReleaseIp(computer, false);
-        targetLease.AssignedComputer = computer;
-        targetLease.AssignedDeviceName = string.Empty;
-        NotifyPoolChanged();
-        return true;
+        return scope.TryAssignIp(computer, address, reservedDeviceName);
     }
 
     public void ReleaseIp(ComputerInteractable computer)
     {
-        ReleaseIp(computer, true);
+        NetworkScope scope = ResolveNetworkScope(false);
+        if (scope != null)
+        {
+            scope.ReleaseIp(computer);
+        }
     }
 
     public RouterInteractable FindRouterForDevice(MovableDevice device)
     {
         return this;
-    }
-
-    private void ReleaseIp(ComputerInteractable computer, bool notify)
-    {
-        if (computer == null)
-        {
-            return;
-        }
-
-        bool changed = false;
-        foreach (IpLease lease in leases)
-        {
-            if (lease.AssignedComputer == computer)
-            {
-                lease.AssignedComputer = null;
-                changed = true;
-            }
-        }
-
-        if (changed && notify)
-        {
-            NotifyPoolChanged();
-        }
     }
 
     private void NotifyPoolChanged()
@@ -209,31 +174,104 @@ public class RouterInteractable : MonoBehaviour
         OnIpPoolChanged?.Invoke();
     }
 
-    private void RebuildLeases()
+    private NetworkScope ResolveNetworkScope(bool createIfMissing)
     {
-        Dictionary<string, ComputerInteractable> currentAssignments = new Dictionary<string, ComputerInteractable>();
-        foreach (IpLease lease in leases)
+        if (networkScope != null)
         {
-            if (lease.AssignedComputer != null && !string.IsNullOrWhiteSpace(lease.Address))
+            networkScope.SetOwnerRouter(this);
+            return networkScope;
+        }
+
+        networkScope = GetComponentInParent<NetworkScope>();
+        if (networkScope != null)
+        {
+            networkScope.SetOwnerRouter(this);
+            return networkScope;
+        }
+
+        networkScope = FindExistingNetworkScopeForThisRouter();
+        if (networkScope != null)
+        {
+            networkScope.Configure(networkPrefix, routerAddress, firstDeviceAddress, availableAddressCount, this);
+            return networkScope;
+        }
+
+        if (!createIfMissing)
+        {
+            return null;
+        }
+
+        GameObject scopeObject = new GameObject("Network_" + networkPrefix.TrimEnd('.') + "_" + name.Replace(" ", "_"));
+        scopeObject.transform.position = transform.position;
+        scopeObject.transform.SetParent(GetNetworkScopeRoot(), true);
+        networkScope = scopeObject.AddComponent<NetworkScope>();
+        networkScope.Configure(networkPrefix, routerAddress, firstDeviceAddress, availableAddressCount, this);
+        return networkScope;
+    }
+
+    private NetworkScope FindExistingNetworkScopeForThisRouter()
+    {
+        NetworkScope prefixMatchWithoutOwner = null;
+        NetworkScope[] scopes = FindObjectsOfType<NetworkScope>(true);
+
+        foreach (NetworkScope scope in scopes)
+        {
+            if (scope == null)
             {
-                currentAssignments[lease.Address] = lease.AssignedComputer;
+                continue;
+            }
+
+            if (scope.OwnerRouter == this)
+            {
+                return scope;
+            }
+
+            if (prefixMatchWithoutOwner == null
+                && scope.OwnerRouter == null
+                && scope.NetworkPrefix == networkPrefix)
+            {
+                prefixMatchWithoutOwner = scope;
             }
         }
 
-        leases.Clear();
-        leases.Add(new IpLease { Address = RouterIpAddress });
+        return prefixMatchWithoutOwner;
+    }
 
-        int addressCount = Mathf.Max(availableAddressCount, 1);
-        for (int i = 0; i < addressCount; i++)
+    private Transform GetNetworkScopeRoot()
+    {
+        GameObject root = GameObject.Find("Networks");
+        if (root == null)
         {
-            string address = networkPrefix + (firstDeviceAddress + i);
-            currentAssignments.TryGetValue(address, out ComputerInteractable assignedComputer);
-            leases.Add(new IpLease
+            root = new GameObject("Networks");
+        }
+
+        return root.transform;
+    }
+
+    private void SetNetworkScope(NetworkScope scope)
+    {
+        if (networkScope == scope)
+        {
+            if (networkScope != null)
             {
-                Address = address,
-                AssignedComputer = assignedComputer,
-                AssignedDeviceName = string.Empty
-            });
+                networkScope.OnIpPoolChanged -= NotifyPoolChanged;
+                networkScope.OnIpPoolChanged += NotifyPoolChanged;
+            }
+
+            return;
+        }
+
+        if (networkScope != null)
+        {
+            networkScope.OnIpPoolChanged -= NotifyPoolChanged;
+        }
+
+        networkScope = scope;
+
+        if (networkScope != null)
+        {
+            networkScope.OnIpPoolChanged -= NotifyPoolChanged;
+            networkScope.OnIpPoolChanged += NotifyPoolChanged;
         }
     }
 
@@ -440,7 +478,7 @@ public class RouterInteractable : MonoBehaviour
             DestroyImmediateSafe(ipScrollRect.content.GetChild(i).gameObject);
         }
 
-        foreach (IpLease lease in leases)
+        foreach (NetworkScope.IpLease lease in Leases)
         {
             string status = GetLeaseStatus(lease);
             bool available = lease.IsAvailable;
@@ -448,7 +486,7 @@ public class RouterInteractable : MonoBehaviour
         }
     }
 
-    private string GetLeaseStatus(IpLease lease)
+    private string GetLeaseStatus(NetworkScope.IpLease lease)
     {
         if (lease.IsRouter)
         {
@@ -513,7 +551,7 @@ public class RouterInteractable : MonoBehaviour
 
     private int GetLastDeviceAddress()
     {
-        return firstDeviceAddress + Mathf.Max(availableAddressCount, 1) - 1;
+        return ActiveNetworkScope != null ? ActiveNetworkScope.LastDeviceAddress : firstDeviceAddress + Mathf.Max(availableAddressCount, 1) - 1;
     }
 
     private void ApplyUiSettings()
@@ -577,7 +615,8 @@ public class RouterInteractable : MonoBehaviour
 
         if (rangeLabel != null)
         {
-            rangeLabel.text = "Range: " + RouterIpAddress + " - " + networkPrefix + GetLastDeviceAddress();
+            string prefix = ActiveNetworkScope != null ? ActiveNetworkScope.NetworkPrefix : networkPrefix;
+            rangeLabel.text = "Range: " + RouterIpAddress + " - " + prefix + GetLastDeviceAddress();
             rangeLabel.alignment = TextAnchor.MiddleLeft;
             rangeLabel.color = new Color(0.2f, 0.2f, 0.2f, 1f);
             rangeLabel.font = GetDefaultFont();

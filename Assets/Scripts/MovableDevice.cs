@@ -203,9 +203,13 @@ public class MovableDevice : MonoBehaviour
         return lowerDeviceName.Contains("computer")
             || lowerDeviceName.Contains("computador")
             || lowerDeviceName.Contains("gabinete")
+            || lowerDeviceName.Contains("printer")
+            || lowerDeviceName.Contains("impressora")
             || lowerObjectName.Contains("computer")
             || lowerObjectName.Contains("computador")
-            || lowerObjectName.Contains("gabinete");
+            || lowerObjectName.Contains("gabinete")
+            || lowerObjectName.Contains("printer")
+            || lowerObjectName.Contains("impressora");
     }
 
     private void EnsureInteractionIndicator()

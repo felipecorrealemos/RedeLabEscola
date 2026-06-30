@@ -26,6 +26,8 @@ public class DeadZoneCameraFollow : MonoBehaviour
     [Header("Bounds")]
     [SerializeField] private bool useBounds = true;
     [SerializeField] private bool centerBoundsOnInitialTarget = true;
+    [SerializeField] private bool expandBoundsToFollowTarget = true;
+    [SerializeField] private float boundsExpansionPadding = 1.5f;
     [SerializeField] private Vector2 minTargetPosition = new Vector2(-9.5f, -3.0f);
     [SerializeField] private Vector2 maxTargetPosition = new Vector2(9.5f, 3.0f);
 
@@ -81,6 +83,11 @@ public class DeadZoneCameraFollow : MonoBehaviour
         if (useBounds)
         {
             Vector3 desiredTargetPosition = desiredPosition - cameraOffset;
+            if (expandBoundsToFollowTarget)
+            {
+                ExpandBoundsToInclude(desiredTargetPosition);
+            }
+
             desiredTargetPosition.x = Mathf.Clamp(desiredTargetPosition.x, minTargetPosition.x, maxTargetPosition.x);
             desiredTargetPosition.z = Mathf.Clamp(desiredTargetPosition.z, minTargetPosition.y, maxTargetPosition.y);
             desiredPosition = desiredTargetPosition + cameraOffset;
@@ -238,6 +245,14 @@ public class DeadZoneCameraFollow : MonoBehaviour
 
         minTargetPosition = targetCenter - boundsSize * 0.5f;
         maxTargetPosition = targetCenter + boundsSize * 0.5f;
+    }
+
+    private void ExpandBoundsToInclude(Vector3 targetPosition)
+    {
+        minTargetPosition.x = Mathf.Min(minTargetPosition.x, targetPosition.x - boundsExpansionPadding);
+        minTargetPosition.y = Mathf.Min(minTargetPosition.y, targetPosition.z - boundsExpansionPadding);
+        maxTargetPosition.x = Mathf.Max(maxTargetPosition.x, targetPosition.x + boundsExpansionPadding);
+        maxTargetPosition.y = Mathf.Max(maxTargetPosition.y, targetPosition.z + boundsExpansionPadding);
     }
 
     private void FindTarget()

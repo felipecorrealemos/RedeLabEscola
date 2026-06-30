@@ -4,6 +4,7 @@ using UnityEngine;
 public class DeviceDropZone : MonoBehaviour
 {
     [SerializeField] private Transform placePoint;
+    [SerializeField] private NetworkScope networkScope;
     [SerializeField] private bool acceptsAnyDevice = true;
     [SerializeField] private string acceptedDeviceName = "Device";
     [SerializeField] private Vector2 indicatorSize = new Vector2(1f, 1f);
@@ -19,6 +20,7 @@ public class DeviceDropZone : MonoBehaviour
     public Vector3 PlacePosition => GetSurfacePosition() + Vector3.up * placementVerticalOffset;
     public Vector3 IndicatorPosition => PlacePosition + Vector3.up * (indicatorHeight + indicatorVerticalOffset);
     public Quaternion PlaceRotation => placePoint != null ? placePoint.rotation : transform.rotation;
+    public NetworkScope NetworkScope => networkScope != null ? networkScope : GetComponentInParent<NetworkScope>();
     public MovableDevice CurrentDevice { get; private set; }
 
     private Transform indicator;
@@ -50,6 +52,7 @@ public class DeviceDropZone : MonoBehaviour
     public void Receive(MovableDevice device)
     {
         CurrentDevice = device;
+        MissionManager.NotifyDevicePlaced(device);
     }
 
     public void Release(MovableDevice device)
@@ -57,6 +60,7 @@ public class DeviceDropZone : MonoBehaviour
         if (CurrentDevice == device)
         {
             CurrentDevice = null;
+            MissionManager.NotifyDeviceRemoved(device);
         }
     }
 

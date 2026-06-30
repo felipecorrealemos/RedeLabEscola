@@ -74,6 +74,7 @@ public class DualNetworkDoorController : MonoBehaviour
         IsOpen = open;
         SetDeviceOpen(FirstDevice, open);
         SetDeviceOpen(SecondDevice, open);
+        MissionManager.NotifyDualDoorsStateChanged(IsOpen);
     }
 
     private void RefreshControlledDevices()

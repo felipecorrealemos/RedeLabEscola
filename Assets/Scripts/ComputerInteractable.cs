@@ -18,6 +18,7 @@ public class ComputerInteractable : MonoBehaviour
     [SerializeField] private string useComputerPromptText = "F usar computador";
     [SerializeField] private string deviceTitle = "Computador";
     [SerializeField] private bool stationaryNetworkDevice;
+    [SerializeField] private NetworkScope networkScope;
     [SerializeField] private string preferredIpAddress;
     [SerializeField] private string reservedDeviceName;
     [SerializeField] private Transform usePoint;
@@ -69,6 +70,7 @@ public class ComputerInteractable : MonoBehaviour
     private MovableDevice movableDevice;
     private RouterInteractable router;
     private NetworkJackConnectionPoint connectedJack;
+    private DeviceDropZone currentDropZone;
     private string assignedIp;
     private bool isOpen;
     private bool showingTerminalPanel;
@@ -80,8 +82,11 @@ public class ComputerInteractable : MonoBehaviour
 
     public bool IsOpen => isOpen;
     public string AssignedIp => assignedIp;
-    public bool IsConnectedToNetworkJack => stationaryNetworkDevice || (connectedJack != null && connectedJack.IsConnected(this));
-    public bool CanInteract => stationaryNetworkDevice || (movableDevice != null && movableDevice.IsPlaced && IsConnectedToNetworkJack);
+    public string DeviceTitle => deviceTitle;
+    public bool IsStationaryNetworkDevice => stationaryNetworkDevice;
+    public NetworkScope ActiveNetworkScope => ResolveNetworkScope(false);
+    public bool IsConnectedToNetworkJack => connectedJack != null && connectedJack.IsConnected(this);
+    public bool CanInteract => IsConnectedToNetworkJack && (stationaryNetworkDevice || (movableDevice != null && movableDevice.IsPlaced));
     public bool IsNetworkOperational => CanInteract && !string.IsNullOrWhiteSpace(assignedIp);
     public bool CanBePickedUp => movableDevice != null && !stationaryNetworkDevice && !IsNetworkOperational;
     public bool CanShowPrompt => stationaryNetworkDevice || (movableDevice != null && !movableDevice.IsCarried);
@@ -94,6 +99,7 @@ public class ComputerInteractable : MonoBehaviour
     {
         movableDevice = GetComponent<MovableDevice>();
         ResolveMaterials();
+        ApplyDeviceDefaults();
         ResetRuntimePanel();
         EnsureNetworkJackPoints();
         EnsureUsePoint();
@@ -140,6 +146,8 @@ public class ComputerInteractable : MonoBehaviour
 
     public void HandlePlaced(DeviceDropZone dropZone)
     {
+        currentDropZone = dropZone;
+        SetRouter(null);
         EnsureNetworkJackPoints();
         EnsureNetworkDoorDevices();
         EnsureRouter();
@@ -150,6 +158,7 @@ public class ComputerInteractable : MonoBehaviour
     public void HandlePickedUp()
     {
         ReleaseCurrentIp();
+        currentDropZone = null;
         SetNetworkJack(null);
         SetPromptVisible(false);
         Close(null);
@@ -163,13 +172,19 @@ public class ComputerInteractable : MonoBehaviour
             return;
         }
 
-        if (connectedJack != null && jack == null)
+        NetworkScope previousScope = ResolveNetworkScope(false);
+        NetworkScope nextScope = jack != null ? jack.NetworkScope : null;
+        if (connectedJack != null && (jack == null || (previousScope != null && nextScope != null && previousScope != nextScope)))
         {
             ReleaseCurrentIp();
             Close(null);
         }
 
         connectedJack = jack;
+        SetRouter(null);
+        EnsureRouter();
+        ReleaseAssignedIpIfOutsideActiveScope();
+        TryAssignPreferredIp();
         UpdateStatusLight();
         RefreshIpRows();
         ApplyPromptSettings();
@@ -257,6 +272,7 @@ public class ComputerInteractable : MonoBehaviour
         assignedIp = ipAddress;
         UpdateStatusLight();
         RefreshIpRows();
+        MissionManager.NotifyNetworkDeviceConfigured(this);
     }
 
     private void ReleaseCurrentIp()
@@ -267,6 +283,7 @@ public class ComputerInteractable : MonoBehaviour
         }
 
         assignedIp = string.Empty;
+        MissionManager.NotifyNetworkDeviceStateChanged(this);
     }
 
     private void RemoveSelectedIp()
@@ -283,22 +300,180 @@ public class ComputerInteractable : MonoBehaviour
             return;
         }
 
+        NetworkScope scope = ResolveNetworkScope(false);
+        if (!IsConnectedToNetworkJack || scope == null || !scope.ContainsAddress(preferredIpAddress))
+        {
+            return;
+        }
+
         SelectIp(preferredIpAddress);
     }
 
     private void EnsureRouter()
     {
+        NetworkScope targetScope = ResolveNetworkScope(true);
+        if (IsConnectedToNetworkJack && targetScope == null)
+        {
+            SetRouter(null);
+            return;
+        }
+
         if (router != null)
+        {
+            if (targetScope != null && router.ActiveNetworkScope == targetScope)
+            {
+                return;
+            }
+
+            if (targetScope == null && IsRouterInCurrentArea(router))
+            {
+                return;
+            }
+        }
+
+        SetRouter(FindRouterForScope(targetScope));
+    }
+
+    private void SetRouter(RouterInteractable targetRouter)
+    {
+        if (router == targetRouter)
         {
             return;
         }
 
-        router = FindObjectOfType<RouterInteractable>();
+        if (router != null)
+        {
+            router.OnIpPoolChanged -= RefreshIpRows;
+        }
+
+        router = targetRouter;
+
         if (router != null)
         {
             router.OnIpPoolChanged -= RefreshIpRows;
             router.OnIpPoolChanged += RefreshIpRows;
         }
+    }
+
+    private RouterInteractable FindRouterForScope(NetworkScope targetScope)
+    {
+        RouterInteractable[] routers = FindObjectsOfType<RouterInteractable>(true);
+        Transform areaRoot = FindAreaRoot(transform);
+        RouterInteractable sameAreaFallback = null;
+
+        foreach (RouterInteractable candidate in routers)
+        {
+            if (candidate == null)
+            {
+                continue;
+            }
+
+            if (targetScope != null && candidate.ActiveNetworkScope == targetScope)
+            {
+                return candidate;
+            }
+
+            if (sameAreaFallback == null && IsInSameArea(candidate.transform, areaRoot))
+            {
+                sameAreaFallback = candidate;
+            }
+        }
+
+        if (targetScope == null && sameAreaFallback != null)
+        {
+            return sameAreaFallback;
+        }
+
+        return targetScope == null ? FindObjectOfType<RouterInteractable>() : null;
+    }
+
+    private NetworkScope ResolveNetworkScope(bool allowPreferredIpLookup)
+    {
+        if (networkScope != null)
+        {
+            return networkScope;
+        }
+
+        if (connectedJack != null)
+        {
+            return connectedJack.NetworkScope;
+        }
+
+        if (currentDropZone != null && currentDropZone.NetworkScope != null)
+        {
+            return currentDropZone.NetworkScope;
+        }
+
+        NetworkScope dropZoneAreaScope = FindNetworkScopeForAreaOwner(currentDropZone != null ? currentDropZone.transform : null);
+        if (dropZoneAreaScope != null)
+        {
+            return dropZoneAreaScope;
+        }
+
+        NetworkScope parentScope = GetComponentInParent<NetworkScope>();
+        if (parentScope != null)
+        {
+            return parentScope;
+        }
+
+        Transform areaRoot = FindAreaRoot(transform);
+        if (areaRoot != null)
+        {
+            NetworkScope areaScope = areaRoot.GetComponentInChildren<NetworkScope>(true);
+            if (areaScope != null)
+            {
+                return areaScope;
+            }
+        }
+
+        return null;
+    }
+
+    private void ReleaseAssignedIpIfOutsideActiveScope()
+    {
+        if (string.IsNullOrWhiteSpace(assignedIp))
+        {
+            return;
+        }
+
+        NetworkScope scope = ResolveNetworkScope(false);
+        if (scope != null && scope.ContainsAddress(assignedIp))
+        {
+            return;
+        }
+
+        ReleaseCurrentIp();
+    }
+
+    private bool IsRouterInCurrentArea(RouterInteractable candidate)
+    {
+        if (candidate == null)
+        {
+            return false;
+        }
+
+        Transform areaOwner = connectedJack != null ? connectedJack.transform : (currentDropZone != null ? currentDropZone.transform : transform);
+        return IsInSameArea(candidate.transform, FindAreaRoot(areaOwner));
+    }
+
+    private NetworkScope FindNetworkScopeForAreaOwner(Transform areaOwner)
+    {
+        Transform areaRoot = FindAreaRoot(areaOwner);
+        if (areaRoot == null)
+        {
+            return null;
+        }
+
+        RouterInteractable[] routers = FindObjectsOfType<RouterInteractable>(true);
+        foreach (RouterInteractable candidate in routers)
+        {
+            if (candidate != null && IsInSameArea(candidate.transform, areaRoot))
+            {
+                return candidate.ActiveNetworkScope;
+            }
+        }
+
+        return null;
     }
 
     public bool IsPlayerNearUsePoint(Vector3 playerPosition)
@@ -471,7 +646,7 @@ public class ComputerInteractable : MonoBehaviour
 
     private void EnsureMonitorScreen()
     {
-        if (stationaryNetworkDevice)
+        if (stationaryNetworkDevice || IsPrinterDevice())
         {
             monitorScreenRenderer = null;
             return;
@@ -496,7 +671,7 @@ public class ComputerInteractable : MonoBehaviour
 
     private void UpdateMonitorScreen()
     {
-        if (stationaryNetworkDevice)
+        if (stationaryNetworkDevice || IsPrinterDevice())
         {
             return;
         }
@@ -758,7 +933,7 @@ public class ComputerInteractable : MonoBehaviour
             return;
         }
 
-        foreach (RouterInteractable.IpLease lease in router.Leases)
+        foreach (NetworkScope.IpLease lease in router.Leases)
         {
             bool isSelected = lease.AssignedComputer == this;
             bool canSelect = !lease.IsRouter && (lease.IsAvailable || isSelected);
@@ -891,6 +1066,7 @@ public class ComputerInteractable : MonoBehaviour
             bool targetOpen = !(firstDevice.IsOpen && secondDevice.IsOpen);
             firstDevice.SetOpenFromAccessGroup(targetOpen);
             secondDevice.SetOpenFromAccessGroup(targetOpen);
+            MissionManager.NotifyDualDoorsStateChanged(targetOpen);
             RefreshIpRows();
         });
 
@@ -958,6 +1134,7 @@ public class ComputerInteractable : MonoBehaviour
         button.onClick.AddListener(() =>
         {
             dualDoor.Toggle();
+            MissionManager.NotifyDualDoorsStateChanged(dualDoor.IsOpen);
             RefreshIpRows();
         });
 
@@ -1117,6 +1294,7 @@ public class ComputerInteractable : MonoBehaviour
         button.onClick.AddListener(() =>
         {
             device.Toggle();
+            MissionManager.NotifySingleDoorStateChanged(device.IsOpen);
             RefreshIpRows();
         });
 
@@ -1396,7 +1574,12 @@ public class ComputerInteractable : MonoBehaviour
             }
 
             string lowerName = renderer.name.ToLowerInvariant();
-            if (lowerName.Contains("light") || lowerName.Contains("luz") || lowerName.Contains("lamp") || lowerName.Contains("status"))
+            if (lowerName.Contains("light")
+                || lowerName.Contains("luz")
+                || lowerName.Contains("lamp")
+                || lowerName.Contains("status")
+                || lowerName.Contains("button_power")
+                || lowerName.Contains("power"))
             {
                 return renderer;
             }
@@ -1738,7 +1921,8 @@ public class ComputerInteractable : MonoBehaviour
 #if UNITY_EDITOR
         if (offMaterial == null)
         {
-            offMaterial = UnityEditor.AssetDatabase.LoadAssetAtPath<Material>(WhiteMaterialPath);
+            string offMaterialPath = IsPrinterDevice() ? GrayMaterialPath : WhiteMaterialPath;
+            offMaterial = UnityEditor.AssetDatabase.LoadAssetAtPath<Material>(offMaterialPath);
         }
 
         if (screenOffMaterial == null)
@@ -1764,7 +1948,8 @@ public class ComputerInteractable : MonoBehaviour
 
         if (offMaterial == null)
         {
-            offMaterial = CreateFallbackMaterial("Fallback_Computer_Light_White", Color.white);
+            Color offColor = IsPrinterDevice() ? Color.gray : Color.white;
+            offMaterial = CreateFallbackMaterial("Fallback_Computer_Light_Off", offColor);
         }
 
         if (noIpMaterial == null)
@@ -1810,6 +1995,48 @@ public class ComputerInteractable : MonoBehaviour
         }
 
         return shader;
+    }
+
+    private void ApplyDeviceDefaults()
+    {
+        if (!IsPrinterDevice())
+        {
+            return;
+        }
+
+        if (deviceTitle == "Computador")
+        {
+            deviceTitle = "Impressora";
+        }
+
+        if (carryPromptText == "E pegar computador")
+        {
+            carryPromptText = "E pegar impressora";
+        }
+
+        if (networkPromptText == "F configurar rede")
+        {
+            networkPromptText = "F configurar impressora";
+        }
+
+        if (string.IsNullOrWhiteSpace(reservedDeviceName))
+        {
+            reservedDeviceName = "Impressora";
+        }
+    }
+
+    private bool IsPrinterDevice()
+    {
+        string lowerObjectName = name.ToLowerInvariant();
+        string lowerParentName = transform.parent != null ? transform.parent.name.ToLowerInvariant() : string.Empty;
+        string lowerTitle = deviceTitle.ToLowerInvariant();
+
+        return lowerObjectName.Contains("printer")
+            || lowerObjectName.Contains("impressora")
+            || lowerParentName.Contains("printer")
+            || lowerParentName.Contains("impressora")
+            || lowerTitle.Contains("impressora")
+            || lowerTitle.Contains("printer");
     }
 
     private Shader GetIndicatorShader()

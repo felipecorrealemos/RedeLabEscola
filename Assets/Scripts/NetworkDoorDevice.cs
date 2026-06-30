@@ -57,6 +57,7 @@ public class NetworkDoorDevice : MonoBehaviour
         }
 
         IsOpen = !IsOpen;
+        MissionManager.NotifySingleDoorStateChanged(IsOpen);
     }
 
     public void SetControlledByAccessGroup(bool controlled)
@@ -78,6 +79,7 @@ public class NetworkDoorDevice : MonoBehaviour
         }
 
         IsOpen = open;
+        MissionManager.NotifySingleDoorStateChanged(IsOpen);
     }
 
     private void CaptureClosedRotation()
