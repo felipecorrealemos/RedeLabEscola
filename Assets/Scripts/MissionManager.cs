@@ -145,11 +145,6 @@ public class MissionManager : MonoBehaviour
             return;
         }
 
-        if (currentMission != mission)
-        {
-            ResetMission(mission);
-        }
-
         currentMission = mission;
         RefreshUi();
     }
@@ -161,19 +156,38 @@ public class MissionManager : MonoBehaviour
 
     public void SetTaskCompletion(string taskId, bool complete)
     {
-        if (currentMission == null || string.IsNullOrWhiteSpace(taskId))
+        if (currentMission == null)
         {
             return;
         }
 
-        MissionTask task = currentMission.Tasks.Find(candidate => candidate.Id == taskId);
+        SetTaskCompletion(currentMission.Number, taskId, complete);
+    }
+
+    public void SetTaskCompletion(int missionNumber, string taskId, bool complete)
+    {
+        if (string.IsNullOrWhiteSpace(taskId))
+        {
+            return;
+        }
+
+        RebuildMissionLookup();
+        if (!missionsByNumber.TryGetValue(missionNumber, out Mission mission))
+        {
+            return;
+        }
+
+        MissionTask task = mission.Tasks.Find(candidate => candidate.Id == taskId);
         if (task == null || task.IsComplete == complete)
         {
             return;
         }
 
         task.IsComplete = complete;
-        RefreshUi();
+        if (currentMission == mission)
+        {
+            RefreshUi();
+        }
     }
 
     public static void CompleteCurrentTask(string taskId)
@@ -181,43 +195,86 @@ public class MissionManager : MonoBehaviour
         Instance?.CompleteTask(taskId);
     }
 
-    public static void NotifyDevicePlaced(MovableDevice device)
+    public static void NotifyDevicePlaced(MovableDevice device, DeviceDropZone dropZone)
     {
-        if (Instance == null || device == null)
+        if (Instance == null || device == null || dropZone == null)
         {
             return;
         }
 
-        if (!device.IsComputerDevice())
+        if (!device.IsComputerCabinetDevice())
         {
             return;
         }
 
-        if (Instance.CurrentMissionNumber == 1)
+        int missionNumber = Instance.ResolvePlacementMissionNumber(dropZone);
+        string taskId = Instance.ResolvePlacementTaskId(dropZone, missionNumber);
+        if (missionNumber > 0 && !string.IsNullOrWhiteSpace(taskId))
         {
-            Instance.SetTaskCompletion("sala1_colocar_gabinete", true);
-        }
-        else if (Instance.CurrentMissionNumber == 2)
-        {
-            Instance.SetTaskCompletion("sala2_colocar_gabinete", true);
+            Instance.SetTaskCompletion(missionNumber, taskId, true);
         }
     }
 
-    public static void NotifyDeviceRemoved(MovableDevice device)
+    public static void NotifyDeviceRemoved(MovableDevice device, DeviceDropZone dropZone)
     {
-        if (Instance == null || device == null || !device.IsComputerDevice())
+        if (Instance == null || device == null || dropZone == null || !device.IsComputerCabinetDevice())
         {
             return;
         }
 
-        if (Instance.CurrentMissionNumber == 1)
+        int missionNumber = Instance.ResolvePlacementMissionNumber(dropZone);
+        string taskId = Instance.ResolvePlacementTaskId(dropZone, missionNumber);
+        if (missionNumber > 0 && !string.IsNullOrWhiteSpace(taskId))
         {
-            Instance.SetTaskCompletion("sala1_colocar_gabinete", false);
+            Instance.SetTaskCompletion(missionNumber, taskId, false);
         }
-        else if (Instance.CurrentMissionNumber == 2)
+    }
+
+    private int ResolvePlacementMissionNumber(DeviceDropZone dropZone)
+    {
+        if (dropZone == null)
         {
-            Instance.SetTaskCompletion("sala2_colocar_gabinete", false);
+            return 0;
         }
+
+        int missionNumber = dropZone.MissionNumber;
+        if (missionNumber > 0)
+        {
+            return missionNumber;
+        }
+
+        if (dropZone.IsComputerPlacementZoneForMission(CurrentMissionNumber))
+        {
+            return CurrentMissionNumber;
+        }
+
+        return 0;
+    }
+
+    private string ResolvePlacementTaskId(DeviceDropZone dropZone, int missionNumber)
+    {
+        if (dropZone == null || !dropZone.IsComputerPlacementZoneForMission(missionNumber))
+        {
+            return string.Empty;
+        }
+
+        string taskId = dropZone.PlacementTaskId;
+        if (!string.IsNullOrWhiteSpace(taskId))
+        {
+            return taskId;
+        }
+
+        if (missionNumber == 1)
+        {
+            return "sala1_colocar_gabinete";
+        }
+
+        if (missionNumber == 2)
+        {
+            return "sala2_colocar_gabinete";
+        }
+
+        return string.Empty;
     }
 
     public static void NotifyNetworkDeviceConfigured(ComputerInteractable device)
@@ -351,19 +408,6 @@ public class MissionManager : MonoBehaviour
         }
     }
 
-    private void ResetMission(Mission mission)
-    {
-        if (mission == null)
-        {
-            return;
-        }
-
-        foreach (MissionTask task in mission.Tasks)
-        {
-            task.IsComplete = false;
-        }
-    }
-
     private void CompleteFirstIncompleteTask(params string[] taskIds)
     {
         if (currentMission == null)
@@ -453,6 +497,23 @@ public class MissionManager : MonoBehaviour
             return;
         }
 
+        int areaMissionNumber = FindMissionNumberForPlayerArea(player.position);
+        if (areaMissionNumber > 0 && areaMissionNumber != CurrentMissionNumber)
+        {
+            SetMission(areaMissionNumber);
+            return;
+        }
+
+        if (areaMissionNumber > 0)
+        {
+            return;
+        }
+
+        if (HasMissionAreaRoots())
+        {
+            return;
+        }
+
         RouterInteractable nearestRouter = FindNearestRouter(player.position, out float nearestDistanceSqr);
         if (nearestRouter == null || nearestDistanceSqr > routerMissionDetectionRadius * routerMissionDetectionRadius)
         {
@@ -505,6 +566,202 @@ public class MissionManager : MonoBehaviour
         }
 
         return nearestRouter;
+    }
+
+    private int FindMissionNumberForPlayerArea(Vector3 playerPosition)
+    {
+        Transform bestArea = null;
+        int bestMissionNumber = 0;
+        float bestAreaSize = float.MaxValue;
+
+        Transform[] transforms = FindObjectsOfType<Transform>(true);
+        foreach (Transform candidate in transforms)
+        {
+            int missionNumber = GetMissionNumberFromAreaName(candidate.name);
+            if (missionNumber <= 0 || !missionsByNumber.ContainsKey(missionNumber))
+            {
+                continue;
+            }
+
+            if (!TryGetAreaBounds(candidate, out Bounds bounds))
+            {
+                continue;
+            }
+
+            float padding = 0.05f;
+            bool containsX = playerPosition.x >= bounds.min.x - padding && playerPosition.x <= bounds.max.x + padding;
+            bool containsZ = playerPosition.z >= bounds.min.z - padding && playerPosition.z <= bounds.max.z + padding;
+            if (!containsX || !containsZ)
+            {
+                continue;
+            }
+
+            float areaSize = bounds.size.x * bounds.size.z;
+            if (areaSize < bestAreaSize)
+            {
+                bestArea = candidate;
+                bestMissionNumber = missionNumber;
+                bestAreaSize = areaSize;
+            }
+        }
+
+        return bestArea != null ? bestMissionNumber : 0;
+    }
+
+    private bool HasMissionAreaRoots()
+    {
+        Transform[] transforms = FindObjectsOfType<Transform>(true);
+        foreach (Transform candidate in transforms)
+        {
+            if (GetMissionNumberFromAreaName(candidate.name) > 0)
+            {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    private int GetMissionNumberFromAreaName(string areaName)
+    {
+        if (string.IsNullOrWhiteSpace(areaName))
+        {
+            return 0;
+        }
+
+        string lowerName = areaName.ToLowerInvariant();
+        if (!lowerName.Contains("sala"))
+        {
+            return 0;
+        }
+
+        if (lowerName.Contains("sala 1"))
+        {
+            return 1;
+        }
+
+        if (lowerName.Contains("sala 2"))
+        {
+            return 2;
+        }
+
+        if (lowerName.Contains("sala 3"))
+        {
+            return 3;
+        }
+
+        return 0;
+    }
+
+    private bool TryGetAreaBounds(Transform areaRoot, out Bounds bounds)
+    {
+        if (TryGetFloorBounds(areaRoot, out bounds))
+        {
+            return true;
+        }
+
+        bounds = new Bounds(areaRoot.position, Vector3.zero);
+        bool hasBounds = false;
+
+        Renderer[] renderers = areaRoot.GetComponentsInChildren<Renderer>(true);
+        foreach (Renderer areaRenderer in renderers)
+        {
+            if (areaRenderer == null || areaRenderer.GetComponentInParent<MovableDevice>() != null)
+            {
+                continue;
+            }
+
+            if (!hasBounds)
+            {
+                bounds = areaRenderer.bounds;
+                hasBounds = true;
+            }
+            else
+            {
+                bounds.Encapsulate(areaRenderer.bounds);
+            }
+        }
+
+        Collider[] colliders = areaRoot.GetComponentsInChildren<Collider>(true);
+        foreach (Collider areaCollider in colliders)
+        {
+            if (areaCollider == null || areaCollider.GetComponentInParent<MovableDevice>() != null)
+            {
+                continue;
+            }
+
+            if (!hasBounds)
+            {
+                bounds = areaCollider.bounds;
+                hasBounds = true;
+            }
+            else
+            {
+                bounds.Encapsulate(areaCollider.bounds);
+            }
+        }
+
+        return hasBounds;
+    }
+
+    private bool TryGetFloorBounds(Transform areaRoot, out Bounds bounds)
+    {
+        bounds = new Bounds(areaRoot.position, Vector3.zero);
+        bool hasBounds = false;
+        float largestFloorArea = 0f;
+
+        Renderer[] renderers = areaRoot.GetComponentsInChildren<Renderer>(true);
+        foreach (Renderer areaRenderer in renderers)
+        {
+            if (areaRenderer == null || areaRenderer.GetComponentInParent<MovableDevice>() != null)
+            {
+                continue;
+            }
+
+            Bounds rendererBounds = areaRenderer.bounds;
+            if (!LooksLikeRoomFloor(rendererBounds))
+            {
+                continue;
+            }
+
+            float floorArea = rendererBounds.size.x * rendererBounds.size.z;
+            if (!hasBounds || floorArea > largestFloorArea)
+            {
+                bounds = rendererBounds;
+                hasBounds = true;
+                largestFloorArea = floorArea;
+            }
+        }
+
+        Collider[] colliders = areaRoot.GetComponentsInChildren<Collider>(true);
+        foreach (Collider areaCollider in colliders)
+        {
+            if (areaCollider == null || areaCollider.GetComponentInParent<MovableDevice>() != null)
+            {
+                continue;
+            }
+
+            Bounds colliderBounds = areaCollider.bounds;
+            if (!LooksLikeRoomFloor(colliderBounds))
+            {
+                continue;
+            }
+
+            float floorArea = colliderBounds.size.x * colliderBounds.size.z;
+            if (!hasBounds || floorArea > largestFloorArea)
+            {
+                bounds = colliderBounds;
+                hasBounds = true;
+                largestFloorArea = floorArea;
+            }
+        }
+
+        return hasBounds;
+    }
+
+    private bool LooksLikeRoomFloor(Bounds bounds)
+    {
+        return bounds.size.y <= 0.35f && bounds.size.x >= 4f && bounds.size.z >= 4f;
     }
 
     private int GetMissionNumberForRouter(RouterInteractable router)

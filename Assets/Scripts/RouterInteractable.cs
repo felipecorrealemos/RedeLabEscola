@@ -1,4 +1,5 @@
 using System;
+using System.Collections;
 using System.Collections.Generic;
 using UnityEngine;
 using UnityEngine.EventSystems;
@@ -67,7 +68,14 @@ public class RouterInteractable : MonoBehaviour
 
     private void Start()
     {
+        StartCoroutine(EnsureGreenLightBlinkersAfterFirstFrame());
         ForceUiClosed();
+    }
+
+    private IEnumerator EnsureGreenLightBlinkersAfterFirstFrame()
+    {
+        yield return null;
+        EnsureGreenLightBlinkers();
     }
 
     private void OnValidate()
@@ -572,7 +580,7 @@ public class RouterInteractable : MonoBehaviour
             return;
         }
 
-        promptLabel.text = "Aperte F para interagir";
+        promptLabel.text = promptText;
         promptLabel.alignment = TextAnchor.MiddleCenter;
         promptLabel.color = Color.white;
         promptLabel.font = GetDefaultFont();

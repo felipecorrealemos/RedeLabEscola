@@ -24,6 +24,7 @@ public static class ProfessorCharacterSetup
     public static void FixProfessorCharacter()
     {
         Selection.objects = new Object[0];
+        ConfigureProfessorIdleClipLoop();
 
         var professorClip = FindAnimationClip(ProfessorAnimationPath);
         if (professorClip == null)
@@ -76,5 +77,41 @@ public static class ProfessorCharacterSetup
         }
 
         return null;
+    }
+
+    private static void ConfigureProfessorIdleClipLoop()
+    {
+        var importer = AssetImporter.GetAtPath(ProfessorAnimationPath) as ModelImporter;
+        if (importer == null)
+        {
+            return;
+        }
+
+        ModelImporterClipAnimation[] clips = importer.clipAnimations;
+        if (clips == null || clips.Length == 0)
+        {
+            clips = importer.defaultClipAnimations;
+        }
+
+        bool changed = false;
+        foreach (ModelImporterClipAnimation clip in clips)
+        {
+            if (clip == null || clip.loopTime)
+            {
+                continue;
+            }
+
+            clip.loopTime = true;
+            clip.loopPose = true;
+            changed = true;
+        }
+
+        if (!changed)
+        {
+            return;
+        }
+
+        importer.clipAnimations = clips;
+        importer.SaveAndReimport();
     }
 }

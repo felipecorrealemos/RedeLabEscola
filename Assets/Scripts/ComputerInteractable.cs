@@ -1,3 +1,4 @@
+using System.Collections;
 using System.Collections.Generic;
 using UnityEngine;
 using UnityEngine.EventSystems;
@@ -23,12 +24,6 @@ public class ComputerInteractable : MonoBehaviour
     [SerializeField] private string reservedDeviceName;
     [SerializeField] private Transform usePoint;
     [SerializeField] private float usePointRadius = 1.2f;
-    [SerializeField] private Vector3 generatedUseColliderSize = new Vector3(1.2f, 0.35f, 0.85f);
-    [SerializeField] private Vector2 terminalIndicatorSize = new Vector2(0.75f, 0.45f);
-    [SerializeField] private Color terminalIndicatorColor = new Color(1f, 0.85f, 0.15f, 0.45f);
-    [SerializeField] private float terminalIndicatorHeight = 0.03f;
-    [SerializeField] private float terminalIndicatorPulseAmount = 0.12f;
-    [SerializeField] private float terminalIndicatorPulseSpeed = 5f;
 
     [Header("Panel")]
     [SerializeField] private Vector2 panelAnchorMin = new Vector2(0.64f, 0.12f);
@@ -74,11 +69,6 @@ public class ComputerInteractable : MonoBehaviour
     private string assignedIp;
     private bool isOpen;
     private bool showingTerminalPanel;
-    private Collider terminalInteractionCollider;
-    private Transform terminalIndicator;
-    private Renderer terminalIndicatorRenderer;
-    private Material terminalIndicatorMaterial;
-    private Vector3 terminalIndicatorBaseScale;
 
     public bool IsOpen => isOpen;
     public string AssignedIp => assignedIp;
@@ -90,10 +80,6 @@ public class ComputerInteractable : MonoBehaviour
     public bool IsNetworkOperational => CanInteract && !string.IsNullOrWhiteSpace(assignedIp);
     public bool CanBePickedUp => movableDevice != null && !stationaryNetworkDevice && !IsNetworkOperational;
     public bool CanShowPrompt => stationaryNetworkDevice || (movableDevice != null && !movableDevice.IsCarried);
-
-    private void Update()
-    {
-    }
 
     private void Awake()
     {
@@ -115,6 +101,13 @@ public class ComputerInteractable : MonoBehaviour
     private void Start()
     {
         TryAssignPreferredIp();
+        StartCoroutine(UpdateStatusLightAfterFirstFrame());
+    }
+
+    private IEnumerator UpdateStatusLightAfterFirstFrame()
+    {
+        yield return null;
+        UpdateStatusLight();
     }
 
     public void ConfigureAsStationaryNetworkDevice(string title, string preferredIp, string reservedName)
@@ -509,7 +502,7 @@ public class ComputerInteractable : MonoBehaviour
             return terminal.ContainsCollider(candidate);
         }
 
-        return terminalInteractionCollider != null && candidate == terminalInteractionCollider;
+        return false;
     }
 
     private void EnsureUsePoint()
@@ -559,26 +552,6 @@ public class ComputerInteractable : MonoBehaviour
         }
 
         return null;
-    }
-
-    private void EnsureTerminalInteractionCollider()
-    {
-        if (usePoint == null || terminalInteractionCollider != null)
-        {
-            return;
-        }
-
-        Collider existingCollider = usePoint.GetComponent<Collider>();
-        if (existingCollider != null)
-        {
-            terminalInteractionCollider = existingCollider;
-            return;
-        }
-
-        BoxCollider generatedCollider = usePoint.gameObject.AddComponent<BoxCollider>();
-        generatedCollider.isTrigger = true;
-        generatedCollider.size = generatedUseColliderSize;
-        terminalInteractionCollider = generatedCollider;
     }
 
     private void EnsureStatusLight()
@@ -1635,105 +1608,6 @@ public class ComputerInteractable : MonoBehaviour
         }
     }
 
-    private void EnsureTerminalIndicator()
-    {
-        EnsureUsePoint();
-
-        if (terminalIndicator != null)
-        {
-            if (usePoint != null && terminalIndicator.parent != usePoint)
-            {
-                terminalIndicator.SetParent(usePoint, false);
-            }
-
-            return;
-        }
-
-        Transform parent = usePoint != null ? usePoint : transform;
-        Transform existingIndicator = parent.Find("KeyboardInteractionIndicator");
-        if (existingIndicator == null && transform != parent)
-        {
-            existingIndicator = transform.Find("KeyboardInteractionIndicator");
-        }
-
-        if (existingIndicator != null)
-        {
-            terminalIndicator = existingIndicator;
-            terminalIndicator.SetParent(parent, false);
-        }
-        else
-        {
-            GameObject indicatorObject = GameObject.CreatePrimitive(PrimitiveType.Quad);
-            indicatorObject.name = "KeyboardInteractionIndicator";
-            terminalIndicator = indicatorObject.transform;
-            terminalIndicator.SetParent(parent, false);
-            Destroy(indicatorObject.GetComponent<Collider>());
-        }
-
-        terminalIndicator.rotation = Quaternion.Euler(-90f, 0f, 0f);
-        terminalIndicatorBaseScale = new Vector3(terminalIndicatorSize.x, terminalIndicatorSize.y, 1f);
-        terminalIndicator.localScale = terminalIndicatorBaseScale;
-
-        terminalIndicatorRenderer = terminalIndicator.GetComponent<Renderer>();
-        terminalIndicatorMaterial = new Material(GetIndicatorShader());
-        terminalIndicatorMaterial.color = new Color(terminalIndicatorColor.r, terminalIndicatorColor.g, terminalIndicatorColor.b, 0f);
-        terminalIndicatorRenderer.sharedMaterial = terminalIndicatorMaterial;
-        terminalIndicator.gameObject.SetActive(false);
-    }
-
-    private void UpdateTerminalIndicator()
-    {
-        EnsureTerminalIndicator();
-        bool shouldShow = IsNetworkOperational && IsPlayerNearUsePoint(GetPlayerPosition());
-        terminalIndicator.gameObject.SetActive(shouldShow);
-        if (!shouldShow)
-        {
-            return;
-        }
-
-        terminalIndicator.position = GetTerminalIndicatorPosition();
-        terminalIndicator.rotation = Quaternion.Euler(-90f, 0f, 0f);
-
-        float pulse = 1f + (Mathf.Sin(Time.time * terminalIndicatorPulseSpeed) * 0.5f + 0.5f) * terminalIndicatorPulseAmount;
-        terminalIndicator.localScale = terminalIndicatorBaseScale * pulse;
-        terminalIndicatorMaterial.color = terminalIndicatorColor;
-    }
-
-    private Vector3 GetTerminalIndicatorPosition()
-    {
-        EnsureUsePoint();
-        if (usePoint == null)
-        {
-            return transform.position + Vector3.up * terminalIndicatorHeight;
-        }
-
-        Renderer[] renderers = usePoint.GetComponentsInChildren<Renderer>(true);
-        Bounds bounds = new Bounds(usePoint.position, Vector3.zero);
-        bool hasBounds = false;
-
-        foreach (Renderer renderer in renderers)
-        {
-            if (renderer == null || renderer.transform == terminalIndicator)
-            {
-                continue;
-            }
-
-            if (!hasBounds)
-            {
-                bounds = renderer.bounds;
-                hasBounds = true;
-            }
-            else
-            {
-                bounds.Encapsulate(renderer.bounds);
-            }
-        }
-
-        return hasBounds
-            ? new Vector3(bounds.center.x, bounds.max.y + terminalIndicatorHeight, bounds.center.z)
-            : usePoint.position + Vector3.up * terminalIndicatorHeight;
-    }
-
     private Vector3 GetPlayerPosition()
     {
         GameObject player = GameObject.FindGameObjectWithTag("Player");
@@ -2039,19 +1913,4 @@ public class ComputerInteractable : MonoBehaviour
             || lowerTitle.Contains("printer");
     }
 
-    private Shader GetIndicatorShader()
-    {
-        Shader shader = Shader.Find("Sprites/Default");
-        if (shader == null)
-        {
-            shader = Shader.Find("Unlit/Transparent");
-        }
-
-        if (shader == null)
-        {
-            shader = GetDefaultShader();
-        }
-
-        return shader;
-    }
 }

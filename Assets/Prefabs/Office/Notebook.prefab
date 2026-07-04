@@ -2438,12 +2438,6 @@ MonoBehaviour:
   reservedDeviceName: Notebook
   usePoint: {fileID: 0}
   usePointRadius: 1.2
-  generatedUseColliderSize: {x: 1.2, y: 0.25, z: 0.6}
-  terminalIndicatorSize: {x: 0.75, y: 0.45}
-  terminalIndicatorColor: {r: 1, g: 0.85, b: 0.15, a: 0.45}
-  terminalIndicatorHeight: 0.03
-  terminalIndicatorPulseAmount: 0.12
-  terminalIndicatorPulseSpeed: 5
   panelAnchorMin: {x: 0.64, y: 0.12}
   panelAnchorMax: {x: 0.98, y: 0.9}
   panelOpacity: 0.9

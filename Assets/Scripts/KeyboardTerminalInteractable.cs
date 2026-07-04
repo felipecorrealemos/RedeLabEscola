@@ -9,7 +9,7 @@ public class KeyboardTerminalInteractable : MonoBehaviour
     [SerializeField] private ComputerInteractable computer;
     [SerializeField] private float interactionRadius = 1.2f;
     [SerializeField] private Vector3 generatedColliderSize = new Vector3(1.2f, 0.35f, 0.85f);
-    [SerializeField] private Vector3 indicatorWorldOffset = new Vector3(0f, -1f, 0f);
+    [SerializeField] private Vector3 indicatorWorldOffset = new Vector3(0f, -0.08f, 0f);
     [SerializeField] private Vector2 indicatorSize = new Vector2(0.75f, 0.45f);
     [SerializeField] private Color indicatorColor = new Color(1f, 0.85f, 0.15f, 0.45f);
     [SerializeField] private float indicatorPulseAmount = 0.12f;

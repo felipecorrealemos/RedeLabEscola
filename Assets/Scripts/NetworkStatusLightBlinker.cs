@@ -3,6 +3,8 @@ using UnityEngine;
 [DisallowMultipleComponent]
 public class NetworkStatusLightBlinker : MonoBehaviour
 {
+    private static bool CanAddBlinkerComponents => Application.isPlaying && Time.frameCount > 0;
+
     [SerializeField] private Renderer targetRenderer;
     [SerializeField] private float blinkFrequency = 4f;
 
@@ -57,6 +59,11 @@ public class NetworkStatusLightBlinker : MonoBehaviour
         NetworkStatusLightBlinker blinker = renderer.GetComponent<NetworkStatusLightBlinker>();
         if (blinker == null)
         {
+            if (!CanAddBlinkerComponents)
+            {
+                return null;
+            }
+
             blinker = renderer.gameObject.AddComponent<NetworkStatusLightBlinker>();
         }
 
