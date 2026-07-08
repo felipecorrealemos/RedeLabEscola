@@ -1170,6 +1170,7 @@ GameObject:
   - component: {fileID: 8278163842993042170}
   - component: {fileID: 7112401154591322401}
   - component: {fileID: 7112401154591322402}
+  - component: {fileID: 7112401154591322403}
   m_Layer: 0
   m_Name: Printer
   m_TagString: Untagged
@@ -1241,7 +1242,9 @@ MonoBehaviour:
   useComputerPromptText: F usar computador
   deviceTitle: Impressora
   stationaryNetworkDevice: 0
-  networkScope: {fileID: 0}
+  networkScopeOverride: {fileID: 0}
+  detectedNetworkScope: {fileID: 0}
+  detectedNetworkSource: Nenhuma rede detectada
   preferredIpAddress: 
   reservedDeviceName: Impressora
   usePoint: {fileID: 0}
@@ -1261,6 +1264,7 @@ MonoBehaviour:
   generatedLightLocalPosition: {x: 0.28, y: 0.16, z: -0.26}
   generatedLightLocalScale: {x: 0.12, y: 0.08, z: 0.04}
   monitorScreenRenderer: {fileID: 0}
+  monitorScreenSpotlight: {fileID: 0}
   screenOffMaterial: {fileID: 2100000, guid: fdef38ae89766f34098be69f4907cf1a, type: 2}
   screenOnMaterial: {fileID: 2100000, guid: 43f6aca0f228ce848b6ab723b8cf8642, type: 2}
   canvas: {fileID: 0}
@@ -1273,6 +1277,29 @@ MonoBehaviour:
   removeIpButton: {fileID: 0}
   removeIpButtonLabel: {fileID: 0}
   ipScrollRect: {fileID: 0}
+--- !u!114 &7112401154591322403
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 6488039802434211006}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 0cdd7615d0af4fc49a2af77db6d14f91, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: 
+  deviceLabel: Impressora
+  readyStateLabel: Pronta
+  printedStateLabel: Documento impresso
+  waitingStateLabel: Sem IP
+  actionLabel: Imprimir documento
+  outputSlot: {fileID: 0}
+  documentSize: {x: 0.693872, y: 19.54597}
+  documentStartLocalPosition: {x: 0, y: -3, z: 10}
+  documentEndLocalPosition: {x: 0, y: -3, z: -3.4}
+  documentLocalEulerAngles: {x: 90, y: 0, z: 0}
+  printDuration: 3
 --- !u!1 &6622002328262122467
 GameObject:
   m_ObjectHideFlags: 0

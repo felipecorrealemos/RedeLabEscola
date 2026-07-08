@@ -37,15 +37,16 @@ public class MissionManager : MonoBehaviour
     [SerializeField] private RectTransform panelRect;
     [SerializeField] private Button toggleButton;
     [SerializeField] private GameObject expandedContent;
-    [SerializeField] private Vector2 panelAnchorMin = new Vector2(0.02f, 0.42f);
+    [SerializeField] private Vector2 panelAnchorMin = new Vector2(0.02f, 0.34f);
     [SerializeField] private Vector2 panelAnchorMax = new Vector2(0.42f, 0.96f);
     [SerializeField] private Vector2 collapsedPanelAnchorMin = new Vector2(0.02f, 0.90f);
     [SerializeField] private Vector2 collapsedPanelAnchorMax = new Vector2(0.22f, 0.96f);
     [SerializeField] private float panelOpacity = 0.78f;
-    [SerializeField] private float taskRowHeight = 46f;
-    [SerializeField] private int taskFontSize = 18;
-    [SerializeField] private float taskTextPaddingLeft = 50f;
-    [SerializeField] private float taskTextPaddingRight = 50f;
+    [SerializeField] private float taskRowHeight = 34f;
+    [SerializeField] private int taskFontSize = 13;
+    [SerializeField] private float taskTextPaddingLeft = 42f;
+    [SerializeField] private float taskTextPaddingRight = 18f;
+    [SerializeField] private float minimumExpandedPanelHeight = 430f;
     [SerializeField] private float autoCollapseDelay = 5f;
     [SerializeField] private bool updateMissionFromNearestRouter = true;
     [SerializeField] private float routerMissionDetectionRadius = 8f;
@@ -202,12 +203,24 @@ public class MissionManager : MonoBehaviour
             return;
         }
 
+        int missionNumber = Instance.ResolvePlacementMissionNumber(dropZone);
+        if (missionNumber == 3)
+        {
+            if (device.IsComputerCabinetDevice())
+            {
+                Instance.SetTaskCompletion(3, "sala3_colocar_gabinete", true);
+            }
+            else if (device.IsPrinterDevice())
+            {
+                Instance.SetTaskCompletion(3, "sala3_colocar_impressora", true);
+            }
+        }
+
         if (!device.IsComputerCabinetDevice())
         {
             return;
         }
 
-        int missionNumber = Instance.ResolvePlacementMissionNumber(dropZone);
         string taskId = Instance.ResolvePlacementTaskId(dropZone, missionNumber);
         if (missionNumber > 0 && !string.IsNullOrWhiteSpace(taskId))
         {
@@ -217,12 +230,29 @@ public class MissionManager : MonoBehaviour
 
     public static void NotifyDeviceRemoved(MovableDevice device, DeviceDropZone dropZone)
     {
-        if (Instance == null || device == null || dropZone == null || !device.IsComputerCabinetDevice())
+        if (Instance == null || device == null || dropZone == null)
         {
             return;
         }
 
         int missionNumber = Instance.ResolvePlacementMissionNumber(dropZone);
+        if (missionNumber == 3)
+        {
+            if (device.IsComputerCabinetDevice())
+            {
+                Instance.SetTaskCompletion(3, "sala3_colocar_gabinete", false);
+            }
+            else if (device.IsPrinterDevice())
+            {
+                Instance.SetTaskCompletion(3, "sala3_colocar_impressora", false);
+            }
+        }
+
+        if (!device.IsComputerCabinetDevice())
+        {
+            return;
+        }
+
         string taskId = Instance.ResolvePlacementTaskId(dropZone, missionNumber);
         if (missionNumber > 0 && !string.IsNullOrWhiteSpace(taskId))
         {
@@ -293,6 +323,7 @@ public class MissionManager : MonoBehaviour
         string lowerName = device.name.ToLowerInvariant();
         bool isComputer = lowerTitle.Contains("computador") || lowerTitle.Contains("computer") || lowerName.Contains("computer") || lowerName.Contains("gabinete");
         bool isDoorDevice = lowerTitle.Contains("porta") || lowerTitle.Contains("door") || lowerTitle.Contains("dispositivo") || lowerName.Contains("porta") || lowerName.Contains("door");
+        bool isPrinter = lowerTitle.Contains("impressora") || lowerTitle.Contains("printer") || lowerName.Contains("impressora") || lowerName.Contains("printer");
         bool isLeftDoor = lowerTitle.Contains("esquerda") || lowerTitle.Contains("left") || lowerName.Contains("esquerda") || lowerName.Contains("left");
         bool isRightDoor = lowerTitle.Contains("direita") || lowerTitle.Contains("right") || lowerName.Contains("direita") || lowerName.Contains("right");
 
@@ -302,33 +333,47 @@ public class MissionManager : MonoBehaviour
             return;
         }
 
-        if (Instance.CurrentMissionNumber != 2)
+        if (Instance.CurrentMissionNumber == 2)
+        {
+            if (isComputer)
+            {
+                Instance.SetTaskCompletion("sala2_configurar_ip_pc", device.IsNetworkOperational);
+            }
+            else if (isLeftDoor)
+            {
+                Instance.SetTaskCompletion("sala2_configurar_ip_porta_esquerda", device.IsNetworkOperational);
+            }
+            else if (isRightDoor)
+            {
+                Instance.SetTaskCompletion("sala2_configurar_ip_porta_direita", device.IsNetworkOperational);
+            }
+            else if (isDoorDevice)
+            {
+                if (device.IsNetworkOperational)
+                {
+                    Instance.CompleteFirstIncompleteTask("sala2_configurar_ip_porta_esquerda", "sala2_configurar_ip_porta_direita");
+                }
+                else
+                {
+                    Instance.SetLastCompleteTask(false, "sala2_configurar_ip_porta_direita", "sala2_configurar_ip_porta_esquerda");
+                }
+            }
+
+            return;
+        }
+
+        if (Instance.CurrentMissionNumber != 3)
         {
             return;
         }
 
         if (isComputer)
         {
-            Instance.SetTaskCompletion("sala2_configurar_ip_pc", device.IsNetworkOperational);
+            Instance.SetTaskCompletion("sala3_configurar_ip_pc", device.IsNetworkOperational);
         }
-        else if (isLeftDoor)
+        else if (isPrinter)
         {
-            Instance.SetTaskCompletion("sala2_configurar_ip_porta_esquerda", device.IsNetworkOperational);
-        }
-        else if (isRightDoor)
-        {
-            Instance.SetTaskCompletion("sala2_configurar_ip_porta_direita", device.IsNetworkOperational);
-        }
-        else if (isDoorDevice)
-        {
-            if (device.IsNetworkOperational)
-            {
-                Instance.CompleteFirstIncompleteTask("sala2_configurar_ip_porta_esquerda", "sala2_configurar_ip_porta_direita");
-            }
-            else
-            {
-                Instance.SetLastCompleteTask(false, "sala2_configurar_ip_porta_direita", "sala2_configurar_ip_porta_esquerda");
-            }
+            Instance.SetTaskCompletion("sala3_configurar_ip_impressora", device.IsNetworkOperational);
         }
     }
 
@@ -339,9 +384,19 @@ public class MissionManager : MonoBehaviour
 
     public static void NotifySingleDoorStateChanged(bool open)
     {
-        if (Instance != null && Instance.CurrentMissionNumber == 1)
+        if (Instance == null)
+        {
+            return;
+        }
+
+        if (Instance.CurrentMissionNumber == 1)
         {
             Instance.SetTaskCompletion("sala1_abrir_porta", open);
+        }
+
+        if (Instance.CurrentMissionNumber == 3)
+        {
+            Instance.SetTaskCompletion("sala3_abrir_porta", open);
         }
     }
 
@@ -356,6 +411,49 @@ public class MissionManager : MonoBehaviour
         {
             Instance.SetTaskCompletion("sala2_abrir_portas", open);
         }
+    }
+
+    public static void NotifyDocumentPrinted(NetworkPrinterDevice printer)
+    {
+        if (Instance == null || printer == null || Instance.CurrentMissionNumber != 3)
+        {
+            return;
+        }
+
+        Instance.SetTaskCompletion("sala3_imprimir_documento", printer.HasPrintedDocument);
+    }
+
+    public static void NotifyDocumentPickedUp(PrintedDocumentInteractable document)
+    {
+        if (Instance != null && Instance.CurrentMissionNumber == 3)
+        {
+            Instance.SetTaskCompletion("sala3_pegar_documento", document != null && document.IsCarried);
+        }
+    }
+
+    public static void NotifyDocumentDelivered(PrintedDocumentInteractable document)
+    {
+        if (Instance != null && Instance.CurrentMissionNumber == 3)
+        {
+            Instance.SetTaskCompletion("sala3_entregar_documento", document != null && document.IsDelivered);
+        }
+    }
+
+    public static bool CanOperateDoorCommand(NetworkDoorDevice doorDevice)
+    {
+        if (Instance == null || Instance.CurrentMissionNumber != 3)
+        {
+            return true;
+        }
+
+        return Instance.AreTasksComplete(
+            "sala3_colocar_gabinete",
+            "sala3_configurar_ip_pc",
+            "sala3_colocar_impressora",
+            "sala3_configurar_ip_impressora",
+            "sala3_imprimir_documento",
+            "sala3_pegar_documento",
+            "sala3_entregar_documento");
     }
 
     private void EnsureDefaultMissions()
@@ -376,7 +474,36 @@ public class MissionManager : MonoBehaviour
             new MissionTask { Id = "sala2_abrir_portas", Description = "Enviar comando pelo computador para abrir a porta" }
         });
 
-        EnsureMission(3, "Sala 3", new MissionTask[0]);
+        EnsureMission(3, "Sala 3", new[]
+        {
+            new MissionTask { Id = "sala3_colocar_gabinete", Description = "Colocar o computador na rede" },
+            new MissionTask { Id = "sala3_configurar_ip_pc", Description = "Configurar o computador com IP" },
+            new MissionTask { Id = "sala3_colocar_impressora", Description = "Colocar a impressora na rede" },
+            new MissionTask { Id = "sala3_configurar_ip_impressora", Description = "Configurar a impressora com IP" },
+            new MissionTask { Id = "sala3_imprimir_documento", Description = "Imprimir documento pelo computador" },
+            new MissionTask { Id = "sala3_pegar_documento", Description = "Pegar o documento na impressora" },
+            new MissionTask { Id = "sala3_entregar_documento", Description = "Entregar o documento para o professor" },
+            new MissionTask { Id = "sala3_abrir_porta", Description = "Enviar comando pelo computador para abrir a porta" }
+        });
+    }
+
+    private bool AreTasksComplete(params string[] taskIds)
+    {
+        if (currentMission == null)
+        {
+            return false;
+        }
+
+        foreach (string taskId in taskIds)
+        {
+            MissionTask task = currentMission.Tasks.Find(candidate => candidate.Id == taskId);
+            if (task == null || !task.IsComplete)
+            {
+                return false;
+            }
+        }
+
+        return true;
     }
 
     private void EnsureMission(int number, string title, MissionTask[] defaultTasks)
@@ -923,7 +1050,7 @@ public class MissionManager : MonoBehaviour
 
         VerticalLayoutGroup layout = tasksObject.AddComponent<VerticalLayoutGroup>();
         layout.padding = new RectOffset(0, 0, 0, 0);
-        layout.spacing = 6f;
+        layout.spacing = 4f;
         layout.childControlHeight = false;
         layout.childControlWidth = true;
         layout.childForceExpandHeight = false;
@@ -972,8 +1099,8 @@ public class MissionManager : MonoBehaviour
         markerRect.anchorMin = new Vector2(0f, 0.5f);
         markerRect.anchorMax = new Vector2(0f, 0.5f);
         markerRect.pivot = new Vector2(0.5f, 0.5f);
-        markerRect.anchoredPosition = new Vector2(24f, 0f);
-        markerRect.sizeDelta = new Vector2(18f, 18f);
+        markerRect.anchoredPosition = new Vector2(20f, 0f);
+        markerRect.sizeDelta = new Vector2(12f, 12f);
 
         Image markerImage = markerObject.AddComponent<Image>();
         markerImage.color = task.IsComplete ? new Color(0.1f, 0.85f, 0.32f, 1f) : new Color(0.9f, 0.72f, 0.16f, 1f);
@@ -1026,7 +1153,7 @@ public class MissionManager : MonoBehaviour
     {
         if (panelRect != null)
         {
-            panelRect.anchorMin = isExpanded ? panelAnchorMin : collapsedPanelAnchorMin;
+            panelRect.anchorMin = isExpanded ? ResolveExpandedPanelAnchorMin() : collapsedPanelAnchorMin;
             panelRect.anchorMax = isExpanded ? panelAnchorMax : collapsedPanelAnchorMax;
             panelRect.offsetMin = Vector2.zero;
             panelRect.offsetMax = Vector2.zero;
@@ -1054,6 +1181,14 @@ public class MissionManager : MonoBehaviour
                 expandedContentCanvasGroup.alpha = fadeTarget;
             }
         }
+    }
+
+    private Vector2 ResolveExpandedPanelAnchorMin()
+    {
+        float screenHeight = Mathf.Max(Screen.height, 1f);
+        float requiredAnchorHeight = Mathf.Clamp01(minimumExpandedPanelHeight / screenHeight);
+        float minY = Mathf.Min(panelAnchorMin.y, panelAnchorMax.y - requiredAnchorHeight);
+        return new Vector2(panelAnchorMin.x, Mathf.Clamp01(minY));
     }
 
     private void UpdateFade()

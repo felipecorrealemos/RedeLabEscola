@@ -1,4 +1,6 @@
 using UnityEngine;
+using UnityEngine.EventSystems;
+using UnityEngine.UI;
 
 [DisallowMultipleComponent]
 public class DeviceDropZone : MonoBehaviour
@@ -18,6 +20,10 @@ public class DeviceDropZone : MonoBehaviour
     [SerializeField] private float pulseAmount = 0.12f;
     [SerializeField] private float pulseSpeed = 4f;
     [SerializeField] private float visibleRange = 2.2f;
+    [SerializeField] private string placePromptFormat = "Aperte E para colocar {0}";
+    [SerializeField] private Canvas canvas;
+    [SerializeField] private GameObject promptObject;
+    [SerializeField] private Text promptLabel;
 
     public Vector3 PlacePosition => GetSurfacePosition() + Vector3.up * placementVerticalOffset;
     public Vector3 IndicatorPosition => PlacePosition + Vector3.up * (indicatorHeight + indicatorVerticalOffset);
@@ -37,6 +43,8 @@ public class DeviceDropZone : MonoBehaviour
     private void Awake()
     {
         EnsureIndicator();
+        EnsurePrompt();
+        SetPromptVisible(false, null);
     }
 
     private void Update()
@@ -128,6 +136,7 @@ public class DeviceDropZone : MonoBehaviour
         float pulse = 1f + (Mathf.Sin(Time.time * pulseSpeed) * 0.5f + 0.5f) * pulseAmount * visibleBlend;
         indicator.localScale = baseIndicatorScale * pulse;
         indicator.gameObject.SetActive(visibleBlend > 0.01f);
+        SetPromptVisible(canReceive && visibleBlend > 0.5f, carriedDevice);
     }
 
     private void PositionIndicator()
@@ -302,6 +311,11 @@ public class DeviceDropZone : MonoBehaviour
             return false;
         }
 
+        if (isComputerDropPoint)
+        {
+            return MissionNumber == targetMissionNumber;
+        }
+
         if (targetMissionNumber == 1)
         {
             return IsDeskNumber(lowerName, 1);
@@ -309,7 +323,7 @@ public class DeviceDropZone : MonoBehaviour
 
         if (targetMissionNumber == 2)
         {
-            return IsDeskNumber(lowerName, 1) || IsDeskNumber(lowerName, 2);
+            return IsDeskNumber(lowerName, 1);
         }
 
         return false;
@@ -358,6 +372,139 @@ public class DeviceDropZone : MonoBehaviour
         }
 
         return null;
+    }
+
+    private void SetPromptVisible(bool visible, MovableDevice device)
+    {
+        EnsurePrompt();
+        if (promptLabel != null && device != null)
+        {
+            promptLabel.text = string.Format(placePromptFormat, GetDisplayDeviceName(device));
+        }
+
+        if (promptObject != null)
+        {
+            promptObject.SetActive(visible);
+        }
+    }
+
+    private string GetDisplayDeviceName(MovableDevice device)
+    {
+        if (device == null)
+        {
+            return "dispositivo";
+        }
+
+        string lowerName = (device.DeviceName + " " + device.name).ToLowerInvariant();
+        if (lowerName.Contains("printer") || lowerName.Contains("impressora"))
+        {
+            return "a impressora";
+        }
+
+        if (lowerName.Contains("computer") || lowerName.Contains("computador") || lowerName.Contains("gabinete"))
+        {
+            return "o computador";
+        }
+
+        return "o dispositivo";
+    }
+
+    private void EnsurePrompt()
+    {
+        if (canvas == null)
+        {
+            canvas = FindCanvasByName("InteractionCanvas");
+        }
+
+        if (canvas == null)
+        {
+            GameObject canvasObject = new GameObject("InteractionCanvas");
+            canvas = canvasObject.AddComponent<Canvas>();
+            canvas.renderMode = RenderMode.ScreenSpaceOverlay;
+            canvasObject.AddComponent<CanvasScaler>();
+            canvasObject.AddComponent<GraphicRaycaster>();
+        }
+
+        EnsureEventSystem();
+
+        if (promptObject == null)
+        {
+            promptObject = new GameObject("DropZonePrompt");
+            promptObject.transform.SetParent(canvas.transform, false);
+            RectTransform promptRect = promptObject.AddComponent<RectTransform>();
+            promptRect.anchorMin = new Vector2(0.5f, 0f);
+            promptRect.anchorMax = new Vector2(0.5f, 0f);
+            promptRect.pivot = new Vector2(0.5f, 0f);
+            promptRect.anchoredPosition = new Vector2(0f, 132f);
+            promptRect.sizeDelta = new Vector2(420f, 42f);
+
+            Image background = promptObject.AddComponent<Image>();
+            background.color = new Color(0f, 0f, 0f, 0.55f);
+
+            GameObject labelObject = new GameObject("Text");
+            labelObject.transform.SetParent(promptObject.transform, false);
+            RectTransform labelRect = labelObject.AddComponent<RectTransform>();
+            labelRect.anchorMin = Vector2.zero;
+            labelRect.anchorMax = Vector2.one;
+            labelRect.offsetMin = Vector2.zero;
+            labelRect.offsetMax = Vector2.zero;
+            promptLabel = labelObject.AddComponent<Text>();
+        }
+
+        RectTransform existingPromptRect = promptObject.GetComponent<RectTransform>();
+        if (existingPromptRect != null)
+        {
+            existingPromptRect.anchorMin = new Vector2(0.5f, 0f);
+            existingPromptRect.anchorMax = new Vector2(0.5f, 0f);
+            existingPromptRect.pivot = new Vector2(0.5f, 0f);
+            existingPromptRect.anchoredPosition = new Vector2(0f, 132f);
+            existingPromptRect.sizeDelta = new Vector2(420f, 42f);
+        }
+
+        if (promptLabel != null)
+        {
+            promptLabel.alignment = TextAnchor.MiddleCenter;
+            promptLabel.color = Color.white;
+            promptLabel.font = GetDefaultFont();
+            promptLabel.fontSize = 18;
+        }
+    }
+
+    private Canvas FindCanvasByName(string canvasName)
+    {
+        Canvas[] canvases = FindObjectsOfType<Canvas>(true);
+        for (int i = 0; i < canvases.Length; i++)
+        {
+            if (canvases[i].name == canvasName)
+            {
+                return canvases[i];
+            }
+        }
+
+        return FindObjectOfType<Canvas>();
+    }
+
+    private void EnsureEventSystem()
+    {
+        if (FindObjectOfType<EventSystem>() != null)
+        {
+            return;
+        }
+
+        GameObject eventSystemObject = new GameObject("EventSystem");
+        eventSystemObject.AddComponent<EventSystem>();
+        eventSystemObject.AddComponent<StandaloneInputModule>();
+    }
+
+    private Font GetDefaultFont()
+    {
+        Font font = Resources.GetBuiltinResource<Font>("LegacyRuntime.ttf");
+        if (font == null)
+        {
+            font = Resources.GetBuiltinResource<Font>("Arial.ttf");
+        }
+
+        return font;
     }
 
     private void SetIndicatorAlpha(float alpha)

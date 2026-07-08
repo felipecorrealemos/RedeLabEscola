@@ -239,6 +239,16 @@ public class MovableDevice : MonoBehaviour
             || lowerObjectName.Contains("gabinete");
     }
 
+    public bool IsPrinterDevice()
+    {
+        string lowerDeviceName = deviceName.ToLowerInvariant();
+        string lowerObjectName = name.ToLowerInvariant();
+        return lowerDeviceName.Contains("printer")
+            || lowerDeviceName.Contains("impressora")
+            || lowerObjectName.Contains("printer")
+            || lowerObjectName.Contains("impressora");
+    }
+
     private bool HasChildNamed(Transform root, string childName)
     {
         if (root == null || string.IsNullOrWhiteSpace(childName))

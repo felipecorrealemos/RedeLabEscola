@@ -37,7 +37,10 @@ public class PlayerTopDownController : MonoBehaviour
     [SerializeField] private string pushButtonParameter = "PushButton";
 
     private MovableDevice carriedDevice;
+    private PrintedDocumentInteractable carriedDocument;
     private MovableDevice highlightedDevice;
+    private PrintedDocumentInteractable highlightedDocument;
+    private ProfessorDocumentReceiver highlightedProfessor;
     private RouterInteractable highlightedRouter;
     private ComputerInteractable highlightedComputer;
     private KeyboardTerminalInteractable highlightedComputerTerminal;
@@ -108,6 +111,16 @@ public class PlayerTopDownController : MonoBehaviour
             return;
         }
 
+        if (carriedDocument == null)
+        {
+            PrintedDocumentInteractable document = FindNearestPrintedDocument(out _);
+            if (document != null)
+            {
+                PickUpDocument(document);
+                return;
+            }
+        }
+
         MovableDevice device = FindNearestMovableDevice(out _);
         if (device != null)
         {
@@ -117,6 +130,19 @@ public class PlayerTopDownController : MonoBehaviour
 
     private void HandleInteractionInput()
     {
+        if (carriedDocument != null)
+        {
+            ProfessorDocumentReceiver professor = FindNearestProfessorDocumentReceiver(out _);
+            if (professor != null)
+            {
+                professor.Receive(carriedDocument);
+                carriedDocument = null;
+                SetAnimatorBool(carryingParameter, false);
+                SetHighlightedProfessor(null);
+                return;
+            }
+        }
+
         RouterInteractable router = FindNearestRouter(out float routerDistance);
         PressButtonInteractable button = FindNearestButton(out float buttonDistance);
         ComputerInteractable computer = FindNearestComputer(out float computerDistance);
@@ -162,6 +188,21 @@ public class PlayerTopDownController : MonoBehaviour
         SetAnimatorBool(carryingParameter, true);
     }
 
+    private void PickUpDocument(PrintedDocumentInteractable document)
+    {
+        EnsureCarryAnchor();
+
+        if (carryAnchor == null || document == null)
+        {
+            return;
+        }
+
+        SetHighlightedDocument(null);
+        carriedDocument = document;
+        carriedDocument.PickUp(carryAnchor);
+        SetAnimatorBool(carryingParameter, true);
+    }
+
     private void TryDropCarriedDevice()
     {
         DeviceDropZone dropZone = FindNearestDropZone();
@@ -180,9 +221,22 @@ public class PlayerTopDownController : MonoBehaviour
         if (carriedDevice != null)
         {
             SetHighlightedDevice(null);
+            SetHighlightedDocument(null);
+            SetHighlightedProfessor(null);
             SetHighlightedRouter(null);
             SetHighlightedComputer(null);
             SetHighlightedComputerTerminal(null);
+            return;
+        }
+
+        if (carriedDocument != null)
+        {
+            SetHighlightedDevice(null);
+            SetHighlightedDocument(null);
+            SetHighlightedRouter(null);
+            SetHighlightedComputer(null);
+            SetHighlightedComputerTerminal(null);
+            SetHighlightedProfessor(FindNearestProfessorDocumentReceiver(out _));
             return;
         }
 
@@ -190,12 +244,16 @@ public class PlayerTopDownController : MonoBehaviour
         ComputerInteractable nearestComputer = FindNearestComputer(out float computerDistance);
         KeyboardTerminalInteractable nearestComputerTerminal = FindNearestComputerTerminal(out float terminalDistance);
         MovableDevice nearestDevice = FindNearestMovableDevice(out _);
+        PrintedDocumentInteractable nearestDocument = FindNearestPrintedDocument(out _);
+        SetHighlightedProfessor(null);
         SetHighlightedRouter(nearestRouter);
         SetHighlightedComputer(nearestComputer);
         SetHighlightedComputerTerminal(nearestComputerTerminal);
+        SetHighlightedDocument(nearestDocument);
         if (nearestComputerTerminal != null && terminalDistance <= interactionRadius * interactionRadius)
         {
             SetHighlightedDevice(null);
+            SetHighlightedDocument(null);
             SetHighlightedComputer(null);
             return;
         }
@@ -203,12 +261,20 @@ public class PlayerTopDownController : MonoBehaviour
         if (nearestRouter != null && routerDistance <= interactionRadius * interactionRadius)
         {
             SetHighlightedDevice(null);
+            SetHighlightedDocument(null);
             return;
         }
 
         if (nearestComputer != null && computerDistance <= interactionRadius * interactionRadius)
         {
             SetHighlightedDevice(nearestDevice);
+            SetHighlightedDocument(null);
+            return;
+        }
+
+        if (nearestDocument != null)
+        {
+            SetHighlightedDevice(null);
             return;
         }
 
@@ -260,6 +326,46 @@ public class PlayerTopDownController : MonoBehaviour
         if (highlightedDevice != null)
         {
             highlightedDevice.SetInteractionHighlighted(true);
+        }
+    }
+
+    private void SetHighlightedDocument(PrintedDocumentInteractable document)
+    {
+        if (highlightedDocument == document)
+        {
+            return;
+        }
+
+        if (highlightedDocument != null)
+        {
+            highlightedDocument.SetPromptVisible(false);
+        }
+
+        highlightedDocument = document;
+
+        if (highlightedDocument != null)
+        {
+            highlightedDocument.SetPromptVisible(true);
+        }
+    }
+
+    private void SetHighlightedProfessor(ProfessorDocumentReceiver professor)
+    {
+        if (highlightedProfessor == professor)
+        {
+            return;
+        }
+
+        if (highlightedProfessor != null)
+        {
+            highlightedProfessor.SetPromptVisible(false);
+        }
+
+        highlightedProfessor = professor;
+
+        if (highlightedProfessor != null)
+        {
+            highlightedProfessor.SetPromptVisible(carriedDocument != null);
         }
     }
 
@@ -426,6 +532,71 @@ public class PlayerTopDownController : MonoBehaviour
         }
 
         return nearestDevice;
+    }
+
+    private PrintedDocumentInteractable FindNearestPrintedDocument(out float nearestDistance)
+    {
+        PrintedDocumentInteractable nearestDocument = null;
+        nearestDistance = float.MaxValue;
+        GetInteractionCapsulePoints(out Vector3 bottom, out Vector3 top);
+        int hitCount = Physics.OverlapCapsuleNonAlloc(bottom, top, interactionRadius, interactionHits, interactionMask, QueryTriggerInteraction.Collide);
+
+        for (int i = 0; i < hitCount; i++)
+        {
+            Collider hit = interactionHits[i];
+            if (hit == null || hit.transform.IsChildOf(transform))
+            {
+                continue;
+            }
+
+            PrintedDocumentInteractable document = hit.GetComponentInParent<PrintedDocumentInteractable>();
+            if (document == null || !document.CanPickUp)
+            {
+                continue;
+            }
+
+            float sqrDistance = Vector3.SqrMagnitude(document.transform.position - transform.position);
+            if (sqrDistance < nearestDistance)
+            {
+                nearestDistance = sqrDistance;
+                nearestDocument = document;
+            }
+        }
+
+        return nearestDocument;
+    }
+
+    private ProfessorDocumentReceiver FindNearestProfessorDocumentReceiver(out float nearestDistance)
+    {
+        ProfessorDocumentReceiver nearestProfessor = null;
+        nearestDistance = float.MaxValue;
+        GetInteractionCapsulePoints(out Vector3 bottom, out Vector3 top);
+        int hitCount = Physics.OverlapCapsuleNonAlloc(bottom, top, interactionRadius, interactionHits, interactionMask, QueryTriggerInteraction.Collide);
+
+        for (int i = 0; i < hitCount; i++)
+        {
+            Collider hit = interactionHits[i];
+            if (hit == null || hit.transform.IsChildOf(transform))
+            {
+                continue;
+            }
+
+            ProfessorDocumentReceiver professor = hit.GetComponentInParent<ProfessorDocumentReceiver>();
+
+            if (professor == null)
+            {
+                continue;
+            }
+
+            float sqrDistance = Vector3.SqrMagnitude(professor.transform.position - transform.position);
+            if (sqrDistance < nearestDistance)
+            {
+                nearestDistance = sqrDistance;
+                nearestProfessor = professor;
+            }
+        }
+
+        return nearestProfessor;
     }
 
     private PressButtonInteractable FindNearestButton(out float nearestDistance)

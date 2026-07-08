@@ -4,8 +4,8 @@ using UnityEngine;
 public class NetworkDoorDevice : MonoBehaviour
 {
     [SerializeField] private string deviceLabel = "Dispositivo da porta";
-    [SerializeField] private bool autoAssignPreferredIp = true;
-    [SerializeField] private string preferredIpAddress = "192.168.0.5";
+    [SerializeField] private bool autoAssignPreferredIp = false;
+    [SerializeField] private string preferredIpAddress = "";
     [SerializeField] private Transform doorPivot;
     [SerializeField] private float openAngle = 90f;
     [SerializeField] private float rotationSpeed = 180f;
@@ -51,7 +51,7 @@ public class NetworkDoorDevice : MonoBehaviour
     public void Toggle()
     {
         EnsureDoorPivot();
-        if (doorPivot == null || controlledByAccessGroup || !CanOperate)
+        if (doorPivot == null || controlledByAccessGroup || !CanOperate || !MissionManager.CanOperateDoorCommand(this))
         {
             return;
         }
@@ -68,7 +68,7 @@ public class NetworkDoorDevice : MonoBehaviour
     public void SetOpenFromAccessGroup(bool open)
     {
         EnsureDoorPivot();
-        if (doorPivot == null || !CanOperate)
+        if (doorPivot == null || !CanOperate || !MissionManager.CanOperateDoorCommand(this))
         {
             return;
         }
@@ -114,12 +114,17 @@ public class NetworkDoorDevice : MonoBehaviour
     private Transform FindNearestDoorPivot()
     {
         Transform[] transforms = FindObjectsOfType<Transform>(true);
+        Transform areaRoot = FindAreaRoot(transform);
         Transform nearestPivot = null;
         float nearestDistance = float.MaxValue;
 
         foreach (Transform candidate in transforms)
         {
-            if (candidate == null || candidate.IsChildOf(transform) || !IsPivotTransform(candidate) || !ContainsDoorTransform(candidate))
+            if (candidate == null
+                || candidate.IsChildOf(transform)
+                || !IsInSameArea(candidate, areaRoot)
+                || !IsPivotTransform(candidate)
+                || !ContainsDoorTransform(candidate))
             {
                 continue;
             }
@@ -139,7 +144,10 @@ public class NetworkDoorDevice : MonoBehaviour
 
         foreach (Transform candidate in transforms)
         {
-            if (candidate == null || candidate.IsChildOf(transform) || !IsDoorTransform(candidate))
+            if (candidate == null
+                || candidate.IsChildOf(transform)
+                || !IsInSameArea(candidate, areaRoot)
+                || !IsDoorTransform(candidate))
             {
                 continue;
             }
@@ -235,5 +243,27 @@ public class NetworkDoorDevice : MonoBehaviour
     {
         string lowerName = candidate.name.ToLowerInvariant();
         return lowerName == "pivot" || lowerName == "pivo" || lowerName.StartsWith("piv");
+    }
+
+    private Transform FindAreaRoot(Transform origin)
+    {
+        Transform current = origin;
+        while (current != null)
+        {
+            string lowerName = current.name.ToLowerInvariant();
+            if (lowerName.Contains("sala "))
+            {
+                return current;
+            }
+
+            current = current.parent;
+        }
+
+        return null;
+    }
+
+    private bool IsInSameArea(Transform candidate, Transform areaRoot)
+    {
+        return areaRoot == null || candidate == areaRoot || candidate.IsChildOf(areaRoot);
     }
 }

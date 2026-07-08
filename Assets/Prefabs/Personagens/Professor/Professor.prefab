@@ -9,6 +9,8 @@ GameObject:
   serializedVersion: 6
   m_Component:
   - component: {fileID: 6379027360904610001}
+  - component: {fileID: 6401427581049155230}
+  - component: {fileID: 6401427581049155231}
   m_Layer: 0
   m_Name: Professor
   m_TagString: Untagged
@@ -32,6 +34,51 @@ Transform:
   - {fileID: 4300073629527224438}
   m_Father: {fileID: 0}
   m_LocalEulerAnglesHint: {x: 0, y: 92.195, z: 0}
+--- !u!65 &6401427581049155230
+BoxCollider:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 6401427581049155229}
+  m_Material: {fileID: 0}
+  m_IncludeLayers:
+    serializedVersion: 2
+    m_Bits: 0
+  m_ExcludeLayers:
+    serializedVersion: 2
+    m_Bits: 0
+  m_LayerOverridePriority: 0
+  m_IsTrigger: 1
+  m_ProvidesContacts: 0
+  m_Enabled: 1
+  serializedVersion: 3
+  m_Size: {x: 2, y: 2, z: 2}
+  m_Center: {x: 0, y: 1, z: 0}
+--- !u!114 &6401427581049155231
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 6401427581049155229}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 7bf92b7b51bd40d0aa24fd995c351f51, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: 
+  promptText: F entregar documento
+  documentAnchor: {fileID: 0}
+  generatedAnchorLocalPosition: {x: 0.42, y: 1.18, z: 0.34}
+  generatedAnchorLocalEulerAngles: {x: 72, y: 0, z: 12}
+  triggerSize: {x: 2, y: 2, z: 2}
+  triggerCenter: {x: 0, y: 1, z: 0}
+  animator: {fileID: 0}
+  carryingParameter: IsCarrying
+  carryingStateName: Idle
+  canvas: {fileID: 0}
+  promptObject: {fileID: 0}
+  promptLabel: {fileID: 0}
 --- !u!1001 &4334247707888834461
 PrefabInstance:
   m_ObjectHideFlags: 0

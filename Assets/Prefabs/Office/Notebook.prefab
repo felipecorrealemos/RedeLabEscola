@@ -2433,7 +2433,9 @@ MonoBehaviour:
   useComputerPromptText: F usar notebook
   deviceTitle: Notebook
   stationaryNetworkDevice: 0
-  networkScope: {fileID: 0}
+  networkScopeOverride: {fileID: 0}
+  detectedNetworkScope: {fileID: 0}
+  detectedNetworkSource: Nenhuma rede detectada
   preferredIpAddress: 
   reservedDeviceName: Notebook
   usePoint: {fileID: 0}
@@ -2453,6 +2455,7 @@ MonoBehaviour:
   generatedLightLocalPosition: {x: 0.66, y: 0.115, z: -0.47}
   generatedLightLocalScale: {x: 0.12, y: 0.08, z: 0.04}
   monitorScreenRenderer: {fileID: 0}
+  monitorScreenSpotlight: {fileID: 0}
   screenOffMaterial: {fileID: 2100000, guid: fdef38ae89766f34098be69f4907cf1a, type: 2}
   screenOnMaterial: {fileID: 2100000, guid: 43f6aca0f228ce848b6ab723b8cf8642, type: 2}
   canvas: {fileID: 0}

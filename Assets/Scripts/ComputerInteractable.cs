@@ -2,12 +2,14 @@ using System.Collections;
 using System.Collections.Generic;
 using UnityEngine;
 using UnityEngine.EventSystems;
+using UnityEngine.Serialization;
 using UnityEngine.UI;
 
 [DisallowMultipleComponent]
 public class ComputerInteractable : MonoBehaviour
 {
     private const string WhiteMaterialPath = "Assets/Prefabs/materiais/branco.mat";
+    private const string ScreenOnMaterialPath = "Assets/Prefabs/materiais/tela branca.mat";
     private const string GrayMaterialPath = "Assets/Prefabs/materiais/cinza.mat";
     private const string RedMaterialPath = "Assets/Prefabs/materiais/vermelho.mat";
     private const string GreenMaterialPath = "Assets/Prefabs/materiais/verde.mat";
@@ -19,7 +21,11 @@ public class ComputerInteractable : MonoBehaviour
     [SerializeField] private string useComputerPromptText = "F usar computador";
     [SerializeField] private string deviceTitle = "Computador";
     [SerializeField] private bool stationaryNetworkDevice;
-    [SerializeField] private NetworkScope networkScope;
+    [HideInInspector]
+    [FormerlySerializedAs("networkScope")]
+    [SerializeField] private NetworkScope networkScopeOverride;
+    [SerializeField, InspectorName("Rede detectada")] private NetworkScope detectedNetworkScope;
+    [SerializeField, InspectorName("Origem da rede")] private string detectedNetworkSource = "Nenhuma rede detectada";
     [SerializeField] private string preferredIpAddress;
     [SerializeField] private string reservedDeviceName;
     [SerializeField] private Transform usePoint;
@@ -47,6 +53,7 @@ public class ComputerInteractable : MonoBehaviour
 
     [Header("Monitor Screen")]
     [SerializeField] private Renderer monitorScreenRenderer;
+    [SerializeField] private Light monitorScreenSpotlight;
     [SerializeField] private Material screenOffMaterial;
     [SerializeField] private Material screenOnMaterial;
 
@@ -90,6 +97,7 @@ public class ComputerInteractable : MonoBehaviour
         EnsureNetworkJackPoints();
         EnsureUsePoint();
         EnsureNetworkDoorDevices();
+        EnsureNetworkPrinterDevices();
         EnsureStatusLight();
         EnsureMonitorScreen();
         EnsureUi();
@@ -143,6 +151,7 @@ public class ComputerInteractable : MonoBehaviour
         SetRouter(null);
         EnsureNetworkJackPoints();
         EnsureNetworkDoorDevices();
+        EnsureNetworkPrinterDevices();
         EnsureRouter();
         UpdateStatusLight();
         RefreshIpRows();
@@ -220,6 +229,7 @@ public class ComputerInteractable : MonoBehaviour
 
         EnsureRouter();
         EnsureNetworkDoorDevices();
+        EnsureNetworkPrinterDevices();
         EnsureUi();
         showingTerminalPanel = false;
         RefreshIpRows();
@@ -237,6 +247,7 @@ public class ComputerInteractable : MonoBehaviour
         }
 
         EnsureNetworkDoorDevices();
+        EnsureNetworkPrinterDevices();
         EnsureUi();
         showingTerminalPanel = true;
         RefreshIpRows();
@@ -288,18 +299,24 @@ public class ComputerInteractable : MonoBehaviour
 
     private void TryAssignPreferredIp()
     {
-        if (!stationaryNetworkDevice || !string.IsNullOrWhiteSpace(assignedIp) || string.IsNullOrWhiteSpace(preferredIpAddress))
+        if (!stationaryNetworkDevice || !string.IsNullOrWhiteSpace(assignedIp))
         {
             return;
         }
 
         NetworkScope scope = ResolveNetworkScope(false);
-        if (!IsConnectedToNetworkJack || scope == null || !scope.ContainsAddress(preferredIpAddress))
+        string targetIpAddress = ResolvePreferredIpAddress(scope);
+        if (!IsConnectedToNetworkJack || scope == null || string.IsNullOrWhiteSpace(targetIpAddress) || !scope.ContainsAddress(targetIpAddress))
         {
             return;
         }
 
-        SelectIp(preferredIpAddress);
+        SelectIp(targetIpAddress);
+    }
+
+    private string ResolvePreferredIpAddress(NetworkScope scope)
+    {
+        return !string.IsNullOrWhiteSpace(preferredIpAddress) ? preferredIpAddress : string.Empty;
     }
 
     private void EnsureRouter()
@@ -382,30 +399,42 @@ public class ComputerInteractable : MonoBehaviour
 
     private NetworkScope ResolveNetworkScope(bool allowPreferredIpLookup)
     {
-        if (networkScope != null)
+        NetworkScope resolvedScope = ResolveNetworkScopeInternal(out string sourceDescription);
+        CacheDetectedNetworkScope(resolvedScope, sourceDescription);
+        return resolvedScope;
+    }
+
+    private NetworkScope ResolveNetworkScopeInternal(out string sourceDescription)
+    {
+        if (networkScopeOverride != null)
         {
-            return networkScope;
+            sourceDescription = "Override manual";
+            return networkScopeOverride;
         }
 
         if (connectedJack != null)
         {
+            sourceDescription = "RJ-45: " + connectedJack.name;
             return connectedJack.NetworkScope;
         }
 
         if (currentDropZone != null && currentDropZone.NetworkScope != null)
         {
+            sourceDescription = "Ponto de rede: " + currentDropZone.name;
             return currentDropZone.NetworkScope;
         }
 
         NetworkScope dropZoneAreaScope = FindNetworkScopeForAreaOwner(currentDropZone != null ? currentDropZone.transform : null);
         if (dropZoneAreaScope != null)
         {
+            sourceDescription = "Roteador da area";
             return dropZoneAreaScope;
         }
 
         NetworkScope parentScope = GetComponentInParent<NetworkScope>();
         if (parentScope != null)
         {
+            sourceDescription = "NetworkScope pai";
             return parentScope;
         }
 
@@ -415,11 +444,19 @@ public class ComputerInteractable : MonoBehaviour
             NetworkScope areaScope = areaRoot.GetComponentInChildren<NetworkScope>(true);
             if (areaScope != null)
             {
+                sourceDescription = "NetworkScope da sala";
                 return areaScope;
             }
         }
 
+        sourceDescription = "Nenhuma rede detectada";
         return null;
+    }
+
+    private void CacheDetectedNetworkScope(NetworkScope resolvedScope, string sourceDescription)
+    {
+        detectedNetworkScope = resolvedScope;
+        detectedNetworkSource = string.IsNullOrWhiteSpace(sourceDescription) ? "Nenhuma rede detectada" : sourceDescription;
     }
 
     private void ReleaseAssignedIpIfOutsideActiveScope()
@@ -622,10 +659,11 @@ public class ComputerInteractable : MonoBehaviour
         if (stationaryNetworkDevice || IsPrinterDevice())
         {
             monitorScreenRenderer = null;
+            monitorScreenSpotlight = null;
             return;
         }
 
-        if (monitorScreenRenderer != null)
+        if (monitorScreenRenderer != null && monitorScreenSpotlight != null)
         {
             return;
         }
@@ -638,8 +676,30 @@ public class ComputerInteractable : MonoBehaviour
 
         if (screen != null)
         {
-            monitorScreenRenderer = screen.GetComponent<Renderer>();
+            if (monitorScreenRenderer == null)
+            {
+                monitorScreenRenderer = screen.GetComponent<Renderer>();
+            }
+
+            if (monitorScreenSpotlight == null)
+            {
+                monitorScreenSpotlight = FindSpotlightInChildren(screen);
+            }
         }
+    }
+
+    private Light FindSpotlightInChildren(Transform parent)
+    {
+        Light[] lights = parent.GetComponentsInChildren<Light>(true);
+        for (int i = 0; i < lights.Length; i++)
+        {
+            if (lights[i].type == LightType.Spot)
+            {
+                return lights[i];
+            }
+        }
+
+        return lights.Length > 0 ? lights[0] : null;
     }
 
     private void UpdateMonitorScreen()
@@ -664,6 +724,17 @@ public class ComputerInteractable : MonoBehaviour
         if (targetMaterial != null)
         {
             monitorScreenRenderer.sharedMaterial = targetMaterial;
+        }
+
+        if (monitorScreenSpotlight != null)
+        {
+            bool shouldEnableSpotlight = IsNetworkOperational;
+            if (monitorScreenSpotlight.gameObject.activeSelf != shouldEnableSpotlight)
+            {
+                monitorScreenSpotlight.gameObject.SetActive(shouldEnableSpotlight);
+            }
+
+            monitorScreenSpotlight.enabled = shouldEnableSpotlight;
         }
     }
 
@@ -885,6 +956,7 @@ public class ComputerInteractable : MonoBehaviour
 
         EnsureRouter();
         EnsureNetworkDoorDevices();
+        EnsureNetworkPrinterDevices();
         ApplyContentPadding();
 
         for (int i = ipScrollRect.content.childCount - 1; i >= 0; i--)
@@ -924,7 +996,9 @@ public class ComputerInteractable : MonoBehaviour
         DualNetworkDoorController[] dualDoors = FindObjectsOfType<DualNetworkDoorController>(true);
         HashSet<NetworkDoorDevice> devicesControlledByDualDoors = new HashSet<NetworkDoorDevice>();
         NetworkDoorDevice[] doorDevices = FindObjectsOfType<NetworkDoorDevice>(true);
+        NetworkPrinterDevice[] printerDevices = FindObjectsOfType<NetworkPrinterDevice>(true);
         List<NetworkDoorDevice> visibleDoorDevices = new List<NetworkDoorDevice>();
+        Dictionary<Transform, NetworkPrinterDevice> visiblePrinterDevices = new Dictionary<Transform, NetworkPrinterDevice>();
         bool createdAny = false;
         bool createdDualDoor = false;
 
@@ -964,12 +1038,44 @@ public class ComputerInteractable : MonoBehaviour
         {
             CreateImplicitDualNetworkDoorRow(visibleDoorDevices[0], visibleDoorDevices[1]);
             createdAny = true;
-            return;
+            visibleDoorDevices.Clear();
         }
 
         foreach (NetworkDoorDevice device in visibleDoorDevices)
         {
             CreateNetworkDeviceRow(device);
+            createdAny = true;
+        }
+
+        foreach (NetworkPrinterDevice printer in printerDevices)
+        {
+            if (printer == null || !printer.isActiveAndEnabled)
+            {
+                continue;
+            }
+
+            NetworkPrinterDevice canonicalPrinter = ResolveCanonicalPrinterDevice(printer);
+            if (canonicalPrinter == null || !canonicalPrinter.isActiveAndEnabled || !IsInSameArea(canonicalPrinter.transform, areaRoot))
+            {
+                continue;
+            }
+
+            Transform printerRoot = ResolvePrinterRootTransform(canonicalPrinter.transform);
+            if (printerRoot == null)
+            {
+                printerRoot = canonicalPrinter.transform;
+            }
+
+            if (!visiblePrinterDevices.TryGetValue(printerRoot, out NetworkPrinterDevice existingPrinter)
+                || (!existingPrinter.CanPrint && canonicalPrinter.CanPrint))
+            {
+                visiblePrinterDevices[printerRoot] = canonicalPrinter;
+            }
+        }
+
+        foreach (NetworkPrinterDevice printer in visiblePrinterDevices.Values)
+        {
+            CreatePrinterDeviceRow(printer);
             createdAny = true;
         }
 
@@ -989,7 +1095,10 @@ public class ComputerInteractable : MonoBehaviour
         firstDevice.SetControlledByAccessGroup(true);
         secondDevice.SetControlledByAccessGroup(true);
 
-        bool canOperate = firstDevice.CanOperate && secondDevice.CanOperate;
+        bool canOperate = firstDevice.CanOperate
+            && secondDevice.CanOperate
+            && MissionManager.CanOperateDoorCommand(firstDevice)
+            && MissionManager.CanOperateDoorCommand(secondDevice);
         bool isOpen = firstDevice.IsOpen && secondDevice.IsOpen;
         int connectedCount = GetConnectedDoorDeviceCount(firstDevice, secondDevice);
 
@@ -1059,6 +1168,75 @@ public class ComputerInteractable : MonoBehaviour
         buttonText.fontStyle = FontStyle.Bold;
     }
 
+    private void CreatePrinterDeviceRow(NetworkPrinterDevice printer)
+    {
+        GameObject rowObject = CreateUiObject("Printer_" + printer.DeviceLabel, ipScrollRect.content);
+        RectTransform rowRect = rowObject.AddComponent<RectTransform>();
+        rowRect.sizeDelta = new Vector2(0f, rowHeight);
+
+        LayoutElement rowLayout = rowObject.AddComponent<LayoutElement>();
+        rowLayout.minHeight = rowHeight;
+        rowLayout.preferredHeight = rowHeight;
+
+        bool canPrintDocument = printer.CanPrint && !printer.HasPrintedDocument;
+
+        Image rowImage = rowObject.AddComponent<Image>();
+        rowImage.color = printer.CanPrint ? new Color(1f, 1f, 1f, 0.94f) : new Color(0.82f, 0.82f, 0.82f, 0.92f);
+
+        GameObject textObject = CreateUiObject("Text", rowObject.transform);
+        RectTransform textRect = textObject.AddComponent<RectTransform>();
+        textRect.anchorMin = Vector2.zero;
+        textRect.anchorMax = Vector2.one;
+        textRect.offsetMin = new Vector2(rowHorizontalPadding, 0f);
+        textRect.offsetMax = new Vector2(-148f, 0f);
+
+        Text printerText = textObject.AddComponent<Text>();
+        printerText.text = printer.DeviceLabel + " - " + printer.StateLabel;
+        printerText.alignment = TextAnchor.MiddleLeft;
+        printerText.color = new Color(0.1f, 0.1f, 0.1f, 1f);
+        printerText.font = GetDefaultFont();
+        printerText.fontSize = 14;
+        printerText.horizontalOverflow = HorizontalWrapMode.Wrap;
+        printerText.verticalOverflow = VerticalWrapMode.Truncate;
+
+        GameObject buttonObject = CreateUiObject("Action", rowObject.transform);
+        RectTransform buttonRect = buttonObject.AddComponent<RectTransform>();
+        buttonRect.anchorMin = new Vector2(1f, 0f);
+        buttonRect.anchorMax = new Vector2(1f, 1f);
+        buttonRect.pivot = new Vector2(1f, 0.5f);
+        buttonRect.anchoredPosition = new Vector2(-rowHorizontalPadding, 0f);
+        buttonRect.sizeDelta = new Vector2(132f, -8f);
+
+        Image buttonImage = buttonObject.AddComponent<Image>();
+        buttonImage.color = canPrintDocument ? new Color(0.16f, 0.45f, 0.92f, 0.92f) : new Color(0.62f, 0.62f, 0.62f, 0.72f);
+
+        Button button = buttonObject.AddComponent<Button>();
+        button.interactable = canPrintDocument;
+        button.targetGraphic = buttonImage;
+        button.onClick.AddListener(() =>
+        {
+            printer.PrintDocument();
+            RefreshIpRows();
+        });
+
+        GameObject labelObject = CreateUiObject("Text", buttonObject.transform);
+        RectTransform labelRect = labelObject.AddComponent<RectTransform>();
+        labelRect.anchorMin = Vector2.zero;
+        labelRect.anchorMax = Vector2.one;
+        labelRect.offsetMin = Vector2.zero;
+        labelRect.offsetMax = Vector2.zero;
+
+        Text buttonText = labelObject.AddComponent<Text>();
+        buttonText.text = printer.HasPrintedDocument ? "Impresso" : printer.CanPrint ? printer.ActionLabel : "Sem IP";
+        buttonText.alignment = TextAnchor.MiddleCenter;
+        buttonText.color = Color.white;
+        buttonText.font = GetDefaultFont();
+        buttonText.fontSize = 12;
+        buttonText.fontStyle = FontStyle.Bold;
+        buttonText.horizontalOverflow = HorizontalWrapMode.Wrap;
+        buttonText.verticalOverflow = VerticalWrapMode.Truncate;
+    }
+
     private void CreateDualNetworkDoorRow(DualNetworkDoorController dualDoor)
     {
         GameObject rowObject = CreateUiObject("DualDoor_" + dualDoor.DoorLabel, ipScrollRect.content);
@@ -1069,7 +1247,9 @@ public class ComputerInteractable : MonoBehaviour
         rowLayout.minHeight = rowHeight;
         rowLayout.preferredHeight = rowHeight;
 
-        bool canOperate = dualDoor.CanOperate;
+        bool canOperate = dualDoor.CanOperate
+            && MissionManager.CanOperateDoorCommand(dualDoor.FirstDevice)
+            && MissionManager.CanOperateDoorCommand(dualDoor.SecondDevice);
         int connectedCount = GetConnectedDoorDeviceCount(dualDoor.FirstDevice, dualDoor.SecondDevice);
         Image rowImage = rowObject.AddComponent<Image>();
         rowImage.color = canOperate ? new Color(1f, 1f, 1f, 0.94f) : new Color(0.82f, 0.82f, 0.82f, 0.92f);
@@ -1232,7 +1412,8 @@ public class ComputerInteractable : MonoBehaviour
         rowLayout.preferredHeight = rowHeight;
 
         Image rowImage = rowObject.AddComponent<Image>();
-        rowImage.color = device.CanOperate ? new Color(1f, 1f, 1f, 0.94f) : new Color(0.82f, 0.82f, 0.82f, 0.92f);
+        bool canOperate = device.CanOperate && MissionManager.CanOperateDoorCommand(device);
+        rowImage.color = canOperate ? new Color(1f, 1f, 1f, 0.94f) : new Color(0.82f, 0.82f, 0.82f, 0.92f);
 
         GameObject textObject = CreateUiObject("Text", rowObject.transform);
         RectTransform textRect = textObject.AddComponent<RectTransform>();
@@ -1242,7 +1423,7 @@ public class ComputerInteractable : MonoBehaviour
         textRect.offsetMax = new Vector2(-92f, 0f);
 
         Text deviceText = textObject.AddComponent<Text>();
-        deviceText.text = device.DeviceLabel + " - " + (device.CanOperate ? device.StateLabel : "Sem IP");
+        deviceText.text = device.DeviceLabel + " - " + (device.CanOperate ? (canOperate ? device.StateLabel : "Aguardando missao") : "Sem IP");
         deviceText.alignment = TextAnchor.MiddleLeft;
         deviceText.color = new Color(0.1f, 0.1f, 0.1f, 1f);
         deviceText.font = GetDefaultFont();
@@ -1259,10 +1440,10 @@ public class ComputerInteractable : MonoBehaviour
         buttonRect.sizeDelta = new Vector2(76f, -8f);
 
         Image buttonImage = buttonObject.AddComponent<Image>();
-        buttonImage.color = device.CanOperate ? new Color(0.16f, 0.45f, 0.92f, 0.92f) : new Color(0.62f, 0.62f, 0.62f, 0.72f);
+        buttonImage.color = canOperate ? new Color(0.16f, 0.45f, 0.92f, 0.92f) : new Color(0.62f, 0.62f, 0.62f, 0.72f);
 
         Button button = buttonObject.AddComponent<Button>();
-        button.interactable = device.CanOperate;
+        button.interactable = canOperate;
         button.targetGraphic = buttonImage;
         button.onClick.AddListener(() =>
         {
@@ -1279,7 +1460,7 @@ public class ComputerInteractable : MonoBehaviour
         labelRect.offsetMax = Vector2.zero;
 
         Text buttonText = labelObject.AddComponent<Text>();
-        buttonText.text = device.CanOperate ? device.ActionLabel : "Sem IP";
+        buttonText.text = device.CanOperate ? (canOperate ? device.ActionLabel : "Bloqueado") : "Sem IP";
         buttonText.alignment = TextAnchor.MiddleCenter;
         buttonText.color = Color.white;
         buttonText.font = GetDefaultFont();
@@ -1675,6 +1856,181 @@ public class ComputerInteractable : MonoBehaviour
         doorNetwork.ConfigureAsStationaryNetworkDevice(doorDevice.DeviceLabel, preferredIp, doorDevice.DeviceLabel);
     }
 
+    private void EnsureNetworkPrinterDevices()
+    {
+        ComputerInteractable[] networkDevices = FindObjectsOfType<ComputerInteractable>(true);
+        foreach (ComputerInteractable networkDevice in networkDevices)
+        {
+            if (networkDevice != null && networkDevice.IsPrinterDevice() && IsPrinterRootTransform(networkDevice.transform) && networkDevice.GetComponent<NetworkPrinterDevice>() == null)
+            {
+                ConfigurePrinterNetworkDevice(networkDevice.gameObject.AddComponent<NetworkPrinterDevice>());
+            }
+        }
+
+        RemoveDuplicatePrinterComponents();
+
+        NetworkPrinterDevice[] existingPrinters = FindObjectsOfType<NetworkPrinterDevice>(true);
+        foreach (NetworkPrinterDevice existingPrinter in existingPrinters)
+        {
+            ConfigurePrinterNetworkDevice(existingPrinter);
+        }
+
+        Transform[] transforms = FindObjectsOfType<Transform>(true);
+        foreach (Transform candidate in transforms)
+        {
+            if (candidate == null)
+            {
+                continue;
+            }
+
+            string lowerName = candidate.name.ToLowerInvariant();
+            bool isPrinterRoot = lowerName.Contains("printer") || lowerName.Contains("impressora");
+            bool parentIsPrinter = HasPrinterNamedParent(candidate);
+            if (isPrinterRoot && !parentIsPrinter && IsPrinterRootTransform(candidate))
+            {
+                NetworkPrinterDevice printer = candidate.GetComponent<NetworkPrinterDevice>();
+                if (printer == null)
+                {
+                    printer = candidate.gameObject.AddComponent<NetworkPrinterDevice>();
+                }
+
+                ConfigurePrinterNetworkDevice(printer);
+            }
+        }
+    }
+
+    private void ConfigurePrinterNetworkDevice(NetworkPrinterDevice printer)
+    {
+        if (printer == null)
+        {
+            return;
+        }
+
+        ComputerInteractable printerNetwork = printer.GetComponent<ComputerInteractable>();
+        if (printerNetwork == null)
+        {
+            printerNetwork = printer.gameObject.AddComponent<ComputerInteractable>();
+        }
+
+        if (string.IsNullOrWhiteSpace(printerNetwork.reservedDeviceName))
+        {
+            printerNetwork.reservedDeviceName = printer.DeviceLabel;
+        }
+    }
+
+    private void RemoveDuplicatePrinterComponents()
+    {
+        NetworkPrinterDevice[] printers = FindObjectsOfType<NetworkPrinterDevice>(true);
+        foreach (NetworkPrinterDevice printer in printers)
+        {
+            if (printer == null)
+            {
+                continue;
+            }
+
+            Transform printerRoot = ResolvePrinterRootTransform(printer.transform);
+            if (printerRoot == null || printerRoot == printer.transform)
+            {
+                continue;
+            }
+
+            NetworkPrinterDevice rootPrinter = printerRoot.GetComponent<NetworkPrinterDevice>();
+            if (rootPrinter == null || rootPrinter == printer)
+            {
+                continue;
+            }
+
+            DestroyImmediateSafe(printer);
+        }
+    }
+
+    private NetworkPrinterDevice ResolveCanonicalPrinterDevice(NetworkPrinterDevice printer)
+    {
+        if (printer == null)
+        {
+            return null;
+        }
+
+        Transform printerRoot = ResolvePrinterRootTransform(printer.transform);
+        if (printerRoot == null)
+        {
+            return printer;
+        }
+
+        NetworkPrinterDevice rootPrinter = printerRoot.GetComponent<NetworkPrinterDevice>();
+        return rootPrinter != null ? rootPrinter : printer;
+    }
+
+    private Transform ResolvePrinterRootTransform(Transform candidate)
+    {
+        if (candidate == null)
+        {
+            return null;
+        }
+
+        MovableDevice movableDeviceRoot = candidate.GetComponentInParent<MovableDevice>();
+        if (movableDeviceRoot != null && movableDeviceRoot.IsComputerDevice() && IsPrinterNamedTransform(movableDeviceRoot.transform))
+        {
+            return movableDeviceRoot.transform;
+        }
+
+        ComputerInteractable computerRoot = candidate.GetComponentInParent<ComputerInteractable>();
+        if (computerRoot != null && computerRoot.IsPrinterDevice())
+        {
+            return computerRoot.transform;
+        }
+
+        return candidate;
+    }
+
+    private bool IsPrinterRootTransform(Transform candidate)
+    {
+        if (candidate == null)
+        {
+            return false;
+        }
+
+        if (HasPrinterNamedParent(candidate))
+        {
+            return false;
+        }
+
+        if (candidate.GetComponent<MovableDevice>() != null || candidate.GetComponent<ComputerInteractable>() != null)
+        {
+            return true;
+        }
+
+        return false;
+    }
+
+    private bool IsPrinterNamedTransform(Transform candidate)
+    {
+        if (candidate == null)
+        {
+            return false;
+        }
+
+        string lowerName = candidate.name.ToLowerInvariant();
+        return lowerName.Contains("printer") || lowerName.Contains("impressora");
+    }
+
+    private bool HasPrinterNamedParent(Transform candidate)
+    {
+        Transform parent = candidate != null ? candidate.parent : null;
+        while (parent != null)
+        {
+            string lowerParentName = parent.name.ToLowerInvariant();
+            if (lowerParentName.Contains("printer") || lowerParentName.Contains("impressora"))
+            {
+                return true;
+            }
+
+            parent = parent.parent;
+        }
+
+        return false;
+    }
+
     private DualNetworkDoorController FindAccessGroupForDoorDevice(NetworkDoorDevice doorDevice)
     {
         if (doorDevice == null)
@@ -1790,6 +2146,23 @@ public class ComputerInteractable : MonoBehaviour
         }
     }
 
+    private void DestroyImmediateSafe(Component target)
+    {
+        if (target == null)
+        {
+            return;
+        }
+
+        if (Application.isPlaying)
+        {
+            Destroy(target);
+        }
+        else
+        {
+            DestroyImmediate(target);
+        }
+    }
+
     private void ResolveMaterials()
     {
 #if UNITY_EDITOR
@@ -1806,7 +2179,7 @@ public class ComputerInteractable : MonoBehaviour
 
         if (screenOnMaterial == null)
         {
-            screenOnMaterial = UnityEditor.AssetDatabase.LoadAssetAtPath<Material>(WhiteMaterialPath);
+            screenOnMaterial = UnityEditor.AssetDatabase.LoadAssetAtPath<Material>(ScreenOnMaterialPath);
         }
 
         if (noIpMaterial == null)
