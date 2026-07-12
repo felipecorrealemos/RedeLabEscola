@@ -69,13 +69,23 @@ MonoBehaviour:
   m_EditorClassIdentifier: 
   promptText: F entregar documento
   documentAnchor: {fileID: 0}
+  preferHandBoneAnchor: 1
+  documentHandBone: 18
+  handAnchorLocalPosition: {x: -0.00115, y: 0.00169, z: 0.00182}
+  handAnchorLocalEulerAngles: {x: -36.817, y: 88.701, z: -18.423}
   generatedAnchorLocalPosition: {x: 0.42, y: 1.18, z: 0.34}
   generatedAnchorLocalEulerAngles: {x: 72, y: 0, z: 12}
   triggerSize: {x: 2, y: 2, z: 2}
   triggerCenter: {x: 0, y: 1, z: 0}
   animator: {fileID: 0}
   carryingParameter: IsCarrying
-  carryingStateName: Idle
+  carryingStateName: Carrying
+  carryingTransitionDuration: 0.04
+  useHandIk: 1
+  documentHandIkGoal: 1
+  handIkLocalPosition: {x: 0.32, y: 1.05, z: 0.28}
+  handIkLocalEulerAngles: {x: 75, y: 0, z: 0}
+  handIkWeight: 1
   canvas: {fileID: 0}
   promptObject: {fileID: 0}
   promptLabel: {fileID: 0}

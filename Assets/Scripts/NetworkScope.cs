@@ -11,6 +11,7 @@ public class NetworkScope : MonoBehaviour
         public string Address;
         public ComputerInteractable AssignedComputer;
         public string AssignedDeviceName;
+        public NetworkConnectionType ConnectionType = NetworkConnectionType.Cable;
 
         public bool IsRouter => AssignedComputer == null && Address != null && Address.EndsWith(".1");
         public bool IsAvailable => AssignedComputer == null && string.IsNullOrWhiteSpace(AssignedDeviceName) && !IsRouter;
@@ -88,6 +89,11 @@ public class NetworkScope : MonoBehaviour
 
     public bool TryAssignIp(ComputerInteractable computer, string address, string reservedDeviceName)
     {
+        return TryAssignIp(computer, address, reservedDeviceName, NetworkConnectionType.Cable);
+    }
+
+    public bool TryAssignIp(ComputerInteractable computer, string address, string reservedDeviceName, NetworkConnectionType connectionType)
+    {
         if (computer == null || string.IsNullOrWhiteSpace(address))
         {
             return false;
@@ -112,6 +118,7 @@ public class NetworkScope : MonoBehaviour
         ReleaseIp(computer, false);
         targetLease.AssignedComputer = computer;
         targetLease.AssignedDeviceName = string.Empty;
+        targetLease.ConnectionType = connectionType;
         NotifyPoolChanged();
         return true;
     }
@@ -139,6 +146,7 @@ public class NetworkScope : MonoBehaviour
             if (lease.AssignedComputer == computer)
             {
                 lease.AssignedComputer = null;
+                lease.ConnectionType = NetworkConnectionType.Cable;
                 changed = true;
             }
         }
@@ -157,12 +165,12 @@ public class NetworkScope : MonoBehaviour
 
     private void RebuildLeases()
     {
-        Dictionary<string, ComputerInteractable> currentAssignments = new Dictionary<string, ComputerInteractable>();
+        Dictionary<string, IpLease> currentAssignments = new Dictionary<string, IpLease>();
         foreach (IpLease lease in leases)
         {
             if (lease.AssignedComputer != null && !string.IsNullOrWhiteSpace(lease.Address))
             {
-                currentAssignments[lease.Address] = lease.AssignedComputer;
+                currentAssignments[lease.Address] = lease;
             }
         }
 
@@ -173,12 +181,13 @@ public class NetworkScope : MonoBehaviour
         for (int i = 0; i < addressCount; i++)
         {
             string address = networkPrefix + (firstDeviceAddress + i);
-            currentAssignments.TryGetValue(address, out ComputerInteractable assignedComputer);
+            currentAssignments.TryGetValue(address, out IpLease currentLease);
             leases.Add(new IpLease
             {
                 Address = address,
-                AssignedComputer = assignedComputer,
-                AssignedDeviceName = string.Empty
+                AssignedComputer = currentLease != null ? currentLease.AssignedComputer : null,
+                AssignedDeviceName = string.Empty,
+                ConnectionType = currentLease != null ? currentLease.ConnectionType : NetworkConnectionType.Cable
             });
         }
     }
@@ -221,10 +230,15 @@ public class NetworkScope : MonoBehaviour
 
         if (lease.AssignedComputer != null)
         {
-            return lease.Address + " - " + lease.AssignedComputer.DeviceTitle;
+            return lease.Address + " - " + lease.AssignedComputer.DeviceTitle + " (" + GetConnectionTypeLabel(lease.ConnectionType) + ")";
         }
 
         return lease.Address + " - Em uso";
+    }
+
+    public static string GetConnectionTypeLabel(NetworkConnectionType connectionType)
+    {
+        return connectionType == NetworkConnectionType.WiFi ? "Wi-Fi" : "Cabo";
     }
 
     private string TrimTrailingDot(string value)

@@ -25,14 +25,24 @@ public class MovableDevice : MonoBehaviour
     private DeviceDropZone pendingDropZone;
     private Vector3 dropTargetPosition;
     private Quaternion dropTargetRotation;
+    private Vector3 defaultLocalScale;
 
     public bool IsCarried { get; private set; }
     public string DeviceName => deviceName;
     public bool IsPlaced => currentDropZone != null && !IsCarried && !isDropping;
     public DeviceDropZone CurrentDropZone => currentDropZone;
 
+    public void ConfigureDeviceName(string nextDeviceName)
+    {
+        if (!string.IsNullOrWhiteSpace(nextDeviceName))
+        {
+            deviceName = nextDeviceName;
+        }
+    }
+
     private void Awake()
     {
+        defaultLocalScale = transform.localScale;
         RefreshReferences();
         EnsureInteractionIndicator();
         EnsureComputerInteractable();
@@ -83,6 +93,7 @@ public class MovableDevice : MonoBehaviour
         SetCollidersEnabled(false);
         SetInteractionHighlighted(false);
         transform.SetParent(targetAnchor, true);
+        transform.localScale = defaultLocalScale;
     }
 
     public void DropAt(DeviceDropZone dropZone)
@@ -98,7 +109,8 @@ public class MovableDevice : MonoBehaviour
         pendingDropZone = dropZone;
         dropTargetRotation = dropZone.PlaceRotation;
         dropTargetPosition = dropZone.GetDropPositionFor(this);
-        transform.SetParent(originalParent, true);
+        transform.SetParent(GetStablePlacementParent(dropZone.transform), true);
+        transform.localScale = defaultLocalScale;
 
         if (rigidBody != null)
         {
@@ -124,7 +136,8 @@ public class MovableDevice : MonoBehaviour
         isDropping = false;
         pendingDropZone = null;
         targetAnchor = null;
-        transform.SetParent(originalParent, true);
+        transform.SetParent(GetStablePlacementParent(originalParent), true);
+        transform.localScale = defaultLocalScale;
         SetCollidersEnabled(true);
         SetInteractionHighlighted(false);
     }
@@ -136,11 +149,13 @@ public class MovableDevice : MonoBehaviour
 
     private void SetCollidersEnabled(bool enabled)
     {
+        WiFiDevice wiFiDevice = GetComponent<WiFiDevice>();
         foreach (Collider deviceCollider in colliders)
         {
             if (deviceCollider != null)
             {
-                deviceCollider.enabled = enabled;
+                bool keepWiFiSensorEnabled = !enabled && wiFiDevice != null && wiFiDevice.IsWiFiSensorCollider(deviceCollider);
+                deviceCollider.enabled = enabled || keepWiFiSensorEnabled;
             }
         }
     }
@@ -166,7 +181,8 @@ public class MovableDevice : MonoBehaviour
 
         if (pendingDropZone != null)
         {
-            transform.SetParent(pendingDropZone.transform, true);
+            transform.SetParent(GetStablePlacementParent(pendingDropZone.transform), true);
+            transform.localScale = defaultLocalScale;
         }
 
         pendingDropZone = null;
@@ -247,6 +263,16 @@ public class MovableDevice : MonoBehaviour
             || lowerDeviceName.Contains("impressora")
             || lowerObjectName.Contains("printer")
             || lowerObjectName.Contains("impressora");
+    }
+
+    public bool IsRouterDevice()
+    {
+        string lowerDeviceName = deviceName.ToLowerInvariant();
+        string lowerObjectName = name.ToLowerInvariant();
+        return lowerDeviceName.Contains("router")
+            || lowerDeviceName.Contains("roteador")
+            || lowerObjectName.Contains("router")
+            || lowerObjectName.Contains("roteador");
     }
 
     private bool HasChildNamed(Transform root, string childName)
@@ -374,7 +400,7 @@ public class MovableDevice : MonoBehaviour
 
         foreach (Renderer deviceRenderer in renderers)
         {
-            if (deviceRenderer == null || deviceRenderer.transform == interactionIndicator)
+            if (ShouldIgnoreBoundsRenderer(deviceRenderer))
             {
                 continue;
             }
@@ -391,6 +417,72 @@ public class MovableDevice : MonoBehaviour
         }
 
         return bounds;
+    }
+
+    private bool ShouldIgnoreBoundsRenderer(Renderer deviceRenderer)
+    {
+        if (deviceRenderer == null || deviceRenderer.transform == interactionIndicator)
+        {
+            return true;
+        }
+
+        Transform rendererTransform = deviceRenderer.transform;
+        string rendererName = rendererTransform.name;
+        if (rendererName == "InteractionIndicator"
+            || rendererName == "DropIndicator"
+            || rendererName == "WiFiRangeVisualizer"
+            || rendererName.StartsWith("OuterDottedRing_")
+            || rendererName.StartsWith("InnerRing"))
+        {
+            return true;
+        }
+
+        if (deviceRenderer is LineRenderer)
+        {
+            return true;
+        }
+
+        return rendererTransform.GetComponentInParent<WiFiRangeVisualizer>() != null;
+    }
+
+    private Transform GetStablePlacementParent(Transform referenceTransform)
+    {
+        Transform candidate = referenceTransform;
+        while (candidate != null)
+        {
+            if (HasUnitWorldScale(candidate))
+            {
+                return candidate;
+            }
+
+            candidate = candidate.parent;
+        }
+
+        return GetScenePlacementRoot();
+    }
+
+    private bool HasUnitWorldScale(Transform candidate)
+    {
+        Vector3 scale = candidate.lossyScale;
+        return Mathf.Approximately(scale.x, 1f)
+            && Mathf.Approximately(scale.y, 1f)
+            && Mathf.Approximately(scale.z, 1f);
+    }
+
+    private Transform GetScenePlacementRoot()
+    {
+        const string placementRootName = "PlacedMovableDevices";
+        GameObject existingRoot = GameObject.Find(placementRootName);
+        if (existingRoot != null)
+        {
+            return existingRoot.transform;
+        }
+
+        GameObject placementRoot = new GameObject(placementRootName);
+        placementRoot.transform.position = Vector3.zero;
+        placementRoot.transform.rotation = Quaternion.identity;
+        placementRoot.transform.localScale = Vector3.one;
+        return placementRoot.transform;
     }
 
     private Shader GetIndicatorShader()

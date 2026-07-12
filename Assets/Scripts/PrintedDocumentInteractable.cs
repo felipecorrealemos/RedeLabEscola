@@ -68,7 +68,7 @@ public class PrintedDocumentInteractable : MonoBehaviour
             transform.SetParent(receiverAnchor, false);
             transform.localPosition = Vector3.zero;
             transform.localRotation = Quaternion.identity;
-            transform.localScale = carriedLocalScale;
+            transform.localScale = GetLocalScaleForWorldScale(carriedLocalScale);
         }
         else
         {
@@ -77,6 +77,31 @@ public class PrintedDocumentInteractable : MonoBehaviour
 
         SetPhysicsEnabled(false);
         MissionManager.NotifyDocumentDelivered(this);
+    }
+
+    private Vector3 GetLocalScaleForWorldScale(Vector3 worldScale)
+    {
+        Transform currentParent = transform.parent;
+        if (currentParent == null)
+        {
+            return worldScale;
+        }
+
+        Vector3 parentScale = currentParent.lossyScale;
+        return new Vector3(
+            DivideScale(worldScale.x, parentScale.x),
+            DivideScale(worldScale.y, parentScale.y),
+            DivideScale(worldScale.z, parentScale.z));
+    }
+
+    private float DivideScale(float value, float parentScale)
+    {
+        if (Mathf.Approximately(parentScale, 0f))
+        {
+            return value;
+        }
+
+        return value / Mathf.Abs(parentScale);
     }
 
     public void SetPromptVisible(bool visible)

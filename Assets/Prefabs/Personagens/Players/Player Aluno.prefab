@@ -12,7 +12,7 @@ GameObject:
   - component: {fileID: 6749257081451097721}
   - component: {fileID: 7838474012237785112}
   m_Layer: 0
-  m_Name: Player
+  m_Name: Player Aluno
   m_TagString: Untagged
   m_Icon: {fileID: 0}
   m_NavMeshLayer: 0

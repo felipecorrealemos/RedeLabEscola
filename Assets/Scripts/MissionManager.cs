@@ -206,13 +206,14 @@ public class MissionManager : MonoBehaviour
         int missionNumber = Instance.ResolvePlacementMissionNumber(dropZone);
         if (missionNumber == 3)
         {
+            ComputerInteractable networkDevice = device.EnsureComputerInteractable();
             if (device.IsComputerCabinetDevice())
             {
-                Instance.SetTaskCompletion(3, "sala3_colocar_gabinete", true);
+                Instance.SetTaskCompletion(3, "sala3_colocar_gabinete", networkDevice != null && networkDevice.IsConnectedToNetworkJack);
             }
             else if (device.IsPrinterDevice())
             {
-                Instance.SetTaskCompletion(3, "sala3_colocar_impressora", true);
+                Instance.SetTaskCompletion(3, "sala3_colocar_impressora", networkDevice != null && networkDevice.IsConnectedToNetworkJack);
             }
         }
 
@@ -369,10 +370,12 @@ public class MissionManager : MonoBehaviour
 
         if (isComputer)
         {
+            Instance.SetTaskCompletion("sala3_colocar_gabinete", device.IsConnectedToNetworkJack);
             Instance.SetTaskCompletion("sala3_configurar_ip_pc", device.IsNetworkOperational);
         }
         else if (isPrinter)
         {
+            Instance.SetTaskCompletion("sala3_colocar_impressora", device.IsConnectedToNetworkJack);
             Instance.SetTaskCompletion("sala3_configurar_ip_impressora", device.IsNetworkOperational);
         }
     }

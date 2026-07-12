@@ -121,7 +121,7 @@ public class PlayerTopDownController : MonoBehaviour
             }
         }
 
-        MovableDevice device = FindNearestMovableDevice(out _);
+        MovableDevice device = FindNearestCarryTarget();
         if (device != null)
         {
             PickUp(device);
@@ -160,7 +160,7 @@ public class PlayerTopDownController : MonoBehaviour
             return;
         }
 
-        if (computer != null && computer.CanInteract && computerDistance <= buttonDistance)
+        if (computer != null && computer.CanConfigureNetwork && computerDistance <= buttonDistance)
         {
             OpenComputer(computer);
             return;
@@ -243,42 +243,89 @@ public class PlayerTopDownController : MonoBehaviour
         RouterInteractable nearestRouter = FindNearestRouter(out float routerDistance);
         ComputerInteractable nearestComputer = FindNearestComputer(out float computerDistance);
         KeyboardTerminalInteractable nearestComputerTerminal = FindNearestComputerTerminal(out float terminalDistance);
-        MovableDevice nearestDevice = FindNearestMovableDevice(out _);
-        PrintedDocumentInteractable nearestDocument = FindNearestPrintedDocument(out _);
+        MovableDevice nearestDevice = FindNearestMovableDevice(out float deviceDistance);
+        PrintedDocumentInteractable nearestDocument = FindNearestPrintedDocument(out float documentDistance);
+        RouterInteractable deviceRouter = GetRouterForDevice(nearestDevice);
+        if (deviceRouter != null && (nearestRouter == null || deviceDistance < routerDistance))
+        {
+            nearestRouter = deviceRouter;
+            routerDistance = deviceDistance;
+        }
+
+        ComputerInteractable deviceComputer = GetComputerForDevice(nearestDevice);
+        if (deviceComputer != null && deviceComputer.CanShowPrompt && (nearestComputer == null || deviceDistance < computerDistance))
+        {
+            nearestComputer = deviceComputer;
+            computerDistance = deviceDistance;
+        }
+
+        float interactionDistanceLimit = interactionRadius * interactionRadius;
+        float selectedDistance = interactionDistanceLimit;
+        RouterInteractable selectedRouter = null;
+        ComputerInteractable selectedComputer = null;
+        KeyboardTerminalInteractable selectedComputerTerminal = null;
+        PrintedDocumentInteractable selectedDocument = null;
+        MovableDevice selectedDevice = null;
+
+        if (nearestComputerTerminal != null && terminalDistance <= selectedDistance)
+        {
+            selectedDistance = terminalDistance;
+            selectedComputerTerminal = nearestComputerTerminal;
+        }
+
+        if (nearestRouter != null && routerDistance <= selectedDistance)
+        {
+            selectedDistance = routerDistance;
+            selectedRouter = nearestRouter;
+            selectedComputerTerminal = null;
+        }
+
+        if (nearestComputer != null && computerDistance <= selectedDistance)
+        {
+            selectedDistance = computerDistance;
+            selectedComputer = nearestComputer;
+            selectedRouter = null;
+            selectedComputerTerminal = null;
+        }
+
+        if (nearestDocument != null && documentDistance <= selectedDistance)
+        {
+            selectedDistance = documentDistance;
+            selectedDocument = nearestDocument;
+            selectedComputer = null;
+            selectedRouter = null;
+            selectedComputerTerminal = null;
+        }
+
+        if (nearestDevice != null
+            && deviceDistance <= selectedDistance
+            && selectedDocument == null
+            && selectedComputer == null
+            && selectedRouter == null
+            && selectedComputerTerminal == null)
+        {
+            selectedDevice = nearestDevice;
+            selectedDocument = null;
+            selectedComputer = null;
+            selectedRouter = null;
+            selectedComputerTerminal = null;
+        }
+
+        if (selectedRouter != null && IsDeviceForRouter(nearestDevice, selectedRouter))
+        {
+            selectedDevice = nearestDevice;
+        }
+        else if (selectedComputer != null && IsDeviceForComputer(nearestDevice, selectedComputer))
+        {
+            selectedDevice = nearestDevice;
+        }
+
         SetHighlightedProfessor(null);
-        SetHighlightedRouter(nearestRouter);
-        SetHighlightedComputer(nearestComputer);
-        SetHighlightedComputerTerminal(nearestComputerTerminal);
-        SetHighlightedDocument(nearestDocument);
-        if (nearestComputerTerminal != null && terminalDistance <= interactionRadius * interactionRadius)
-        {
-            SetHighlightedDevice(null);
-            SetHighlightedDocument(null);
-            SetHighlightedComputer(null);
-            return;
-        }
-
-        if (nearestRouter != null && routerDistance <= interactionRadius * interactionRadius)
-        {
-            SetHighlightedDevice(null);
-            SetHighlightedDocument(null);
-            return;
-        }
-
-        if (nearestComputer != null && computerDistance <= interactionRadius * interactionRadius)
-        {
-            SetHighlightedDevice(nearestDevice);
-            SetHighlightedDocument(null);
-            return;
-        }
-
-        if (nearestDocument != null)
-        {
-            SetHighlightedDevice(null);
-            return;
-        }
-
-        SetHighlightedDevice(nearestDevice);
+        SetHighlightedRouter(selectedRouter);
+        SetHighlightedComputer(selectedComputer);
+        SetHighlightedComputerTerminal(selectedComputerTerminal);
+        SetHighlightedDocument(selectedDocument);
+        SetHighlightedDevice(selectedDevice);
     }
 
     public void SetMovementLocked(bool locked)
@@ -429,6 +476,123 @@ public class PlayerTopDownController : MonoBehaviour
         }
     }
 
+    private bool IsDeviceForRouter(MovableDevice device, RouterInteractable router)
+    {
+        if (device == null || router == null)
+        {
+            return false;
+        }
+
+        return device.GetComponent<RouterInteractable>() == router
+            || router.GetComponent<MovableDevice>() == device
+            || device.transform == router.transform
+            || router.transform.IsChildOf(device.transform)
+            || device.transform.IsChildOf(router.transform);
+    }
+
+    private bool IsDeviceForComputer(MovableDevice device, ComputerInteractable computer)
+    {
+        if (device == null || computer == null)
+        {
+            return false;
+        }
+
+        return device.GetComponent<ComputerInteractable>() == computer
+            || computer.GetComponent<MovableDevice>() == device
+            || device.transform == computer.transform
+            || computer.transform.IsChildOf(device.transform)
+            || device.transform.IsChildOf(computer.transform);
+    }
+
+    private RouterInteractable GetRouterForDevice(MovableDevice device)
+    {
+        if (device == null)
+        {
+            return null;
+        }
+
+        RouterInteractable router = device.GetComponent<RouterInteractable>();
+        if (router != null)
+        {
+            return router;
+        }
+
+        router = device.GetComponentInParent<RouterInteractable>();
+        return router != null ? router : device.GetComponentInChildren<RouterInteractable>();
+    }
+
+    private ComputerInteractable GetComputerForDevice(MovableDevice device)
+    {
+        if (device == null)
+        {
+            return null;
+        }
+
+        ComputerInteractable computer = device.GetComponent<ComputerInteractable>();
+        if (computer != null)
+        {
+            return computer;
+        }
+
+        computer = device.GetComponentInParent<ComputerInteractable>();
+        return computer != null ? computer : device.GetComponentInChildren<ComputerInteractable>();
+    }
+
+    private MovableDevice FindNearestCarryTarget()
+    {
+        MovableDevice nearestDevice = FindNearestMovableDevice(out float deviceDistance);
+        RouterInteractable nearestRouter = FindNearestRouter(out float routerDistance);
+        ComputerInteractable nearestComputer = FindNearestComputer(out float computerDistance);
+        MovableDevice routerDevice = nearestRouter != null && nearestRouter.AllowMovement ? GetMovableDeviceForRouter(nearestRouter) : null;
+        MovableDevice computerDevice = GetMovableDeviceForComputer(nearestComputer);
+
+        if (routerDevice != null && routerDistance <= computerDistance && routerDistance <= deviceDistance)
+        {
+            return routerDevice;
+        }
+
+        if (computerDevice != null && computerDistance <= routerDistance && computerDistance <= deviceDistance)
+        {
+            return computerDevice;
+        }
+
+        return nearestDevice;
+    }
+
+    private MovableDevice GetMovableDeviceForRouter(RouterInteractable router)
+    {
+        if (router == null)
+        {
+            return null;
+        }
+
+        MovableDevice device = router.GetComponent<MovableDevice>();
+        if (device != null)
+        {
+            return device;
+        }
+
+        device = router.GetComponentInParent<MovableDevice>();
+        return device != null ? device : router.GetComponentInChildren<MovableDevice>();
+    }
+
+    private MovableDevice GetMovableDeviceForComputer(ComputerInteractable computer)
+    {
+        if (computer == null)
+        {
+            return null;
+        }
+
+        MovableDevice device = computer.GetComponent<MovableDevice>();
+        if (device != null)
+        {
+            return device;
+        }
+
+        device = computer.GetComponentInParent<MovableDevice>();
+        return device != null ? device : computer.GetComponentInChildren<MovableDevice>();
+    }
+
     private void OpenRouter(RouterInteractable router)
     {
         if (router == null)
@@ -513,6 +677,12 @@ public class PlayerTopDownController : MonoBehaviour
 
             MovableDevice device = hit.GetComponentInParent<MovableDevice>();
             if (device == null || device.IsCarried)
+            {
+                continue;
+            }
+
+            RouterInteractable router = device.GetComponent<RouterInteractable>();
+            if (router != null && !router.AllowMovement)
             {
                 continue;
             }
@@ -758,6 +928,28 @@ public class PlayerTopDownController : MonoBehaviour
             }
 
             float distance = Vector3.SqrMagnitude(dropZone.transform.position - transform.position);
+            if (distance < nearestDistance)
+            {
+                nearestDistance = distance;
+                nearestZone = dropZone;
+            }
+        }
+
+        if (nearestZone != null)
+        {
+            return nearestZone;
+        }
+
+        DeviceDropZone[] dropZones = FindObjectsOfType<DeviceDropZone>();
+        for (int i = 0; i < dropZones.Length; i++)
+        {
+            DeviceDropZone dropZone = dropZones[i];
+            if (dropZone == null || !dropZone.CanReceive(carriedDevice) || !dropZone.IsDeviceInPlacementRange(carriedDevice))
+            {
+                continue;
+            }
+
+            float distance = Vector3.SqrMagnitude(dropZone.PlacePosition - carriedDevice.transform.position);
             if (distance < nearestDistance)
             {
                 nearestDistance = distance;

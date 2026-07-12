@@ -9,12 +9,21 @@ using UnityEngine.UI;
 public class RouterInteractable : MonoBehaviour
 {
     [Header("Network")]
-    [SerializeField] private string promptText = "Aperte F para interagir";
+    [SerializeField] private string promptText = "F configurar roteador";
     [SerializeField] private NetworkScope networkScope;
     [SerializeField] private string networkPrefix = "192.168.0.";
     [SerializeField] private int routerAddress = 1;
     [SerializeField] private int firstDeviceAddress = 2;
     [SerializeField] private int availableAddressCount = 4;
+
+    [Header("Movement")]
+    [SerializeField] private bool allowMovement;
+
+    [Header("Wi-Fi")]
+    [SerializeField] private bool initialWiFiEnabled;
+    [SerializeField] private int wifiRange = 5;
+    [SerializeField] private float wifiDetectionInterval = 1f;
+    [SerializeField] private LayerMask wifiDeviceLayerMask = ~0;
 
     [Header("Panel")]
     [SerializeField] private Vector2 panelAnchorMin = new Vector2(0.52f, 0.14f);
@@ -48,16 +57,31 @@ public class RouterInteractable : MonoBehaviour
     [SerializeField] private ScrollRect ipScrollRect;
 
     private bool isOpen;
+    private bool isWiFiEnabled;
+    private MovableDevice movableDevice;
+    private Button wifiToggleButton;
+    private Text wifiToggleLabel;
+    private readonly HashSet<WiFiDevice> detectedWiFiDevices = new HashSet<WiFiDevice>();
 
     public event Action OnIpPoolChanged;
     public bool IsOpen => isOpen;
     public IReadOnlyList<NetworkScope.IpLease> Leases => ActiveNetworkScope != null ? ActiveNetworkScope.Leases : Array.Empty<NetworkScope.IpLease>();
     public NetworkScope ActiveNetworkScope => ResolveNetworkScope(false);
     public string RouterIpAddress => ActiveNetworkScope != null ? ActiveNetworkScope.RouterIpAddress : networkPrefix + routerAddress;
+    public bool IsWiFiEnabled => isWiFiEnabled;
+    public bool InitialWiFiEnabled => initialWiFiEnabled;
+    public int WiFiRange => Mathf.Max(wifiRange, 0);
+    public string WiFiNetworkName => (ActiveNetworkScope != null ? ActiveNetworkScope.NetworkPrefix : networkPrefix).TrimEnd('.');
+    public bool AllowMovement => allowMovement;
 
     private void Awake()
     {
+        if (allowMovement)
+        {
+            EnsureMovableDevice();
+        }
         SetNetworkScope(ResolveNetworkScope(true));
+        isWiFiEnabled = initialWiFiEnabled;
         ResetRuntimePanel();
         isOpen = false;
         EnsureUi();
@@ -69,6 +93,7 @@ public class RouterInteractable : MonoBehaviour
     private void Start()
     {
         StartCoroutine(EnsureGreenLightBlinkersAfterFirstFrame());
+        StartCoroutine(DetectWiFiDevicesRoutine());
         ForceUiClosed();
     }
 
@@ -80,17 +105,30 @@ public class RouterInteractable : MonoBehaviour
 
     private void OnValidate()
     {
+        movableDevice = GetComponent<MovableDevice>();
+        movableDevice?.ConfigureDeviceName("Roteador");
         ResolveNetworkScope(false);
+        wifiRange = Mathf.Max(wifiRange, 0);
+        wifiDetectionInterval = Mathf.Max(wifiDetectionInterval, 0.1f);
         ApplyUiSettings();
         RefreshIpRows();
     }
 
     private void OnDestroy()
     {
+        ClearDetectedWiFiDevices();
         if (networkScope != null)
         {
             networkScope.OnIpPoolChanged -= NotifyPoolChanged;
         }
+    }
+
+    private void OnDrawGizmosSelected()
+    {
+        Gizmos.color = new Color(0.1f, 0.55f, 1f, 0.22f);
+        Gizmos.DrawSphere(transform.position, Mathf.Max(wifiRange, 0));
+        Gizmos.color = new Color(0.1f, 0.55f, 1f, 0.8f);
+        Gizmos.DrawWireSphere(transform.position, Mathf.Max(wifiRange, 0));
     }
 
     [ContextMenu("Create Editable Router UI")]
@@ -108,7 +146,7 @@ public class RouterInteractable : MonoBehaviour
         EnsureUi();
         if (promptObject != null)
         {
-            promptObject.SetActive(visible && !isOpen);
+            promptObject.SetActive(visible && !isOpen && (!allowMovement || movableDevice == null || !movableDevice.IsCarried));
         }
     }
 
@@ -148,6 +186,11 @@ public class RouterInteractable : MonoBehaviour
 
     public bool TryAssignIp(ComputerInteractable computer, string address, string reservedDeviceName)
     {
+        return TryAssignIp(computer, address, reservedDeviceName, NetworkConnectionType.Cable);
+    }
+
+    public bool TryAssignIp(ComputerInteractable computer, string address, string reservedDeviceName, NetworkConnectionType connectionType)
+    {
         if (computer == null || string.IsNullOrWhiteSpace(address))
         {
             return false;
@@ -159,7 +202,7 @@ public class RouterInteractable : MonoBehaviour
             return false;
         }
 
-        return scope.TryAssignIp(computer, address, reservedDeviceName);
+        return scope.TryAssignIp(computer, address, reservedDeviceName, connectionType);
     }
 
     public void ReleaseIp(ComputerInteractable computer)
@@ -171,15 +214,193 @@ public class RouterInteractable : MonoBehaviour
         }
     }
 
+    public bool TryConnectWiFi(ComputerInteractable computer, WiFiDevice wiFiDevice, string address, string reservedDeviceName)
+    {
+        if (!isWiFiEnabled || computer == null || wiFiDevice == null || string.IsNullOrWhiteSpace(address))
+        {
+            return false;
+        }
+
+        if (!IsWiFiDeviceInRange(wiFiDevice))
+        {
+            return false;
+        }
+
+        return TryAssignIp(computer, address, reservedDeviceName, NetworkConnectionType.WiFi);
+    }
+
+    public void ReleaseWiFiConnection(ComputerInteractable computer)
+    {
+        if (computer == null)
+        {
+            return;
+        }
+
+        NetworkScope scope = ResolveNetworkScope(false);
+        if (scope == null)
+        {
+            return;
+        }
+
+        foreach (NetworkScope.IpLease lease in scope.Leases)
+        {
+            if (lease.AssignedComputer == computer && lease.ConnectionType == NetworkConnectionType.WiFi)
+            {
+                scope.ReleaseIp(computer);
+                return;
+            }
+        }
+    }
+
+    public void SetWiFiEnabled(bool enabled)
+    {
+        if (isWiFiEnabled == enabled)
+        {
+            return;
+        }
+
+        isWiFiEnabled = enabled;
+        if (!isWiFiEnabled)
+        {
+            DisconnectAllWiFiDevices();
+            ClearDetectedWiFiDevices();
+        }
+
+        ApplyWiFiToggleButton();
+        RefreshIpRows();
+    }
+
+    public bool IsWiFiDeviceInRange(WiFiDevice wiFiDevice)
+    {
+        if (!isWiFiEnabled || wiFiDevice == null)
+        {
+            return false;
+        }
+
+        float range = Mathf.Max(wifiRange, 0);
+        return Vector3.SqrMagnitude(wiFiDevice.transform.position - transform.position) <= range * range;
+    }
+
     public RouterInteractable FindRouterForDevice(MovableDevice device)
     {
         return this;
+    }
+
+    private void EnsureMovableDevice()
+    {
+        if (movableDevice == null)
+        {
+            movableDevice = GetComponent<MovableDevice>();
+        }
+
+        if (movableDevice == null)
+        {
+            movableDevice = gameObject.AddComponent<MovableDevice>();
+        }
+
+        movableDevice.ConfigureDeviceName("Roteador");
     }
 
     private void NotifyPoolChanged()
     {
         RefreshIpRows();
         OnIpPoolChanged?.Invoke();
+    }
+
+    private IEnumerator DetectWiFiDevicesRoutine()
+    {
+        WaitForSeconds wait = new WaitForSeconds(Mathf.Max(wifiDetectionInterval, 0.1f));
+        while (enabled)
+        {
+            if (isWiFiEnabled)
+            {
+                DetectWiFiDevices();
+            }
+
+            yield return wait;
+            wait = new WaitForSeconds(Mathf.Max(wifiDetectionInterval, 0.1f));
+        }
+    }
+
+    private void DetectWiFiDevices()
+    {
+        Collider[] hits = Physics.OverlapSphere(transform.position, Mathf.Max(wifiRange, 0), wifiDeviceLayerMask, QueryTriggerInteraction.Collide);
+        HashSet<WiFiDevice> currentDevices = new HashSet<WiFiDevice>();
+
+        foreach (Collider hit in hits)
+        {
+            if (hit == null)
+            {
+                continue;
+            }
+
+            WiFiDevice wiFiDevice = hit.GetComponentInParent<WiFiDevice>();
+            if (wiFiDevice == null)
+            {
+                continue;
+            }
+
+            currentDevices.Add(wiFiDevice);
+            if (detectedWiFiDevices.Add(wiFiDevice))
+            {
+                wiFiDevice.SetRouterAvailable(this, true);
+            }
+        }
+
+        List<WiFiDevice> devicesOutOfRange = new List<WiFiDevice>();
+        foreach (WiFiDevice wiFiDevice in detectedWiFiDevices)
+        {
+            if (wiFiDevice == null || !currentDevices.Contains(wiFiDevice))
+            {
+                devicesOutOfRange.Add(wiFiDevice);
+            }
+        }
+
+        foreach (WiFiDevice wiFiDevice in devicesOutOfRange)
+        {
+            detectedWiFiDevices.Remove(wiFiDevice);
+            if (wiFiDevice != null)
+            {
+                wiFiDevice.SetRouterAvailable(this, false);
+                wiFiDevice.Computer?.HandleWiFiRouterOutOfRange(this);
+            }
+        }
+    }
+
+    private void DisconnectAllWiFiDevices()
+    {
+        NetworkScope scope = ResolveNetworkScope(false);
+        if (scope == null)
+        {
+            return;
+        }
+
+        List<ComputerInteractable> computersToDisconnect = new List<ComputerInteractable>();
+        foreach (NetworkScope.IpLease lease in scope.Leases)
+        {
+            if (lease.AssignedComputer != null && lease.ConnectionType == NetworkConnectionType.WiFi)
+            {
+                computersToDisconnect.Add(lease.AssignedComputer);
+            }
+        }
+
+        foreach (ComputerInteractable computer in computersToDisconnect)
+        {
+            computer.HandleWiFiRouterDisabled(this);
+        }
+    }
+
+    private void ClearDetectedWiFiDevices()
+    {
+        foreach (WiFiDevice wiFiDevice in detectedWiFiDevices)
+        {
+            if (wiFiDevice != null)
+            {
+                wiFiDevice.SetRouterAvailable(this, false);
+            }
+        }
+
+        detectedWiFiDevices.Clear();
     }
 
     private NetworkScope ResolveNetworkScope(bool createIfMissing)
@@ -412,7 +633,35 @@ public class RouterInteractable : MonoBehaviour
 
         rangeLabel = rangeObject.AddComponent<Text>();
 
+        CreateWiFiToggleButton(parent);
         CreateFooter(parent, hint);
+    }
+
+    private void CreateWiFiToggleButton(Transform parent)
+    {
+        GameObject buttonObject = CreateUiObject("WiFiToggleButton", parent);
+        RectTransform buttonRect = buttonObject.AddComponent<RectTransform>();
+        buttonRect.anchorMin = new Vector2(1f, 1f);
+        buttonRect.anchorMax = new Vector2(1f, 1f);
+        buttonRect.pivot = new Vector2(1f, 1f);
+        buttonRect.anchoredPosition = new Vector2(-24f, -22f);
+        buttonRect.sizeDelta = new Vector2(108f, 28f);
+
+        Image buttonImage = buttonObject.AddComponent<Image>();
+        wifiToggleButton = buttonObject.AddComponent<Button>();
+        wifiToggleButton.targetGraphic = buttonImage;
+        wifiToggleButton.transition = Selectable.Transition.None;
+        wifiToggleButton.interactable = false;
+
+        GameObject labelObject = CreateUiObject("Text", buttonObject.transform);
+        RectTransform labelRect = labelObject.AddComponent<RectTransform>();
+        labelRect.anchorMin = Vector2.zero;
+        labelRect.anchorMax = Vector2.one;
+        labelRect.offsetMin = Vector2.zero;
+        labelRect.offsetMax = Vector2.zero;
+
+        wifiToggleLabel = labelObject.AddComponent<Text>();
+        ApplyWiFiToggleButton();
     }
 
     private void CreateFooter(Transform parent, string hint)
@@ -501,7 +750,7 @@ public class RouterInteractable : MonoBehaviour
             return "Roteador";
         }
 
-        return lease.IsAvailable ? "Disponivel" : "Em uso";
+        return lease.IsAvailable ? "Disponivel" : NetworkScope.GetConnectionTypeLabel(lease.ConnectionType);
     }
 
     private void CreateIpRow(Transform parent, string ipAddress, string status, bool available)
@@ -580,11 +829,26 @@ public class RouterInteractable : MonoBehaviour
             return;
         }
 
-        promptLabel.text = promptText;
+        promptLabel.text = GetPromptText();
         promptLabel.alignment = TextAnchor.MiddleCenter;
         promptLabel.color = Color.white;
         promptLabel.font = GetDefaultFont();
-        promptLabel.fontSize = 22;
+        promptLabel.fontSize = 18;
+    }
+
+    private string GetPromptText()
+    {
+        if (string.IsNullOrWhiteSpace(promptText)
+            || promptText.Contains("E para interagir")
+            || promptText.Contains("F para interagir")
+            || promptText.Contains("interagir"))
+        {
+            return allowMovement ? "E mover roteador  |  F configurar roteador" : "F configurar roteador";
+        }
+
+        return allowMovement && !promptText.Contains("E mover")
+            ? "E mover roteador  |  " + promptText
+            : promptText;
     }
 
     private void ApplyPanelSettings()
@@ -631,6 +895,7 @@ public class RouterInteractable : MonoBehaviour
             rangeLabel.fontSize = rangeFontSize;
         }
 
+        ApplyWiFiToggleButton();
         ApplyCloseHintLabel();
 
         if (ipScrollRect != null)
@@ -638,6 +903,38 @@ public class RouterInteractable : MonoBehaviour
             ipScrollRect.horizontal = false;
             ipScrollRect.scrollSensitivity = scrollSensitivity;
             ApplyContentPadding();
+        }
+    }
+
+    private void ApplyWiFiToggleButton()
+    {
+        if (wifiToggleButton == null)
+        {
+            return;
+        }
+
+        wifiToggleButton.interactable = false;
+        wifiToggleButton.transition = Selectable.Transition.None;
+
+        Image buttonImage = wifiToggleButton.GetComponent<Image>();
+        if (buttonImage != null)
+        {
+            buttonImage.color = isWiFiEnabled ? new Color(0.08f, 0.62f, 0.26f, 0.96f) : new Color(0.82f, 0.12f, 0.1f, 0.96f);
+        }
+
+        if (wifiToggleLabel == null)
+        {
+            wifiToggleLabel = wifiToggleButton.GetComponentInChildren<Text>(true);
+        }
+
+        if (wifiToggleLabel != null)
+        {
+            wifiToggleLabel.text = isWiFiEnabled ? "Wi-Fi ON" : "Wi-Fi OFF";
+            wifiToggleLabel.alignment = TextAnchor.MiddleCenter;
+            wifiToggleLabel.color = Color.white;
+            wifiToggleLabel.font = GetDefaultFont();
+            wifiToggleLabel.fontSize = 13;
+            wifiToggleLabel.fontStyle = FontStyle.Bold;
         }
     }
 
@@ -702,6 +999,13 @@ public class RouterInteractable : MonoBehaviour
             closeHintLabel = closeHint.GetComponent<Text>();
         }
 
+        Transform wifiToggle = panelObject.transform.Find("WiFiToggleButton");
+        if (wifiToggle != null)
+        {
+            wifiToggleButton = wifiToggle.GetComponent<Button>();
+            wifiToggleLabel = wifiToggle.GetComponentInChildren<Text>(true);
+        }
+
         Transform scrollView = panelObject.transform.Find("IpScrollView");
         if (scrollView != null)
         {
@@ -733,6 +1037,8 @@ public class RouterInteractable : MonoBehaviour
         closeHintLabel = null;
         rangeLabel = null;
         ipScrollRect = null;
+        wifiToggleButton = null;
+        wifiToggleLabel = null;
     }
 
     private Canvas FindCanvasByName(string canvasName)

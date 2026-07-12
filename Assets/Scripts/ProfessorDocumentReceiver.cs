@@ -8,6 +8,10 @@ public class ProfessorDocumentReceiver : MonoBehaviour
 {
     [SerializeField] private string promptText = "F entregar documento";
     [SerializeField] private Transform documentAnchor;
+    [SerializeField] private bool preferHandBoneAnchor = true;
+    [SerializeField] private HumanBodyBones documentHandBone = HumanBodyBones.RightHand;
+    [SerializeField] private Vector3 handAnchorLocalPosition = new Vector3(-0.00115f, 0.00169f, 0.00182f);
+    [SerializeField] private Vector3 handAnchorLocalEulerAngles = new Vector3(-36.817f, 88.701f, -18.423f);
     [SerializeField] private Vector3 generatedAnchorLocalPosition = new Vector3(0.42f, 1.18f, 0.34f);
     [SerializeField] private Vector3 generatedAnchorLocalEulerAngles = new Vector3(72f, 0f, 12f);
     [SerializeField] private Vector3 triggerSize = new Vector3(2f, 2f, 2f);
@@ -15,12 +19,19 @@ public class ProfessorDocumentReceiver : MonoBehaviour
     [SerializeField] private Animator animator;
     [SerializeField] private string carryingParameter = "IsCarrying";
     [SerializeField] private string carryingStateName = "Idle";
+    [SerializeField] private float carryingTransitionDuration = 0.04f;
+    [SerializeField] private bool useHandIk = true;
+    [SerializeField] private AvatarIKGoal documentHandIkGoal = AvatarIKGoal.RightHand;
+    [SerializeField] private Vector3 handIkLocalPosition = new Vector3(0.32f, 1.05f, 0.28f);
+    [SerializeField] private Vector3 handIkLocalEulerAngles = new Vector3(75f, 0f, 0f);
+    [SerializeField] [Range(0f, 1f)] private float handIkWeight = 1f;
     [SerializeField] private Canvas canvas;
     [SerializeField] private GameObject promptObject;
     [SerializeField] private Text promptLabel;
 
     private BoxCollider triggerCollider;
     private bool hasCarryingParameter;
+    private bool isHoldingDocument;
 
     public Transform DocumentAnchor
     {
@@ -53,6 +64,7 @@ public class ProfessorDocumentReceiver : MonoBehaviour
         }
 
         document.DeliverTo(DocumentAnchor);
+        isHoldingDocument = true;
         SetCarryingAnimation(true);
     }
 
@@ -82,34 +94,74 @@ public class ProfessorDocumentReceiver : MonoBehaviour
 
     private void EnsureDocumentAnchor()
     {
-        if (documentAnchor != null)
+        EnsureAnimator();
+        Transform anchorParent = ResolveDocumentAnchorParent();
+
+        if (documentAnchor == null)
         {
-            return;
+            documentAnchor = FindExistingDocumentAnchor();
         }
 
-        Transform existingAnchor = transform.Find("DocumentAnchor");
-        if (existingAnchor != null)
+        if (documentAnchor == null)
         {
-            documentAnchor = existingAnchor;
-            ApplyDocumentAnchorDefaults();
-            return;
+            GameObject anchorObject = new GameObject("DocumentAnchor");
+            documentAnchor = anchorObject.transform;
         }
 
-        GameObject anchorObject = new GameObject("DocumentAnchor");
-        documentAnchor = anchorObject.transform;
-        documentAnchor.SetParent(transform, false);
-        ApplyDocumentAnchorDefaults();
+        if (anchorParent != null && documentAnchor.parent != anchorParent)
+        {
+            documentAnchor.SetParent(anchorParent, false);
+        }
+
+        ApplyDocumentAnchorDefaults(anchorParent);
     }
 
-    private void ApplyDocumentAnchorDefaults()
+    private Transform FindExistingDocumentAnchor()
+    {
+        Transform[] children = GetComponentsInChildren<Transform>(true);
+        for (int i = 0; i < children.Length; i++)
+        {
+            if (children[i] != null && children[i].name == "DocumentAnchor")
+            {
+                return children[i];
+            }
+        }
+
+        return null;
+    }
+
+    private Transform ResolveDocumentAnchorParent()
+    {
+        if (preferHandBoneAnchor && TryGetDocumentHand(out Transform hand))
+        {
+            return hand;
+        }
+
+        return transform;
+    }
+
+    private bool TryGetDocumentHand(out Transform hand)
+    {
+        hand = null;
+        if (animator == null || animator.avatar == null || !animator.avatar.isHuman)
+        {
+            return false;
+        }
+
+        hand = animator.GetBoneTransform(documentHandBone);
+        return hand != null;
+    }
+
+    private void ApplyDocumentAnchorDefaults(Transform anchorParent)
     {
         if (documentAnchor == null)
         {
             return;
         }
 
-        documentAnchor.localPosition = generatedAnchorLocalPosition;
-        documentAnchor.localRotation = Quaternion.Euler(generatedAnchorLocalEulerAngles);
+        bool anchoredToHand = anchorParent != null && anchorParent != transform;
+        documentAnchor.localPosition = anchoredToHand ? handAnchorLocalPosition : generatedAnchorLocalPosition;
+        documentAnchor.localRotation = Quaternion.Euler(anchoredToHand ? handAnchorLocalEulerAngles : generatedAnchorLocalEulerAngles);
         documentAnchor.localScale = Vector3.one;
     }
 
@@ -148,8 +200,23 @@ public class ProfessorDocumentReceiver : MonoBehaviour
 
         if (animator != null && carrying && !string.IsNullOrWhiteSpace(carryingStateName))
         {
-            animator.CrossFade(carryingStateName, 0.12f);
+            animator.CrossFade(carryingStateName, carryingTransitionDuration);
         }
+    }
+
+    private void OnAnimatorIK(int layerIndex)
+    {
+        if (!isHoldingDocument || !useHandIk || animator == null || animator.avatar == null || !animator.avatar.isHuman)
+        {
+            return;
+        }
+
+        Vector3 targetPosition = transform.TransformPoint(handIkLocalPosition);
+        Quaternion targetRotation = transform.rotation * Quaternion.Euler(handIkLocalEulerAngles);
+        animator.SetIKPositionWeight(documentHandIkGoal, handIkWeight);
+        animator.SetIKRotationWeight(documentHandIkGoal, handIkWeight);
+        animator.SetIKPosition(documentHandIkGoal, targetPosition);
+        animator.SetIKRotation(documentHandIkGoal, targetRotation);
     }
 
     private void EnsurePrompt()

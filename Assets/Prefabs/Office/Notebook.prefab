@@ -2323,6 +2323,7 @@ GameObject:
   - component: {fileID: 8239370816752785986}
   - component: {fileID: 8463933881499909245}
   - component: {fileID: 5357695526562484146}
+  - component: {fileID: 6110735708572429180}
   m_Layer: 0
   m_Name: Notebook
   m_TagString: Untagged
@@ -2440,6 +2441,7 @@ MonoBehaviour:
   reservedDeviceName: Notebook
   usePoint: {fileID: 0}
   usePointRadius: 1.2
+  initialNotebookWiFiEnabled: 0
   panelAnchorMin: {x: 0.64, y: 0.12}
   panelAnchorMax: {x: 0.98, y: 0.9}
   panelOpacity: 0.9
@@ -2468,6 +2470,21 @@ MonoBehaviour:
   removeIpButton: {fileID: 0}
   removeIpButtonLabel: {fileID: 0}
   ipScrollRect: {fileID: 0}
+--- !u!114 &6110735708572429180
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 3948060230086057235}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 6de4ee9161d846e4b8adbe5c7dd59c2e, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: 
+  deviceType: 0
+  deviceIdentifier: Notebook
+  sensorRadius: 0.35
 --- !u!1 &4085731041130803894
 GameObject:
   m_ObjectHideFlags: 0

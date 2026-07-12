@@ -20,6 +20,7 @@ public class DeviceDropZone : MonoBehaviour
     [SerializeField] private float pulseAmount = 0.12f;
     [SerializeField] private float pulseSpeed = 4f;
     [SerializeField] private float visibleRange = 2.2f;
+    [SerializeField] private float occupancyHeight = 1.6f;
     [SerializeField] private string placePromptFormat = "Aperte E para colocar {0}";
     [SerializeField] private Canvas canvas;
     [SerializeField] private GameObject promptObject;
@@ -39,6 +40,7 @@ public class DeviceDropZone : MonoBehaviour
     private Material indicatorMaterial;
     private Vector3 baseIndicatorScale;
     private float visibleBlend;
+    private readonly Collider[] occupancyHits = new Collider[32];
 
     private void Awake()
     {
@@ -54,12 +56,17 @@ public class DeviceDropZone : MonoBehaviour
 
     public bool CanReceive(MovableDevice device)
     {
-        if (device == null || CurrentDevice != null)
+        if (device == null || CurrentDevice != null || IsOccupiedByAnotherDevice(device))
         {
             return false;
         }
 
         return acceptsAnyDevice || device.DeviceName == acceptedDeviceName;
+    }
+
+    public bool IsDeviceInPlacementRange(MovableDevice device)
+    {
+        return device != null && Vector3.SqrMagnitude(device.transform.position - PlacePosition) <= visibleRange * visibleRange;
     }
 
     public void Receive(MovableDevice device)
@@ -81,6 +88,13 @@ public class DeviceDropZone : MonoBehaviour
     {
         if (device == null)
         {
+            return PlacePosition;
+        }
+
+        if (device.IsRouterDevice())
+        {
+            // Routers use their root/pivot as the placement anchor. Their child
+            // visuals can extend far outside the physical body and skew bounds.
             return PlacePosition;
         }
 
@@ -156,6 +170,9 @@ public class DeviceDropZone : MonoBehaviour
         Gizmos.color = new Color(1f, 0.75f, 0.1f, 0.9f);
         Gizmos.DrawSphere(placePosition, 0.08f);
         Gizmos.DrawLine(placePosition, indicatorPosition);
+
+        Gizmos.color = new Color(1f, 0.25f, 0.1f, 0.5f);
+        Gizmos.DrawWireCube(GetOccupancyCenter(), GetOccupancySize());
     }
 
     private Vector3 GetSurfacePosition()
@@ -374,6 +391,74 @@ public class DeviceDropZone : MonoBehaviour
         return null;
     }
 
+    private bool IsOccupiedByAnotherDevice(MovableDevice ignoredDevice)
+    {
+        if (CurrentDevice != null && CurrentDevice != ignoredDevice)
+        {
+            return true;
+        }
+
+        Vector3 center = GetOccupancyCenter();
+        Vector3 halfExtents = GetOccupancySize() * 0.5f;
+
+        MovableDevice[] devices = FindObjectsOfType<MovableDevice>();
+        for (int i = 0; i < devices.Length; i++)
+        {
+            MovableDevice device = devices[i];
+            if (device == null || device == ignoredDevice || device.IsCarried)
+            {
+                continue;
+            }
+
+            if (device.CurrentDropZone == this || IsInsideOccupancyFootprint(device.transform.position))
+            {
+                return true;
+            }
+        }
+
+        int hitCount = Physics.OverlapBoxNonAlloc(center, halfExtents, occupancyHits, Quaternion.identity, ~0, QueryTriggerInteraction.Collide);
+        for (int i = 0; i < hitCount; i++)
+        {
+            Collider hit = occupancyHits[i];
+            if (hit == null)
+            {
+                continue;
+            }
+
+            MovableDevice device = hit.GetComponentInParent<MovableDevice>();
+            if (device == null || device == ignoredDevice || device.IsCarried)
+            {
+                continue;
+            }
+
+            if (device.CurrentDropZone == this || IsInsideOccupancyFootprint(device.transform.position))
+            {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    private Vector3 GetOccupancyCenter()
+    {
+        return PlacePosition + Vector3.up * (occupancyHeight * 0.5f);
+    }
+
+    private Vector3 GetOccupancySize()
+    {
+        return new Vector3(Mathf.Max(indicatorSize.x, 0.1f), Mathf.Max(occupancyHeight, 0.1f), Mathf.Max(indicatorSize.y, 0.1f));
+    }
+
+    private bool IsInsideOccupancyFootprint(Vector3 worldPosition)
+    {
+        Vector3 center = PlacePosition;
+        Vector3 size = GetOccupancySize();
+        float halfX = size.x * 0.5f;
+        float halfZ = size.z * 0.5f;
+        return Mathf.Abs(worldPosition.x - center.x) <= halfX && Mathf.Abs(worldPosition.z - center.z) <= halfZ;
+    }
+
     private void SetPromptVisible(bool visible, MovableDevice device)
     {
         EnsurePrompt();
@@ -396,9 +481,19 @@ public class DeviceDropZone : MonoBehaviour
         }
 
         string lowerName = (device.DeviceName + " " + device.name).ToLowerInvariant();
+        if (lowerName.Contains("notebook") || lowerName.Contains("laptop"))
+        {
+            return "o notebook";
+        }
+
         if (lowerName.Contains("printer") || lowerName.Contains("impressora"))
         {
             return "a impressora";
+        }
+
+        if (lowerName.Contains("router") || lowerName.Contains("roteador"))
+        {
+            return "o roteador";
         }
 
         if (lowerName.Contains("computer") || lowerName.Contains("computador") || lowerName.Contains("gabinete"))
