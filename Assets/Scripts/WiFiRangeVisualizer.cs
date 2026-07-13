@@ -60,6 +60,13 @@ public class WiFiRangeVisualizer : MonoBehaviour
 
     private void Awake()
     {
+        if (!Application.isPlaying)
+        {
+            requestedVisible = false;
+            DisableExistingVisualRenderers();
+            return;
+        }
+
         EnsureRouterReference();
         EnsureVisualObjects();
         requestedVisible = showRangeAtStart;
@@ -75,22 +82,35 @@ public class WiFiRangeVisualizer : MonoBehaviour
             requestedVisible = showRangeAtStart;
             RefreshVisual(true);
         }
+        else
+        {
+            requestedVisible = false;
+            DisableExistingVisualRenderers();
+        }
     }
 
     private void Start()
     {
+        if (!Application.isPlaying)
+        {
+            requestedVisible = false;
+            DisableExistingVisualRenderers();
+            return;
+        }
+
         requestedVisible = showRangeAtStart;
         RefreshVisual(true);
     }
 
     private void Update()
     {
-        if (!Application.isPlaying && !requestedVisible)
+        if (!Application.isPlaying)
         {
+            SetRenderersEnabled(false);
             return;
         }
 
-        float time = Application.isPlaying ? Time.time : Time.realtimeSinceStartup;
+        float time = Time.time;
         if (time - lastUpdateTime < animationUpdateInterval)
         {
             return;
@@ -116,7 +136,9 @@ public class WiFiRangeVisualizer : MonoBehaviour
         EnsureRouterReference();
         if (!Application.isPlaying)
         {
-            requestedVisible = showRangeAtStart;
+            requestedVisible = false;
+            DisableExistingVisualRenderers();
+            return;
         }
 
         RefreshExistingVisual();
@@ -125,6 +147,13 @@ public class WiFiRangeVisualizer : MonoBehaviour
     [ContextMenu("Show Wi-Fi Range Preview")]
     public void ShowRange()
     {
+        if (!Application.isPlaying)
+        {
+            requestedVisible = false;
+            DisableExistingVisualRenderers();
+            return;
+        }
+
         requestedVisible = true;
         EnsureRouterReference();
         EnsureVisualObjects();
@@ -140,6 +169,13 @@ public class WiFiRangeVisualizer : MonoBehaviour
 
     public void SetRangeVisible(bool visible)
     {
+        if (!Application.isPlaying)
+        {
+            requestedVisible = false;
+            DisableExistingVisualRenderers();
+            return;
+        }
+
         if (visible)
         {
             ShowRange();
@@ -153,6 +189,13 @@ public class WiFiRangeVisualizer : MonoBehaviour
     [ContextMenu("Rebuild Wi-Fi Range Visualizer")]
     public void RebuildVisualizer()
     {
+        if (!Application.isPlaying)
+        {
+            requestedVisible = false;
+            DisableExistingVisualRenderers();
+            return;
+        }
+
         EnsureRouterReference();
         EnsureVisualObjects(true);
         RefreshVisual(true);
@@ -426,8 +469,7 @@ public class WiFiRangeVisualizer : MonoBehaviour
             return 0f;
         }
 
-        float time = Application.isPlaying ? Time.time : Time.realtimeSinceStartup;
-        return Mathf.Repeat(time * animationSpeed, 1f);
+        return Mathf.Repeat(Time.time * animationSpeed, 1f);
     }
 
     private void ApplyRendererSettings()
@@ -502,6 +544,27 @@ public class WiFiRangeVisualizer : MonoBehaviour
                 }
             }
         }
+    }
+
+    private void DisableExistingVisualRenderers()
+    {
+        visualRoot = transform.Find(RootName);
+        if (visualRoot == null)
+        {
+            renderersVisible = false;
+            return;
+        }
+
+        LineRenderer[] lineRenderers = visualRoot.GetComponentsInChildren<LineRenderer>(true);
+        foreach (LineRenderer lineRenderer in lineRenderers)
+        {
+            if (lineRenderer != null)
+            {
+                lineRenderer.enabled = false;
+            }
+        }
+
+        renderersVisible = false;
     }
 
     private static Material GetLineMaterial()

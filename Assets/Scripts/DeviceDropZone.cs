@@ -581,14 +581,7 @@ public class DeviceDropZone : MonoBehaviour
 
     private void EnsureEventSystem()
     {
-        if (FindObjectOfType<EventSystem>() != null)
-        {
-            return;
-        }
-
-        GameObject eventSystemObject = new GameObject("EventSystem");
-        eventSystemObject.AddComponent<EventSystem>();
-        eventSystemObject.AddComponent<StandaloneInputModule>();
+        RuntimeEventSystemUtility.EnsureSingleEventSystem();
     }
 
     private Font GetDefaultFont()

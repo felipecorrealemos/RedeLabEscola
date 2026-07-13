@@ -152,6 +152,7 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: 
   gameplaySceneName: SampleScene
+  characterSelectionSceneName: CharacterSelection
 --- !u!4 &8853059
 Transform:
   m_ObjectHideFlags: 0

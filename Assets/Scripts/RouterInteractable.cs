@@ -527,14 +527,7 @@ public class RouterInteractable : MonoBehaviour
 
     private void EnsureEventSystem()
     {
-        if (FindObjectOfType<EventSystem>() != null)
-        {
-            return;
-        }
-
-        GameObject eventSystemObject = CreateUiObject("EventSystem", null);
-        eventSystemObject.AddComponent<EventSystem>();
-        eventSystemObject.AddComponent<StandaloneInputModule>();
+        RuntimeEventSystemUtility.EnsureSingleEventSystem();
     }
 
     private void EnsurePrompt()

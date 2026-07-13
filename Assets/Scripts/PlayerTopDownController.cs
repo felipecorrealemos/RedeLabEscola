@@ -24,6 +24,7 @@ public class PlayerTopDownController : MonoBehaviour
 
     [Header("Interaction")]
     [SerializeField] private float interactionRadius = 1.2f;
+    [SerializeField] private float documentFallbackInteractionRadius = 1.6f;
     [SerializeField] private Transform carryAnchor;
     [SerializeField] private Vector3 carryAnchorLocalPosition = new Vector3(0f, 1.05f, 0.45f);
     [SerializeField] private LayerMask interactionMask = ~0;
@@ -48,6 +49,27 @@ public class PlayerTopDownController : MonoBehaviour
     private ComputerInteractable openComputer;
     private readonly Collider[] interactionHits = new Collider[16];
     private bool movementLocked;
+
+    private enum PromptTargetType
+    {
+        None,
+        Router,
+        Computer,
+        ComputerTerminal,
+        Document,
+        Device
+    }
+
+    private struct PromptTarget
+    {
+        public PromptTargetType Type;
+        public float Distance;
+        public RouterInteractable Router;
+        public ComputerInteractable Computer;
+        public KeyboardTerminalInteractable ComputerTerminal;
+        public PrintedDocumentInteractable Document;
+        public MovableDevice Device;
+    }
 
     private void Reset()
     {
@@ -111,17 +133,23 @@ public class PlayerTopDownController : MonoBehaviour
             return;
         }
 
-        if (carriedDocument == null)
+        PromptTarget target = FindNearestPromptTarget();
+        if (target.Type == PromptTargetType.Document && target.Document != null)
         {
-            PrintedDocumentInteractable document = FindNearestPrintedDocument(out _);
-            if (document != null)
-            {
-                PickUpDocument(document);
-                return;
-            }
+            PickUpDocument(target.Document);
+            return;
         }
 
-        MovableDevice device = FindNearestCarryTarget();
+        MovableDevice device = target.Device;
+        if (device == null && target.Type == PromptTargetType.Router && target.Router != null && target.Router.AllowMovement)
+        {
+            device = GetMovableDeviceForRouter(target.Router);
+        }
+        else if (device == null && target.Type == PromptTargetType.Computer && target.Computer != null)
+        {
+            device = GetMovableDeviceForComputer(target.Computer);
+        }
+
         if (device != null)
         {
             PickUp(device);
@@ -240,92 +268,14 @@ public class PlayerTopDownController : MonoBehaviour
             return;
         }
 
-        RouterInteractable nearestRouter = FindNearestRouter(out float routerDistance);
-        ComputerInteractable nearestComputer = FindNearestComputer(out float computerDistance);
-        KeyboardTerminalInteractable nearestComputerTerminal = FindNearestComputerTerminal(out float terminalDistance);
-        MovableDevice nearestDevice = FindNearestMovableDevice(out float deviceDistance);
-        PrintedDocumentInteractable nearestDocument = FindNearestPrintedDocument(out float documentDistance);
-        RouterInteractable deviceRouter = GetRouterForDevice(nearestDevice);
-        if (deviceRouter != null && (nearestRouter == null || deviceDistance < routerDistance))
-        {
-            nearestRouter = deviceRouter;
-            routerDistance = deviceDistance;
-        }
-
-        ComputerInteractable deviceComputer = GetComputerForDevice(nearestDevice);
-        if (deviceComputer != null && deviceComputer.CanShowPrompt && (nearestComputer == null || deviceDistance < computerDistance))
-        {
-            nearestComputer = deviceComputer;
-            computerDistance = deviceDistance;
-        }
-
-        float interactionDistanceLimit = interactionRadius * interactionRadius;
-        float selectedDistance = interactionDistanceLimit;
-        RouterInteractable selectedRouter = null;
-        ComputerInteractable selectedComputer = null;
-        KeyboardTerminalInteractable selectedComputerTerminal = null;
-        PrintedDocumentInteractable selectedDocument = null;
-        MovableDevice selectedDevice = null;
-
-        if (nearestComputerTerminal != null && terminalDistance <= selectedDistance)
-        {
-            selectedDistance = terminalDistance;
-            selectedComputerTerminal = nearestComputerTerminal;
-        }
-
-        if (nearestRouter != null && routerDistance <= selectedDistance)
-        {
-            selectedDistance = routerDistance;
-            selectedRouter = nearestRouter;
-            selectedComputerTerminal = null;
-        }
-
-        if (nearestComputer != null && computerDistance <= selectedDistance)
-        {
-            selectedDistance = computerDistance;
-            selectedComputer = nearestComputer;
-            selectedRouter = null;
-            selectedComputerTerminal = null;
-        }
-
-        if (nearestDocument != null && documentDistance <= selectedDistance)
-        {
-            selectedDistance = documentDistance;
-            selectedDocument = nearestDocument;
-            selectedComputer = null;
-            selectedRouter = null;
-            selectedComputerTerminal = null;
-        }
-
-        if (nearestDevice != null
-            && deviceDistance <= selectedDistance
-            && selectedDocument == null
-            && selectedComputer == null
-            && selectedRouter == null
-            && selectedComputerTerminal == null)
-        {
-            selectedDevice = nearestDevice;
-            selectedDocument = null;
-            selectedComputer = null;
-            selectedRouter = null;
-            selectedComputerTerminal = null;
-        }
-
-        if (selectedRouter != null && IsDeviceForRouter(nearestDevice, selectedRouter))
-        {
-            selectedDevice = nearestDevice;
-        }
-        else if (selectedComputer != null && IsDeviceForComputer(nearestDevice, selectedComputer))
-        {
-            selectedDevice = nearestDevice;
-        }
+        PromptTarget target = FindNearestPromptTarget();
 
         SetHighlightedProfessor(null);
-        SetHighlightedRouter(selectedRouter);
-        SetHighlightedComputer(selectedComputer);
-        SetHighlightedComputerTerminal(selectedComputerTerminal);
-        SetHighlightedDocument(selectedDocument);
-        SetHighlightedDevice(selectedDevice);
+        SetHighlightedRouter(target.Type == PromptTargetType.Router ? target.Router : null);
+        SetHighlightedComputer(target.Type == PromptTargetType.Computer ? target.Computer : null);
+        SetHighlightedComputerTerminal(target.Type == PromptTargetType.ComputerTerminal ? target.ComputerTerminal : null);
+        SetHighlightedDocument(target.Type == PromptTargetType.Document ? target.Document : null);
+        SetHighlightedDevice(target.Device);
     }
 
     public void SetMovementLocked(bool locked)
@@ -339,6 +289,16 @@ public class PlayerTopDownController : MonoBehaviour
             openRouter = null;
             openComputer = null;
             UpdateInteractionHighlight();
+        }
+    }
+
+    public void SetCharacterAnimator(Animator newAnimator)
+    {
+        animator = newAnimator;
+
+        if (animator != null && disableRootMotion)
+        {
+            animator.applyRootMotion = false;
         }
     }
 
@@ -538,25 +498,140 @@ public class PlayerTopDownController : MonoBehaviour
         return computer != null ? computer : device.GetComponentInChildren<ComputerInteractable>();
     }
 
-    private MovableDevice FindNearestCarryTarget()
+    private PromptTarget FindNearestPromptTarget()
     {
-        MovableDevice nearestDevice = FindNearestMovableDevice(out float deviceDistance);
-        RouterInteractable nearestRouter = FindNearestRouter(out float routerDistance);
-        ComputerInteractable nearestComputer = FindNearestComputer(out float computerDistance);
-        MovableDevice routerDevice = nearestRouter != null && nearestRouter.AllowMovement ? GetMovableDeviceForRouter(nearestRouter) : null;
-        MovableDevice computerDevice = GetMovableDeviceForComputer(nearestComputer);
-
-        if (routerDevice != null && routerDistance <= computerDistance && routerDistance <= deviceDistance)
+        PromptTarget target = new PromptTarget
         {
-            return routerDevice;
+            Type = PromptTargetType.None,
+            Distance = float.MaxValue
+        };
+
+        GetInteractionCapsulePoints(out Vector3 bottom, out Vector3 top);
+        int hitCount = Physics.OverlapCapsuleNonAlloc(bottom, top, interactionRadius, interactionHits, interactionMask, QueryTriggerInteraction.Collide);
+
+        for (int i = 0; i < hitCount; i++)
+        {
+            Collider hit = interactionHits[i];
+            if (hit == null || hit.transform.IsChildOf(transform))
+            {
+                continue;
+            }
+
+            float distance = Vector3.SqrMagnitude(hit.ClosestPoint(transform.position) - transform.position);
+
+            KeyboardTerminalInteractable terminal = hit.GetComponentInParent<KeyboardTerminalInteractable>();
+            if (terminal != null && terminal.CanUse && terminal.ContainsCollider(hit) && terminal.IsPlayerNear(transform.position))
+            {
+                TrySelectPromptTarget(ref target, PromptTargetType.ComputerTerminal, distance, null, null, terminal, null, null);
+                continue;
+            }
+
+            PrintedDocumentInteractable document = hit.GetComponentInParent<PrintedDocumentInteractable>();
+            if (document != null && document.CanPickUp)
+            {
+                TrySelectPromptTarget(ref target, PromptTargetType.Document, distance, null, null, null, document, null);
+                continue;
+            }
+
+            RouterInteractable router = hit.GetComponentInParent<RouterInteractable>();
+            if (router != null)
+            {
+                MovableDevice routerDevice = router.AllowMovement ? GetMovableDeviceForRouter(router) : null;
+                TrySelectPromptTarget(ref target, PromptTargetType.Router, distance, router, null, null, null, routerDevice);
+                continue;
+            }
+
+            ComputerInteractable computer = hit.GetComponentInParent<ComputerInteractable>();
+            if (computer != null && computer.CanShowPrompt && !computer.IsTerminalCollider(hit))
+            {
+                TrySelectPromptTarget(ref target, PromptTargetType.Computer, distance, null, computer, null, null, GetMovableDeviceForComputer(computer));
+                continue;
+            }
+
+            MovableDevice device = hit.GetComponentInParent<MovableDevice>();
+            if (device == null || device.IsCarried)
+            {
+                continue;
+            }
+
+            RouterInteractable deviceRouter = GetRouterForDevice(device);
+            if (deviceRouter != null)
+            {
+                MovableDevice routerDevice = deviceRouter.AllowMovement ? device : null;
+                TrySelectPromptTarget(ref target, PromptTargetType.Router, distance, deviceRouter, null, null, null, routerDevice);
+                continue;
+            }
+
+            ComputerInteractable deviceComputer = GetComputerForDevice(device);
+            if (deviceComputer != null && deviceComputer.CanShowPrompt)
+            {
+                TrySelectPromptTarget(ref target, PromptTargetType.Computer, distance, null, deviceComputer, null, null, device);
+                continue;
+            }
+
+            if (CanHighlightMovableDevice(device))
+            {
+                TrySelectPromptTarget(ref target, PromptTargetType.Device, distance, null, null, null, null, device);
+            }
         }
 
-        if (computerDevice != null && computerDistance <= routerDistance && computerDistance <= deviceDistance)
+        if (target.Type != PromptTargetType.Document)
         {
-            return computerDevice;
+            PrintedDocumentInteractable fallbackDocument = FindNearestPrintedDocumentByDistance(out float documentDistance);
+            if (fallbackDocument != null)
+            {
+                target.Type = PromptTargetType.Document;
+                target.Distance = documentDistance;
+                target.Router = null;
+                target.Computer = null;
+                target.ComputerTerminal = null;
+                target.Document = fallbackDocument;
+                target.Device = null;
+            }
         }
 
-        return nearestDevice;
+        return target;
+    }
+
+    private void TrySelectPromptTarget(
+        ref PromptTarget target,
+        PromptTargetType type,
+        float distance,
+        RouterInteractable router,
+        ComputerInteractable computer,
+        KeyboardTerminalInteractable computerTerminal,
+        PrintedDocumentInteractable document,
+        MovableDevice device)
+    {
+        if (distance >= target.Distance)
+        {
+            return;
+        }
+
+        target.Type = type;
+        target.Distance = distance;
+        target.Router = router;
+        target.Computer = computer;
+        target.ComputerTerminal = computerTerminal;
+        target.Document = document;
+        target.Device = device;
+    }
+
+    private bool CanHighlightMovableDevice(MovableDevice device)
+    {
+        if (device == null || device.IsCarried)
+        {
+            return false;
+        }
+
+        RouterInteractable router = device.GetComponent<RouterInteractable>();
+        if (router != null && !router.AllowMovement)
+        {
+            return false;
+        }
+
+        ComputerInteractable computer = device.GetComponent<ComputerInteractable>();
+        return computer == null || computer.CanBePickedUp;
     }
 
     private MovableDevice GetMovableDeviceForRouter(RouterInteractable router)
@@ -727,6 +802,33 @@ public class PlayerTopDownController : MonoBehaviour
 
             float sqrDistance = Vector3.SqrMagnitude(document.transform.position - transform.position);
             if (sqrDistance < nearestDistance)
+            {
+                nearestDistance = sqrDistance;
+                nearestDocument = document;
+            }
+        }
+
+        return nearestDocument;
+    }
+
+    private PrintedDocumentInteractable FindNearestPrintedDocumentByDistance(out float nearestDistance)
+    {
+        PrintedDocumentInteractable nearestDocument = null;
+        nearestDistance = float.MaxValue;
+        float maxDistance = Mathf.Max(documentFallbackInteractionRadius, interactionRadius);
+        float maxDistanceSqr = maxDistance * maxDistance;
+        PrintedDocumentInteractable[] documents = FindObjectsOfType<PrintedDocumentInteractable>(true);
+
+        for (int i = 0; i < documents.Length; i++)
+        {
+            PrintedDocumentInteractable document = documents[i];
+            if (document == null || !document.CanPickUp)
+            {
+                continue;
+            }
+
+            float sqrDistance = Vector3.SqrMagnitude(document.transform.position - transform.position);
+            if (sqrDistance <= maxDistanceSqr && sqrDistance < nearestDistance)
             {
                 nearestDistance = sqrDistance;
                 nearestDocument = document;

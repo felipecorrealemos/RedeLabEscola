@@ -151,6 +151,7 @@ MonoBehaviour:
   reservedDeviceName: Dispositivo da porta
   usePoint: {fileID: 0}
   usePointRadius: 1.2
+  initialNotebookWiFiEnabled: 0
   panelAnchorMin: {x: 0.64, y: 0.12}
   panelAnchorMax: {x: 0.98, y: 0.9}
   panelOpacity: 0.9

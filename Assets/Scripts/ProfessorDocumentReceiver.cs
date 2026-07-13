@@ -1,3 +1,4 @@
+using System.Collections;
 using UnityEngine;
 using UnityEngine.EventSystems;
 using UnityEngine.UI;
@@ -18,7 +19,7 @@ public class ProfessorDocumentReceiver : MonoBehaviour
     [SerializeField] private Vector3 triggerCenter = new Vector3(0f, 1f, 0f);
     [SerializeField] private Animator animator;
     [SerializeField] private string carryingParameter = "IsCarrying";
-    [SerializeField] private string carryingStateName = "Idle";
+    [SerializeField] private string carryingStateName = "Carrying";
     [SerializeField] private float carryingTransitionDuration = 0.04f;
     [SerializeField] private bool useHandIk = true;
     [SerializeField] private AvatarIKGoal documentHandIkGoal = AvatarIKGoal.RightHand;
@@ -31,7 +32,11 @@ public class ProfessorDocumentReceiver : MonoBehaviour
 
     private BoxCollider triggerCollider;
     private bool hasCarryingParameter;
+    private bool hasCarryingState;
+    private int carryingStateHash;
+    private int carryingStateLayer;
     private bool isHoldingDocument;
+    private Coroutine carryingRoutine;
 
     public Transform DocumentAnchor
     {
@@ -185,7 +190,33 @@ public class ProfessorDocumentReceiver : MonoBehaviour
             if (parameter.type == AnimatorControllerParameterType.Bool && parameter.name == carryingParameter)
             {
                 hasCarryingParameter = true;
-                return;
+                break;
+            }
+        }
+
+        hasCarryingState = false;
+        carryingStateLayer = 0;
+        if (!string.IsNullOrWhiteSpace(carryingStateName))
+        {
+            for (int i = 0; i < animator.layerCount; i++)
+            {
+                int shortHash = Animator.StringToHash(carryingStateName);
+                int fullPathHash = Animator.StringToHash(animator.GetLayerName(i) + "." + carryingStateName);
+                if (animator.HasState(i, shortHash))
+                {
+                    carryingStateHash = shortHash;
+                    hasCarryingState = true;
+                    carryingStateLayer = i;
+                    break;
+                }
+
+                if (animator.HasState(i, fullPathHash))
+                {
+                    carryingStateHash = fullPathHash;
+                    hasCarryingState = true;
+                    carryingStateLayer = i;
+                    break;
+                }
             }
         }
     }
@@ -198,10 +229,32 @@ public class ProfessorDocumentReceiver : MonoBehaviour
             animator.SetBool(carryingParameter, carrying);
         }
 
-        if (animator != null && carrying && !string.IsNullOrWhiteSpace(carryingStateName))
+        if (animator != null && carrying && hasCarryingState)
         {
-            animator.CrossFade(carryingStateName, carryingTransitionDuration);
+            animator.Play(carryingStateHash, carryingStateLayer, 0f);
+            animator.Update(0f);
+
+            if (carryingRoutine != null)
+            {
+                StopCoroutine(carryingRoutine);
+            }
+
+            carryingRoutine = StartCoroutine(ForceCarryingPoseNextFrame());
         }
+    }
+
+    private IEnumerator ForceCarryingPoseNextFrame()
+    {
+        yield return null;
+
+        EnsureAnimator();
+        if (isHoldingDocument && animator != null && hasCarryingState)
+        {
+            animator.Play(carryingStateHash, carryingStateLayer, 0f);
+            animator.Update(0f);
+        }
+
+        carryingRoutine = null;
     }
 
     private void OnAnimatorIK(int layerIndex)
@@ -297,14 +350,7 @@ public class ProfessorDocumentReceiver : MonoBehaviour
 
     private void EnsureEventSystem()
     {
-        if (FindObjectOfType<EventSystem>() != null)
-        {
-            return;
-        }
-
-        GameObject eventSystemObject = new GameObject("EventSystem");
-        eventSystemObject.AddComponent<EventSystem>();
-        eventSystemObject.AddComponent<StandaloneInputModule>();
+        RuntimeEventSystemUtility.EnsureSingleEventSystem();
     }
 
     private Font GetDefaultFont()

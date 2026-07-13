@@ -57,6 +57,7 @@ public class NetworkPrinterDevice : MonoBehaviour
         }
 
         document.gameObject.SetActive(true);
+        document.PrepareForPrint();
         document.SetPromptVisible(false);
         Transform documentTransform = document.transform;
         documentTransform.SetParent(outputSlot, false);

@@ -142,8 +142,9 @@ public class QuitConfirmationDialog : MonoBehaviour
         Image panelImage = panelObject.AddComponent<Image>();
         panelImage.color = new Color(0f, 0f, 0f, panelOpacity);
 
-        CreateText(panelObject.transform, "Title", "Deseja encerrar o jogo?", new Vector2(0f, 48f), new Vector2(-48f, 44f), 24, FontStyle.Bold);
-        CreateText(panelObject.transform, "Hint", "Esc para cancelar", new Vector2(0f, 8f), new Vector2(-48f, 30f), 15, FontStyle.Normal);
+        float textWidth = Mathf.Max(160f, panelSize.x - 48f);
+        CreateText(panelObject.transform, "Title", "Deseja sair do jogo?", new Vector2(0f, 48f), new Vector2(textWidth, 44f), 24, FontStyle.Bold);
+        CreateText(panelObject.transform, "Hint", "Esc para cancelar", new Vector2(0f, 8f), new Vector2(textWidth, 30f), 15, FontStyle.Normal);
         CreateButton(panelObject.transform, "SimButton", "Sim", new Vector2(-82f, -58f), QuitGame);
         CreateButton(panelObject.transform, "NoButton", "Nao", new Vector2(82f, -58f), () => SetOpen(false));
     }
@@ -207,15 +208,7 @@ public class QuitConfirmationDialog : MonoBehaviour
 
     private void EnsureEventSystem()
     {
-        if (FindObjectOfType<EventSystem>() != null)
-        {
-            return;
-        }
-
-        GameObject eventSystemObject = new GameObject("EventSystem");
-        DontDestroyOnLoad(eventSystemObject);
-        eventSystemObject.AddComponent<EventSystem>();
-        eventSystemObject.AddComponent<StandaloneInputModule>();
+        RuntimeEventSystemUtility.EnsureSingleEventSystem();
     }
 
     private Font GetDefaultFont()

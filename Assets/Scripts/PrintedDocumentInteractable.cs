@@ -23,6 +23,15 @@ public class PrintedDocumentInteractable : MonoBehaviour
     public bool IsCarried => isCarried;
     public bool IsDelivered => isDelivered;
 
+    public void PrepareForPrint()
+    {
+        originalParent = transform.parent;
+        isCarried = false;
+        isDelivered = false;
+        SetPhysicsEnabled(true);
+        SetPromptVisible(false);
+    }
+
     private void Awake()
     {
         EnsureTrigger();
@@ -123,10 +132,11 @@ public class PrintedDocumentInteractable : MonoBehaviour
         if (triggerCollider != null)
         {
             triggerCollider.isTrigger = true;
-            if (triggerCollider.size == Vector3.zero)
-            {
-                triggerCollider.size = new Vector3(0.45f, 0.08f, 0.32f);
-            }
+            Vector3 minimumSize = new Vector3(1f, 1f, 0.18f);
+            triggerCollider.size = new Vector3(
+                Mathf.Max(triggerCollider.size.x, minimumSize.x),
+                Mathf.Max(triggerCollider.size.y, minimumSize.y),
+                Mathf.Max(triggerCollider.size.z, minimumSize.z));
         }
     }
 
@@ -230,14 +240,7 @@ public class PrintedDocumentInteractable : MonoBehaviour
 
     private void EnsureEventSystem()
     {
-        if (FindObjectOfType<EventSystem>() != null)
-        {
-            return;
-        }
-
-        GameObject eventSystemObject = new GameObject("EventSystem");
-        eventSystemObject.AddComponent<EventSystem>();
-        eventSystemObject.AddComponent<StandaloneInputModule>();
+        RuntimeEventSystemUtility.EnsureSingleEventSystem();
     }
 
     private Font GetDefaultFont()
