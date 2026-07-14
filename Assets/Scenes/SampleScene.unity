@@ -7974,8 +7974,15 @@ PrefabInstance:
       propertyPath: m_Name
       value: RedeLab_VisualStyleRig
       objectReference: {fileID: 0}
+    - target: {fileID: 5496584286956489075, guid: 7f347bfa7c1e571438ff56f8a5c78a25, type: 3}
+      propertyPath: m_LocalPosition.x
+      value: -2.09
+      objectReference: {fileID: 0}
     m_RemovedComponents: []
-    m_RemovedGameObjects: []
+    m_RemovedGameObjects:
+    - {fileID: 8592002178625321912, guid: 7f347bfa7c1e571438ff56f8a5c78a25, type: 3}
+    - {fileID: 4642629864845976153, guid: 7f347bfa7c1e571438ff56f8a5c78a25, type: 3}
+    - {fileID: 2871769100605129494, guid: 7f347bfa7c1e571438ff56f8a5c78a25, type: 3}
     m_AddedGameObjects: []
     m_AddedComponents: []
   m_SourcePrefab: {fileID: 100100000, guid: 7f347bfa7c1e571438ff56f8a5c78a25, type: 3}
@@ -9741,7 +9748,7 @@ PrefabInstance:
       objectReference: {fileID: 0}
     - target: {fileID: 4742350084292462587, guid: 6d585aa09222eb14dabcf496d529f0cf, type: 3}
       propertyPath: m_LocalPosition.x
-      value: -2.4
+      value: -3.72
       objectReference: {fileID: 0}
     - target: {fileID: 4742350084292462587, guid: 6d585aa09222eb14dabcf496d529f0cf, type: 3}
       propertyPath: m_LocalPosition.y
@@ -9749,7 +9756,7 @@ PrefabInstance:
       objectReference: {fileID: 0}
     - target: {fileID: 4742350084292462587, guid: 6d585aa09222eb14dabcf496d529f0cf, type: 3}
       propertyPath: m_LocalPosition.z
-      value: 16.2
+      value: -1.31
       objectReference: {fileID: 0}
     - target: {fileID: 4742350084292462587, guid: 6d585aa09222eb14dabcf496d529f0cf, type: 3}
       propertyPath: m_LocalRotation.w
