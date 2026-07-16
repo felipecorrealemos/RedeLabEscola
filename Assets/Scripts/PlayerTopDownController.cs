@@ -36,6 +36,8 @@ public class PlayerTopDownController : MonoBehaviour
     [SerializeField] private string speedParameter = "Speed";
     [SerializeField] private string carryingParameter = "IsCarrying";
     [SerializeField] private string pushButtonParameter = "PushButton";
+    [SerializeField] private string drivingForkliftParameter = "IsDrivingForklift";
+    [SerializeField] private string drivingForkliftStateName = "dirigindo";
 
     private MovableDevice carriedDevice;
     private PrintedDocumentInteractable carriedDocument;
@@ -49,6 +51,7 @@ public class PlayerTopDownController : MonoBehaviour
     private ComputerInteractable openComputer;
     private readonly Collider[] interactionHits = new Collider[16];
     private bool movementLocked;
+    private bool externalMovementLocked;
 
     private enum PromptTargetType
     {
@@ -94,10 +97,14 @@ public class PlayerTopDownController : MonoBehaviour
 
     private void Update()
     {
-        if (movementLocked)
+        if (movementLocked || externalMovementLocked)
         {
             UpdateAnimator(Vector3.zero, false);
-            UpdateLockedInteractionInput();
+            if (movementLocked)
+            {
+                UpdateLockedInteractionInput();
+            }
+
             return;
         }
 
@@ -282,13 +289,53 @@ public class PlayerTopDownController : MonoBehaviour
     {
         movementLocked = locked;
         EnsureCameraFollow();
-        cameraFollow?.SetZoomLocked(locked);
+        cameraFollow?.SetZoomLocked(locked || externalMovementLocked);
 
         if (!movementLocked)
         {
             openRouter = null;
             openComputer = null;
             UpdateInteractionHighlight();
+        }
+    }
+
+    public void SetExternalMovementLocked(bool locked)
+    {
+        externalMovementLocked = locked;
+        EnsureCameraFollow();
+        cameraFollow?.SetZoomLocked(locked || movementLocked);
+
+        if (externalMovementLocked)
+        {
+            SetHighlightedDevice(null);
+            SetHighlightedDocument(null);
+            SetHighlightedProfessor(null);
+            SetHighlightedRouter(null);
+            SetHighlightedComputer(null);
+            SetHighlightedComputerTerminal(null);
+        }
+        else if (!movementLocked)
+        {
+            UpdateInteractionHighlight();
+        }
+    }
+
+    public void SetForkliftDrivingAnimation(bool driving)
+    {
+        if (animator == null)
+        {
+            return;
+        }
+
+        SetAnimatorBool(drivingForkliftParameter, driving);
+
+        if (driving && !string.IsNullOrWhiteSpace(drivingForkliftStateName))
+        {
+            int stateHash = Animator.StringToHash(drivingForkliftStateName);
+            if (animator.HasState(0, stateHash))
+            {
+                animator.CrossFade(stateHash, 0.08f, 0, 0f);
+            }
         }
     }
 
@@ -1233,7 +1280,7 @@ public class PlayerTopDownController : MonoBehaviour
 
     private void SetAnimatorBool(string parameterName, bool value)
     {
-        if (animator != null && !string.IsNullOrWhiteSpace(parameterName))
+        if (animator != null && HasAnimatorParameter(parameterName, AnimatorControllerParameterType.Bool))
         {
             animator.SetBool(parameterName, value);
         }
@@ -1241,9 +1288,29 @@ public class PlayerTopDownController : MonoBehaviour
 
     private void SetAnimatorTrigger(string parameterName)
     {
-        if (animator != null && !string.IsNullOrWhiteSpace(parameterName))
+        if (animator != null && HasAnimatorParameter(parameterName, AnimatorControllerParameterType.Trigger))
         {
             animator.SetTrigger(parameterName);
         }
+    }
+
+    private bool HasAnimatorParameter(string parameterName, AnimatorControllerParameterType parameterType)
+    {
+        if (animator == null || string.IsNullOrWhiteSpace(parameterName))
+        {
+            return false;
+        }
+
+        AnimatorControllerParameter[] parameters = animator.parameters;
+        for (int i = 0; i < parameters.Length; i++)
+        {
+            AnimatorControllerParameter parameter = parameters[i];
+            if (parameter.type == parameterType && parameter.name == parameterName)
+            {
+                return true;
+            }
+        }
+
+        return false;
     }
 }

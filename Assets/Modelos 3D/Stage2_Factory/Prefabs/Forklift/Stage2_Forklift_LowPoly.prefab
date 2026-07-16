@@ -302,7 +302,9 @@ Transform:
   m_LocalPosition: {x: 0, y: 0.85, z: -1.75}
   m_LocalScale: {x: 1.6, y: 0.55, z: 0.18}
   m_ConstrainProportionsScale: 0
-  m_Children: []
+  m_Children:
+  - {fileID: 6768522626835746926}
+  - {fileID: 1620566390159254602}
   m_Father: {fileID: 4548764003668378993}
   m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
 --- !u!33 &3519522762107421033
@@ -551,6 +553,8 @@ GameObject:
   serializedVersion: 6
   m_Component:
   - component: {fileID: 4548764003668378993}
+  - component: {fileID: 4843230475914215768}
+  - component: {fileID: 6290099260847513828}
   m_Layer: 0
   m_Name: Stage2_Forklift_LowPoly
   m_TagString: Untagged
@@ -581,8 +585,106 @@ Transform:
   - {fileID: 4558578205308788256}
   - {fileID: 7085721210949211716}
   - {fileID: 4995280299118738531}
+  - {fileID: 7177525181049832276}
+  - {fileID: 3361541820504555994}
+  - {fileID: 997557661555444888}
   m_Father: {fileID: 0}
   m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
+--- !u!54 &4843230475914215768
+Rigidbody:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 3108318571672251830}
+  serializedVersion: 4
+  m_Mass: 350
+  m_Drag: 1.2
+  m_AngularDrag: 4
+  m_CenterOfMass: {x: 0, y: 0, z: 0}
+  m_InertiaTensor: {x: 1, y: 1, z: 1}
+  m_InertiaRotation: {x: 0, y: 0, z: 0, w: 1}
+  m_IncludeLayers:
+    serializedVersion: 2
+    m_Bits: 0
+  m_ExcludeLayers:
+    serializedVersion: 2
+    m_Bits: 0
+  m_ImplicitCom: 1
+  m_ImplicitTensor: 1
+  m_UseGravity: 1
+  m_IsKinematic: 0
+  m_Interpolate: 1
+  m_Constraints: 80
+  m_CollisionDetection: 2
+--- !u!114 &6290099260847513828
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 3108318571672251830}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 68da67e0e9334f59b911e95221ba21a0, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: 
+  maxForwardSpeed: 4.5
+  maxReverseSpeed: 2.3
+  acceleration: 3.2
+  deceleration: 4
+  brakeForce: 8
+  maxSteeringAngle: 32
+  steeringResponseSpeed: 7
+  highSpeedSteeringReduction: 0.55
+  centerOfMass: {x: 0, y: 0.28, z: 0.1}
+  requiresInstalledMotor: 0
+  frontLeftWheel: {fileID: 2762019189199266979}
+  frontRightWheel: {fileID: 2409323543853815075}
+  rearLeftWheel: {fileID: 8647117486847809163}
+  rearRightWheel: {fileID: 6158205906383072206}
+  steeringWheel: {fileID: 6973953618423386226}
+  wheelVisualRotationSpeed: 360
+  steeringWheelMultiplier: 2.4
+  topLampLight: {fileID: 0}
+  topLampRenderer: {fileID: 7782468327880446450}
+  topLampOnMaterial: {fileID: 0}
+  topLampOffMaterial: {fileID: 0}
+  forkLiftTransform: {fileID: 1134666246867468710}
+  forkLocalMinHeight: 0.28
+  forkLocalMaxHeight: 1.95
+  forkLiftSpeed: 1
+  forkLowerSpeed: 1
+  driverSeatPoint: {fileID: 7177525181049832276}
+  playerExitPoint: {fileID: 3361541820504555994}
+  interactionTrigger: {fileID: 3035969133718912160}
+  interactionKey: 101
+  fallbackInteractionRadius: 1.8
+  exitBlockingMask:
+    serializedVersion: 2
+    m_Bits: 4294967295
+  exitCheckRadius: 0.35
+  exitCheckHeight: 1.65
+  exitSearchSteps: 12
+  exitSearchRadius: 1.6
+  forkPickupSensor: {fileID: 1580904368428725669}
+  forkCarryPoint: {fileID: 6768522626835746926}
+  captureDistance: 1.45
+  captureWidth: 1.4
+  angularTolerance: 45
+  autoSnapSpeed: 8
+  validPalletLayers:
+    serializedVersion: 2
+    m_Bits: 4294967295
+  canvas: {fileID: 0}
+  interactionPromptObject: {fileID: 0}
+  interactionPromptLabel: {fileID: 0}
+  drivingPanelObject: {fileID: 0}
+  drivingPanelLabel: {fileID: 0}
+  enterPromptText: Pressione E para dirigir a empilhadeira
+  blockedExitText: Saida bloqueada
+  driverState: 0
+  cargoState: 0
 --- !u!1 &3221781410599533773
 GameObject:
   m_ObjectHideFlags: 0
@@ -887,6 +989,104 @@ Transform:
   - {fileID: 5181229997082214398}
   m_Father: {fileID: 4548764003668378993}
   m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
+--- !u!1 &4425653944824090670
+GameObject:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  serializedVersion: 6
+  m_Component:
+  - component: {fileID: 3361541820504555994}
+  m_Layer: 0
+  m_Name: PlayerExitPoint
+  m_TagString: Untagged
+  m_Icon: {fileID: 0}
+  m_NavMeshLayer: 0
+  m_StaticEditorFlags: 0
+  m_IsActive: 1
+--- !u!4 &3361541820504555994
+Transform:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 4425653944824090670}
+  serializedVersion: 2
+  m_LocalRotation: {x: 0, y: 0, z: 0, w: 1}
+  m_LocalPosition: {x: 1.75, y: 0, z: 0.55}
+  m_LocalScale: {x: 1, y: 1, z: 1}
+  m_ConstrainProportionsScale: 0
+  m_Children: []
+  m_Father: {fileID: 4548764003668378993}
+  m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
+--- !u!1 &4443523947325115699
+GameObject:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  serializedVersion: 6
+  m_Component:
+  - component: {fileID: 1620566390159254602}
+  - component: {fileID: 6713005345346978952}
+  - component: {fileID: 1580904368428725669}
+  m_Layer: 0
+  m_Name: ForkPickupSensor
+  m_TagString: Untagged
+  m_Icon: {fileID: 0}
+  m_NavMeshLayer: 0
+  m_StaticEditorFlags: 0
+  m_IsActive: 1
+--- !u!4 &1620566390159254602
+Transform:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 4443523947325115699}
+  serializedVersion: 2
+  m_LocalRotation: {x: 0, y: 0, z: 0, w: 1}
+  m_LocalPosition: {x: 0, y: 0.32, z: -1.35}
+  m_LocalScale: {x: 1, y: 1, z: 1}
+  m_ConstrainProportionsScale: 0
+  m_Children: []
+  m_Father: {fileID: 1134666246867468710}
+  m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
+--- !u!65 &6713005345346978952
+BoxCollider:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 4443523947325115699}
+  m_Material: {fileID: 0}
+  m_IncludeLayers:
+    serializedVersion: 2
+    m_Bits: 0
+  m_ExcludeLayers:
+    serializedVersion: 2
+    m_Bits: 0
+  m_LayerOverridePriority: 0
+  m_IsTrigger: 1
+  m_ProvidesContacts: 0
+  m_Enabled: 1
+  serializedVersion: 3
+  m_Size: {x: 1.5, y: 0.75, z: 1.5}
+  m_Center: {x: 0, y: 0, z: 0}
+--- !u!114 &1580904368428725669
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 4443523947325115699}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: b748d976b9ad4301b92b9334d998fd72, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: 
+  controller: {fileID: 6290099260847513828}
 --- !u!1 &4482878825424581093
 GameObject:
   m_ObjectHideFlags: 0
@@ -970,6 +1170,37 @@ MeshRenderer:
   m_SortingLayer: 0
   m_SortingOrder: 0
   m_AdditionalVertexStreams: {fileID: 0}
+--- !u!1 &4514758940029613773
+GameObject:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  serializedVersion: 6
+  m_Component:
+  - component: {fileID: 7177525181049832276}
+  m_Layer: 0
+  m_Name: DriverSeatPoint
+  m_TagString: Untagged
+  m_Icon: {fileID: 0}
+  m_NavMeshLayer: 0
+  m_StaticEditorFlags: 0
+  m_IsActive: 1
+--- !u!4 &7177525181049832276
+Transform:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 4514758940029613773}
+  serializedVersion: 2
+  m_LocalRotation: {x: 0, y: 1, z: 0, w: -0.00000004371139}
+  m_LocalPosition: {x: 0, y: 1.55, z: 0.62}
+  m_LocalScale: {x: 1, y: 1, z: 1}
+  m_ConstrainProportionsScale: 0
+  m_Children: []
+  m_Father: {fileID: 4548764003668378993}
+  m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
 --- !u!1 &4708835472007059219
 GameObject:
   m_ObjectHideFlags: 0
@@ -1464,6 +1695,59 @@ MeshRenderer:
   m_SortingLayer: 0
   m_SortingOrder: 0
   m_AdditionalVertexStreams: {fileID: 0}
+--- !u!1 &6477037214372409013
+GameObject:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  serializedVersion: 6
+  m_Component:
+  - component: {fileID: 997557661555444888}
+  - component: {fileID: 3035969133718912160}
+  m_Layer: 0
+  m_Name: InteractionTrigger
+  m_TagString: Untagged
+  m_Icon: {fileID: 0}
+  m_NavMeshLayer: 0
+  m_StaticEditorFlags: 0
+  m_IsActive: 1
+--- !u!4 &997557661555444888
+Transform:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 6477037214372409013}
+  serializedVersion: 2
+  m_LocalRotation: {x: 0, y: 0, z: 0, w: 1}
+  m_LocalPosition: {x: 0, y: 0.9, z: 0.25}
+  m_LocalScale: {x: 1, y: 1, z: 1}
+  m_ConstrainProportionsScale: 0
+  m_Children: []
+  m_Father: {fileID: 4548764003668378993}
+  m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
+--- !u!65 &3035969133718912160
+BoxCollider:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 6477037214372409013}
+  m_Material: {fileID: 0}
+  m_IncludeLayers:
+    serializedVersion: 2
+    m_Bits: 0
+  m_ExcludeLayers:
+    serializedVersion: 2
+    m_Bits: 0
+  m_LayerOverridePriority: 0
+  m_IsTrigger: 1
+  m_ProvidesContacts: 0
+  m_Enabled: 1
+  serializedVersion: 3
+  m_Size: {x: 3.8, y: 1.8, z: 4.2}
+  m_Center: {x: 0, y: 0, z: 0}
 --- !u!1 &6614161303324529047
 GameObject:
   m_ObjectHideFlags: 0
@@ -1908,4 +2192,35 @@ Transform:
   - {fileID: 3492435810650555086}
   - {fileID: 7110046768388530948}
   m_Father: {fileID: 4548764003668378993}
+  m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
+--- !u!1 &8890545732650267208
+GameObject:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  serializedVersion: 6
+  m_Component:
+  - component: {fileID: 6768522626835746926}
+  m_Layer: 0
+  m_Name: ForkCarryPoint
+  m_TagString: Untagged
+  m_Icon: {fileID: 0}
+  m_NavMeshLayer: 0
+  m_StaticEditorFlags: 0
+  m_IsActive: 1
+--- !u!4 &6768522626835746926
+Transform:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 8890545732650267208}
+  serializedVersion: 2
+  m_LocalRotation: {x: 0, y: 0, z: 0, w: 1}
+  m_LocalPosition: {x: 0, y: 0.48, z: -0.78}
+  m_LocalScale: {x: 1, y: 1, z: 1}
+  m_ConstrainProportionsScale: 0
+  m_Children: []
+  m_Father: {fileID: 1134666246867468710}
   m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}

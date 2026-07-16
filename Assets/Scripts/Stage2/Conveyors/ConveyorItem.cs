@@ -19,6 +19,10 @@ public class ConveyorItem : MonoBehaviour
     private float lateralBlendOffset;
     private bool isInitialized;
     private bool waitingForCollectionSpace;
+    private bool wasRigidbodyKinematicBeforeCarry;
+    private bool wasRigidbodyUsingGravityBeforeCarry;
+    private Collider[] carriedColliders;
+    private bool[] carriedColliderTriggerStates;
 
     public ConveyorItemState CurrentState => currentState;
     public string ProductId => productId;
@@ -35,6 +39,8 @@ public class ConveyorItem : MonoBehaviour
     public bool IsAvailableForCollection => (currentState == ConveyorItemState.QueuedForCollection || currentState == ConveyorItemState.WaitingForMachine)
         && collectionQueueSlotIndex <= 0
         && !reservedForCollection;
+    public ConveyorController CurrentController => controller;
+    public bool IsBeingCarried => currentState == ConveyorItemState.BeingCollected;
 
     private void Awake()
     {
@@ -46,6 +52,7 @@ public class ConveyorItem : MonoBehaviour
         if (controller != null)
         {
             controller.UnregisterItem(this);
+            controller = null;
         }
     }
 
@@ -180,10 +187,148 @@ public class ConveyorItem : MonoBehaviour
         reservedForCollection = false;
     }
 
+    public bool TryReserveForRoboticArm()
+    {
+        if (reservedForCollection || currentState == ConveyorItemState.BeingCollected || currentState == ConveyorItemState.Removed)
+        {
+            return false;
+        }
+
+        Reserve();
+        return true;
+    }
+
     public void MarkBeingCollected()
     {
         currentState = ConveyorItemState.BeingCollected;
         reservedForCollection = true;
+    }
+
+    public void HoldForRoboticPickup(Transform holdPoint)
+    {
+        MarkBeingCollected();
+        waitingForCollectionSpace = false;
+        currentMoveSpeed = 0f;
+
+        if (holdPoint == null)
+        {
+            return;
+        }
+
+        EnsurePhysicsSetup();
+        if (itemRigidbody != null)
+        {
+            itemRigidbody.MovePosition(holdPoint.position);
+            itemRigidbody.MoveRotation(holdPoint.rotation);
+        }
+        else
+        {
+            transform.SetPositionAndRotation(holdPoint.position, holdPoint.rotation);
+        }
+    }
+
+    public void BeginRoboticCarry(Transform socket, Vector3 localPosition, Vector3 localEulerAngles)
+    {
+        if (socket == null)
+        {
+            return;
+        }
+
+        if (controller != null)
+        {
+            controller.UnregisterItem(this);
+            controller = null;
+        }
+
+        MarkBeingCollected();
+        waitingForCollectionSpace = false;
+        collectionQueueIndex = -1;
+        collectionQueueSlotIndex = -1;
+        isInitialized = false;
+
+        EnsurePhysicsSetup();
+        if (itemRigidbody != null)
+        {
+            wasRigidbodyKinematicBeforeCarry = itemRigidbody.isKinematic;
+            wasRigidbodyUsingGravityBeforeCarry = itemRigidbody.useGravity;
+            itemRigidbody.isKinematic = true;
+            itemRigidbody.useGravity = false;
+            itemRigidbody.velocity = Vector3.zero;
+            itemRigidbody.angularVelocity = Vector3.zero;
+        }
+
+        carriedColliders = GetComponentsInChildren<Collider>();
+        carriedColliderTriggerStates = new bool[carriedColliders.Length];
+        for (int i = 0; i < carriedColliders.Length; i++)
+        {
+            if (carriedColliders[i] != null)
+            {
+                carriedColliderTriggerStates[i] = carriedColliders[i].isTrigger;
+                carriedColliders[i].isTrigger = true;
+            }
+        }
+
+        transform.SetParent(socket, false);
+        transform.localPosition = localPosition;
+        transform.localRotation = Quaternion.Euler(localEulerAngles);
+    }
+
+    public void CompleteRoboticDrop(ConveyorController destinationController, Transform dropPoint, bool keepDropRotation)
+    {
+        Transform destinationParent = destinationController != null ? destinationController.transform : null;
+        transform.SetParent(destinationParent, true);
+
+        if (dropPoint != null)
+        {
+            transform.position = dropPoint.position;
+            if (keepDropRotation)
+            {
+                transform.rotation = dropPoint.rotation;
+            }
+        }
+
+        if (destinationController != null && destinationController.ConveyorPath != null && destinationController.ConveyorPath.IsValid())
+        {
+            float dropDistance = destinationController.ConveyorPath.GetClosestDistance(transform.position);
+            if (controller != destinationController)
+            {
+                destinationController.RegisterItem(this);
+            }
+
+            Initialize(destinationController, destinationController.ConveyorPath, productId, dropDistance, 0f);
+        }
+        else
+        {
+            controller = null;
+            path = null;
+            isInitialized = false;
+            currentState = ConveyorItemState.Moving;
+            reservedForCollection = false;
+            collectionQueueIndex = -1;
+            collectionQueueSlotIndex = -1;
+        }
+
+        if (itemRigidbody != null)
+        {
+            itemRigidbody.isKinematic = wasRigidbodyKinematicBeforeCarry;
+            itemRigidbody.useGravity = wasRigidbodyUsingGravityBeforeCarry;
+        }
+
+        if (carriedColliders != null && carriedColliderTriggerStates != null)
+        {
+            for (int i = 0; i < carriedColliders.Length && i < carriedColliderTriggerStates.Length; i++)
+            {
+                if (carriedColliders[i] != null)
+                {
+                    carriedColliders[i].isTrigger = carriedColliderTriggerStates[i];
+                }
+            }
+        }
+
+        carriedColliders = null;
+        carriedColliderTriggerStates = null;
+
+        ReleaseReservation();
     }
 
     public void MarkRemoved()

@@ -14,7 +14,7 @@ GameObject:
   - component: {fileID: 6129768440774329011}
   m_Layer: 0
   m_Name: Player Aluno
-  m_TagString: Untagged
+  m_TagString: Player
   m_Icon: {fileID: 0}
   m_NavMeshLayer: 0
   m_StaticEditorFlags: 0
@@ -61,6 +61,7 @@ MonoBehaviour:
   maxPushSpeed: 0.75
   pushableMassLimit: 25
   interactionRadius: 1.2
+  documentFallbackInteractionRadius: 1.6
   carryAnchor: {fileID: 0}
   carryAnchorLocalPosition: {x: 0, y: 1.05, z: 0.45}
   interactionMask:
@@ -72,22 +73,6 @@ MonoBehaviour:
   speedParameter: Speed
   carryingParameter: IsCarrying
   pushButtonParameter: PushButton
---- !u!114 &6129768440774329011
-MonoBehaviour:
-  m_ObjectHideFlags: 0
-  m_CorrespondingSourceObject: {fileID: 0}
-  m_PrefabInstance: {fileID: 0}
-  m_PrefabAsset: {fileID: 0}
-  m_GameObject: {fileID: 1378321656543550499}
-  m_Enabled: 1
-  m_EditorHideFlags: 0
-  m_Script: {fileID: 11500000, guid: 6cc67673816f46d5bd34358ca30d3be5, type: 3}
-  m_Name: 
-  m_EditorClassIdentifier: 
-  alunaVisualPrefab: {fileID: 78076585706733764, guid: 6efc8144df7289c4e805c26deabe9262, type: 3}
-  alunoVisualRoot: {fileID: 3632453318803515417}
-  visualParent: {fileID: 4742350084292462587}
-  topDownController: {fileID: 6749257081451097721}
 --- !u!136 &7838474012237785112
 CapsuleCollider:
   m_ObjectHideFlags: 0
@@ -111,6 +96,22 @@ CapsuleCollider:
   m_Height: 1.45
   m_Direction: 1
   m_Center: {x: 0, y: 0.72, z: 0}
+--- !u!114 &6129768440774329011
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 1378321656543550499}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 6cc67673816f46d5bd34358ca30d3be5, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: 
+  alunaVisualPrefab: {fileID: 78076585706733764, guid: 6efc8144df7289c4e805c26deabe9262, type: 3}
+  alunoVisualRoot: {fileID: 3632453318803515417}
+  visualParent: {fileID: 4742350084292462587}
+  topDownController: {fileID: 6749257081451097721}
 --- !u!1 &4313444759476730997
 GameObject:
   m_ObjectHideFlags: 0
