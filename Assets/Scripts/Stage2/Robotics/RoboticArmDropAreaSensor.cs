@@ -10,7 +10,14 @@ public class RoboticArmDropAreaSensor : MonoBehaviour
 
     private readonly HashSet<Collider> colliders = new HashSet<Collider>();
 
-    public bool IsOccupied => occupiedCount > 0;
+    public bool IsOccupied
+    {
+        get
+        {
+            RefreshCount();
+            return occupiedCount > 0;
+        }
+    }
     public int OccupiedCount => occupiedCount;
 
     private void OnTriggerEnter(Collider other)

@@ -71,13 +71,33 @@ public class RoboticArmController : MonoBehaviour
     [SerializeField, Min(0f)] private float delayBeforeReturn = 0.1f;
 
     [Header("Movement")]
-    [SerializeField] private float rotationToDropAngle = 180f;
+    [SerializeField, Tooltip("Signed local Y rotation applied from the home base rotation when moving to the drop side. Use negative values to rotate the opposite direction.")]
+    private float rotationToDropAngle = 180f;
     [SerializeField, Min(0.01f)] private float angularTolerance = 1f;
     [SerializeField, Min(0.001f)] private float positionTolerance = 0.03f;
     [SerializeField] private bool invertDropRotation;
     [SerializeField] private bool keepProductOrientationWhileCarried;
     [SerializeField] private bool useSafeLiftPoint = true;
     [SerializeField, Min(0f)] private float pickupArrivalTimeout = 2f;
+    [SerializeField, Min(0.001f)] private float pickupHoldTolerance = 0.45f;
+    [SerializeField] private bool smoothItemToSocketAfterAttach = true;
+    [SerializeField, Min(0.01f)] private float itemToSocketSpeed = 2.8f;
+    [SerializeField, Min(0.01f)] private float itemToSocketRotationSpeed = 360f;
+    [SerializeField, Min(0.05f)] private float itemToSocketTimeout = 0.75f;
+    [SerializeField] private Vector3 wristRaisedRotation = Vector3.zero;
+    [SerializeField] private Vector3 wristPickupLoweredRotation = new Vector3(-40f, 0f, 0f);
+    [SerializeField] private Vector3 wristDropLoweredRotation = new Vector3(-40f, 0f, 0f);
+    [SerializeField, Min(1f)] private float wristPickupDropSpeedMultiplier = 2.5f;
+    [SerializeField, Min(1f)] private float gripperCloseSpeedMultiplier = 3f;
+    [SerializeField] private bool waitForDropAreaToClear;
+    [SerializeField, Min(0f)] private float maxDropAreaWaitTime = 0.5f;
+    [SerializeField] private bool useDropPoseBeforeRelease;
+    [SerializeField] private bool handReleasedItemToDestinationConveyor;
+    [SerializeField] private bool smoothReleaseToDropPoint = true;
+    [SerializeField, Min(0.01f)] private float releaseSmoothDuration = 0.25f;
+    [SerializeField, Min(0.05f)] private float maxPoseMoveTime = 1.5f;
+    [SerializeField, Min(0.05f)] private float maxWristMoveTime = 0.8f;
+    [SerializeField, Min(0.05f)] private float maxBaseRotationTime = 2f;
 
     [Header("Debug")]
     [SerializeField] private bool showGizmos = true;
@@ -90,6 +110,7 @@ public class RoboticArmController : MonoBehaviour
     private Coroutine cycleRoutine;
     private Quaternion homeBaseRotation;
     private bool hasHomeBaseRotation;
+    private float currentBaseDropOffset;
 
     public ArmState CurrentState => currentState;
     public RoboticArmProductType AcceptedProductType => acceptedProductType;
@@ -110,6 +131,17 @@ public class RoboticArmController : MonoBehaviour
         returnSpeed = Mathf.Max(0.01f, returnSpeed);
         angularTolerance = Mathf.Max(0.01f, angularTolerance);
         positionTolerance = Mathf.Max(0.001f, positionTolerance);
+        pickupHoldTolerance = Mathf.Max(0.001f, pickupHoldTolerance);
+        itemToSocketSpeed = Mathf.Max(0.01f, itemToSocketSpeed);
+        itemToSocketRotationSpeed = Mathf.Max(0.01f, itemToSocketRotationSpeed);
+        itemToSocketTimeout = Mathf.Max(0.05f, itemToSocketTimeout);
+        wristPickupDropSpeedMultiplier = Mathf.Max(1f, wristPickupDropSpeedMultiplier);
+        gripperCloseSpeedMultiplier = Mathf.Max(1f, gripperCloseSpeedMultiplier);
+        maxDropAreaWaitTime = Mathf.Max(0f, maxDropAreaWaitTime);
+        releaseSmoothDuration = Mathf.Max(0.01f, releaseSmoothDuration);
+        maxPoseMoveTime = Mathf.Max(0.05f, maxPoseMoveTime);
+        maxWristMoveTime = Mathf.Max(0.05f, maxWristMoveTime);
+        maxBaseRotationTime = Mathf.Max(0.05f, maxBaseRotationTime);
     }
 
     private void Update()
@@ -190,17 +222,19 @@ public class RoboticArmController : MonoBehaviour
             return false;
         }
 
-        if (acceptedPrefab != null && !IsPrefabMatch(item.gameObject, acceptedPrefab))
-        {
-            return false;
-        }
-
         if (!string.IsNullOrWhiteSpace(acceptedProductId))
         {
             return string.Equals(item.ProductId, acceptedProductId, System.StringComparison.OrdinalIgnoreCase);
         }
 
-        return true;
+        return acceptedPrefab == null || IsPrefabMatch(item.gameObject, acceptedPrefab);
+    }
+
+    public bool CanStartPickup(ConveyorItem item)
+    {
+        return CanAcceptItem(item)
+            && pickupPoint != null
+            && Vector3.Distance(item.transform.position, pickupPoint.position) <= pickupHoldTolerance;
     }
 
     public void ReportDetectedItem(ConveyorItem item)
@@ -242,20 +276,13 @@ public class RoboticArmController : MonoBehaviour
         }
 
         yield return Wait(delayBeforePickup);
-        yield return WaitForItemAtPickup(item);
-        if (item == null || pickupPoint == null || Vector3.Distance(item.transform.position, pickupPoint.position) > positionTolerance)
-        {
-            AbortCycle("item did not reach the pickup point in time.");
-            yield break;
-        }
-
-        item.HoldForRoboticPickup(pickupPoint);
 
         ChangeState(ArmState.MovingToPickup, Color.cyan);
         yield return MovePose(pickupPose, pickupMovementSpeed);
+        yield return MoveWristTo(wristPickupLoweredRotation, wristPickupDropSpeedMultiplier);
 
         ChangeState(ArmState.ClosingGripper, Color.cyan);
-        while (gripper != null && !gripper.MoveClosed(gripperSpeed, Time.deltaTime))
+        while (gripper != null && !gripper.MoveClosed(gripperSpeed * gripperCloseSpeedMultiplier, Time.deltaTime))
         {
             yield return null;
         }
@@ -269,25 +296,44 @@ public class RoboticArmController : MonoBehaviour
             yield break;
         }
 
-        gripper.Attach(currentItem, itemSocketLocalPosition, itemSocketLocalRotation);
+        gripper.Attach(currentItem, itemSocketLocalPosition, itemSocketLocalRotation, !smoothItemToSocketAfterAttach);
+        if (smoothItemToSocketAfterAttach)
+        {
+            yield return MoveItemToSocket(currentItem);
+        }
+
         yield return null;
 
         ChangeState(ArmState.Lifting, Color.cyan);
-        yield return MovePose(liftPose, pickupMovementSpeed);
+        yield return MoveWristTo(wristRaisedRotation, wristPickupDropSpeedMultiplier);
+        yield return MovePose(liftPose, pickupMovementSpeed, false);
 
         ChangeState(ArmState.RotatingToDrop, Color.cyan);
         yield return RotateBaseToDrop();
 
         ChangeState(ArmState.MovingToDrop, Color.cyan);
-        yield return MovePose(dropPose, dropMovementSpeed);
-
-        ChangeState(ArmState.WaitingForDropArea, Color.yellow);
-        while (dropAreaSensor != null && dropAreaSensor.IsOccupied)
+        if (useDropPoseBeforeRelease)
         {
-            yield return null;
+            yield return MovePose(dropPose, dropMovementSpeed, false);
+        }
+
+        yield return MoveWristTo(wristDropLoweredRotation, wristPickupDropSpeedMultiplier);
+
+        if (waitForDropAreaToClear)
+        {
+            ChangeState(ArmState.WaitingForDropArea, Color.yellow);
+            float waited = 0f;
+            while (dropAreaSensor != null && dropAreaSensor.IsOccupied && waited < maxDropAreaWaitTime)
+            {
+                waited += Time.deltaTime;
+                yield return null;
+            }
         }
 
         yield return Wait(delayBeforeRelease);
+
+        ChangeState(ArmState.ReleasingItem, Color.cyan);
+        yield return ReleaseCurrentItemAtDropPoint();
 
         ChangeState(ArmState.OpeningGripper, Color.cyan);
         while (gripper != null && !gripper.MoveOpen(gripperSpeed, Time.deltaTime))
@@ -295,24 +341,15 @@ public class RoboticArmController : MonoBehaviour
             yield return null;
         }
 
-        ChangeState(ArmState.ReleasingItem, Color.cyan);
-        if (currentItem != null)
-        {
-            gripper.Release(currentItem, destinationConveyor, dropPoint, useDropPointRotation);
-            if (logItemEvents)
-            {
-                Debug.Log($"{name}: released {currentItem.ProductId}.", this);
-            }
-        }
-
         currentItem = null;
         yield return Wait(delayAfterRelease);
         yield return Wait(delayBeforeReturn);
+        yield return MoveWristTo(wristRaisedRotation, wristPickupDropSpeedMultiplier);
 
         ChangeState(ArmState.ReturningHome, Color.cyan);
-        yield return MovePose(liftPose, returnSpeed);
+        yield return MovePose(liftPose, returnSpeed, false);
         yield return ReturnBaseHome();
-        yield return MovePose(homePose, returnSpeed);
+        yield return MovePose(homePose, returnSpeed, false);
         while (gripper != null && !gripper.MoveOpen(gripperSpeed, Time.deltaTime))
         {
             yield return null;
@@ -320,6 +357,51 @@ public class RoboticArmController : MonoBehaviour
 
         ChangeState(ArmState.Idle, Color.green);
         cycleRoutine = null;
+    }
+
+    private IEnumerator ReleaseCurrentItemAtDropPoint()
+    {
+        if (currentItem == null)
+        {
+            yield break;
+        }
+
+        ConveyorItem releasedItem = currentItem;
+        ConveyorController conveyorForRelease = handReleasedItemToDestinationConveyor ? destinationConveyor : null;
+        if (smoothReleaseToDropPoint && dropPoint != null)
+        {
+            Transform destinationParent = conveyorForRelease != null ? conveyorForRelease.transform : null;
+            releasedItem.PrepareSmoothRoboticDrop(destinationParent);
+
+            Vector3 startPosition = releasedItem.transform.position;
+            Quaternion startRotation = releasedItem.transform.rotation;
+            Vector3 targetPosition = dropPoint.position;
+            Quaternion targetRotation = useDropPointRotation ? dropPoint.rotation : startRotation;
+            float elapsed = 0f;
+
+            while (elapsed < releaseSmoothDuration)
+            {
+                elapsed += Time.deltaTime;
+                float t = Mathf.Clamp01(elapsed / releaseSmoothDuration);
+                t = t * t * (3f - 2f * t);
+                releasedItem.MoveDuringSmoothRoboticDrop(
+                    Vector3.Lerp(startPosition, targetPosition, t),
+                    Quaternion.Slerp(startRotation, targetRotation, t));
+                yield return null;
+            }
+
+            releasedItem.MoveDuringSmoothRoboticDrop(targetPosition, targetRotation);
+            releasedItem.CompleteRoboticDrop(conveyorForRelease, dropPoint, useDropPointRotation);
+        }
+        else
+        {
+            gripper.Release(releasedItem, conveyorForRelease, dropPoint, useDropPointRotation);
+        }
+
+        if (logItemEvents)
+        {
+            Debug.Log($"{name}: released {releasedItem.ProductId}.", this);
+        }
     }
 
     private IEnumerator RecoverFromError()
@@ -343,7 +425,7 @@ public class RoboticArmController : MonoBehaviour
     private IEnumerator WaitForItemAtPickup(ConveyorItem item)
     {
         float elapsed = 0f;
-        while (item != null && pickupPoint != null && Vector3.Distance(item.transform.position, pickupPoint.position) > positionTolerance)
+        while (item != null && pickupPoint != null && Vector3.Distance(item.transform.position, pickupPoint.position) > pickupHoldTolerance)
         {
             if (pickupArrivalTimeout > 0f && elapsed >= pickupArrivalTimeout)
             {
@@ -355,12 +437,17 @@ public class RoboticArmController : MonoBehaviour
         }
     }
 
-    private IEnumerator MovePose(RoboticArmPose pose, float speedMultiplier)
+    private IEnumerator MovePose(RoboticArmPose pose, float speedMultiplier, bool rotateBase = true)
     {
-        while (!IsPoseReached(pose))
+        float elapsed = 0f;
+        while (!IsPoseReached(pose, rotateBase) && elapsed < maxPoseMoveTime)
         {
             float deltaTime = Time.deltaTime * Mathf.Max(0.01f, speedMultiplier);
-            RotateLocal(pivotBaseRotation, pose.baseRotation, baseRotationSpeed * deltaTime);
+            if (rotateBase)
+            {
+                RotateLocal(pivotBaseRotation, pose.baseRotation, baseRotationSpeed * deltaTime);
+            }
+
             RotateLocal(pivotShoulder, pose.shoulderRotation, shoulderSpeed * deltaTime);
             RotateLocal(pivotElbow, pose.elbowRotation, elbowSpeed * deltaTime);
             RotateLocal(pivotWrist, pose.wristRotation, wristSpeed * deltaTime);
@@ -370,8 +457,56 @@ public class RoboticArmController : MonoBehaviour
                 currentItem.transform.localRotation = Quaternion.Euler(itemSocketLocalRotation);
             }
 
+            elapsed += Time.deltaTime;
             yield return null;
         }
+    }
+
+    private IEnumerator MoveWristTo(Vector3 localEulerAngles, float speedMultiplier)
+    {
+        if (pivotWrist == null)
+        {
+            yield break;
+        }
+
+        Quaternion targetRotation = Quaternion.Euler(localEulerAngles);
+        float speed = wristSpeed * Mathf.Max(0.01f, speedMultiplier);
+        float elapsed = 0f;
+        while (Quaternion.Angle(pivotWrist.localRotation, targetRotation) > angularTolerance && elapsed < maxWristMoveTime)
+        {
+            pivotWrist.localRotation = Quaternion.RotateTowards(pivotWrist.localRotation, targetRotation, speed * Time.deltaTime);
+            elapsed += Time.deltaTime;
+            yield return null;
+        }
+    }
+
+    private IEnumerator MoveItemToSocket(ConveyorItem item)
+    {
+        if (item == null || itemSocket == null)
+        {
+            yield break;
+        }
+
+        Transform itemTransform = item.transform;
+        Quaternion targetRotation = itemSocket.rotation * Quaternion.Euler(itemSocketLocalRotation);
+        Vector3 targetPosition = itemSocket.TransformPoint(itemSocketLocalPosition);
+        float elapsed = 0f;
+
+        while (itemTransform != null
+            && elapsed < itemToSocketTimeout
+            && (Vector3.Distance(itemTransform.position, targetPosition) > positionTolerance
+                || Quaternion.Angle(itemTransform.rotation, targetRotation) > angularTolerance))
+        {
+            targetPosition = itemSocket.TransformPoint(itemSocketLocalPosition);
+            targetRotation = itemSocket.rotation * Quaternion.Euler(itemSocketLocalRotation);
+            Vector3 nextPosition = Vector3.MoveTowards(itemTransform.position, targetPosition, itemToSocketSpeed * Time.deltaTime);
+            Quaternion nextRotation = Quaternion.RotateTowards(itemTransform.rotation, targetRotation, itemToSocketRotationSpeed * Time.deltaTime);
+            item.MoveDuringSmoothRoboticCarry(nextPosition, nextRotation);
+            elapsed += Time.deltaTime;
+            yield return null;
+        }
+
+        item.FinishSmoothRoboticCarry();
     }
 
     private IEnumerator RotateBaseToDrop()
@@ -381,14 +516,20 @@ public class RoboticArmController : MonoBehaviour
             yield break;
         }
 
-        float signedAngle = Mathf.Abs(rotationToDropAngle) * (invertDropRotation ? -1f : 1f);
+        float signedAngle = invertDropRotation ? -rotationToDropAngle : rotationToDropAngle;
         Quaternion startRotation = hasHomeBaseRotation ? homeBaseRotation : pivotBaseRotation.localRotation;
-        Quaternion targetRotation = startRotation * Quaternion.Euler(0f, signedAngle, 0f);
-        while (Quaternion.Angle(pivotBaseRotation.localRotation, targetRotation) > angularTolerance)
+        currentBaseDropOffset = 0f;
+        float elapsed = 0f;
+        while (Mathf.Abs(signedAngle - currentBaseDropOffset) > angularTolerance && elapsed < maxBaseRotationTime)
         {
-            pivotBaseRotation.localRotation = Quaternion.RotateTowards(pivotBaseRotation.localRotation, targetRotation, baseRotationSpeed * Time.deltaTime);
+            currentBaseDropOffset = Mathf.MoveTowards(currentBaseDropOffset, signedAngle, baseRotationSpeed * Time.deltaTime);
+            pivotBaseRotation.localRotation = startRotation * Quaternion.Euler(0f, currentBaseDropOffset, 0f);
+            elapsed += Time.deltaTime;
             yield return null;
         }
+
+        currentBaseDropOffset = signedAngle;
+        pivotBaseRotation.localRotation = startRotation * Quaternion.Euler(0f, signedAngle, 0f);
     }
 
     private IEnumerator ReturnBaseHome()
@@ -398,11 +539,15 @@ public class RoboticArmController : MonoBehaviour
             yield break;
         }
 
-        while (Quaternion.Angle(pivotBaseRotation.localRotation, homeBaseRotation) > angularTolerance)
+        while (Mathf.Abs(currentBaseDropOffset) > angularTolerance)
         {
-            pivotBaseRotation.localRotation = Quaternion.RotateTowards(pivotBaseRotation.localRotation, homeBaseRotation, baseRotationSpeed * Time.deltaTime);
+            currentBaseDropOffset = Mathf.MoveTowards(currentBaseDropOffset, 0f, baseRotationSpeed * Time.deltaTime);
+            pivotBaseRotation.localRotation = homeBaseRotation * Quaternion.Euler(0f, currentBaseDropOffset, 0f);
             yield return null;
         }
+
+        currentBaseDropOffset = 0f;
+        pivotBaseRotation.localRotation = homeBaseRotation;
     }
 
     private void RotateLocal(Transform target, Vector3 eulerAngles, float maxDegreesDelta)
@@ -416,9 +561,9 @@ public class RoboticArmController : MonoBehaviour
         target.localRotation = Quaternion.RotateTowards(target.localRotation, desired, maxDegreesDelta);
     }
 
-    private bool IsPoseReached(RoboticArmPose pose)
+    private bool IsPoseReached(RoboticArmPose pose, bool checkBaseRotation = true)
     {
-        return AngleReached(pivotBaseRotation, pose.baseRotation)
+        return (!checkBaseRotation || AngleReached(pivotBaseRotation, pose.baseRotation))
             && AngleReached(pivotShoulder, pose.shoulderRotation)
             && AngleReached(pivotElbow, pose.elbowRotation)
             && AngleReached(pivotWrist, pose.wristRotation);
@@ -502,6 +647,7 @@ public class RoboticArmController : MonoBehaviour
         {
             homeBaseRotation = pivotBaseRotation.localRotation;
             hasHomeBaseRotation = true;
+            currentBaseDropOffset = 0f;
         }
     }
 

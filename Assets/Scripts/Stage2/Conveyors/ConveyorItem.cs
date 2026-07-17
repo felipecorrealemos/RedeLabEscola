@@ -21,8 +21,13 @@ public class ConveyorItem : MonoBehaviour
     private bool waitingForCollectionSpace;
     private bool wasRigidbodyKinematicBeforeCarry;
     private bool wasRigidbodyUsingGravityBeforeCarry;
+    private bool wasRigidbodyDetectingCollisionsBeforeCarry;
     private Collider[] carriedColliders;
     private bool[] carriedColliderTriggerStates;
+    private Transform carriedSocket;
+    private Vector3 carriedLocalPosition;
+    private Quaternion carriedLocalRotation;
+    private bool lockToCarriedSocket;
 
     public ConveyorItemState CurrentState => currentState;
     public string ProductId => productId;
@@ -53,6 +58,24 @@ public class ConveyorItem : MonoBehaviour
         {
             controller.UnregisterItem(this);
             controller = null;
+        }
+    }
+
+    private void LateUpdate()
+    {
+        if (lockToCarriedSocket && carriedSocket != null && currentState == ConveyorItemState.BeingCollected)
+        {
+            transform.SetParent(carriedSocket, false);
+            transform.localPosition = carriedLocalPosition;
+            transform.localRotation = carriedLocalRotation;
+
+            if (itemRigidbody != null)
+            {
+                itemRigidbody.position = transform.position;
+                itemRigidbody.rotation = transform.rotation;
+                itemRigidbody.velocity = Vector3.zero;
+                itemRigidbody.angularVelocity = Vector3.zero;
+            }
         }
     }
 
@@ -204,18 +227,24 @@ public class ConveyorItem : MonoBehaviour
         reservedForCollection = true;
     }
 
-    public void HoldForRoboticPickup(Transform holdPoint)
+    public void HoldForRoboticPickup(Transform holdPoint, bool snapToHoldPoint)
     {
         MarkBeingCollected();
         waitingForCollectionSpace = false;
         currentMoveSpeed = 0f;
 
-        if (holdPoint == null)
+        EnsurePhysicsSetup();
+        if (itemRigidbody != null)
+        {
+            itemRigidbody.velocity = Vector3.zero;
+            itemRigidbody.angularVelocity = Vector3.zero;
+        }
+
+        if (!snapToHoldPoint || holdPoint == null)
         {
             return;
         }
 
-        EnsurePhysicsSetup();
         if (itemRigidbody != null)
         {
             itemRigidbody.MovePosition(holdPoint.position);
@@ -227,7 +256,7 @@ public class ConveyorItem : MonoBehaviour
         }
     }
 
-    public void BeginRoboticCarry(Transform socket, Vector3 localPosition, Vector3 localEulerAngles)
+    public void BeginRoboticCarry(Transform socket, Vector3 localPosition, Vector3 localEulerAngles, bool snapToSocket)
     {
         if (socket == null)
         {
@@ -245,14 +274,21 @@ public class ConveyorItem : MonoBehaviour
         collectionQueueIndex = -1;
         collectionQueueSlotIndex = -1;
         isInitialized = false;
+        currentMoveSpeed = 0f;
+        carriedSocket = socket;
+        carriedLocalPosition = localPosition;
+        carriedLocalRotation = Quaternion.Euler(localEulerAngles);
+        lockToCarriedSocket = snapToSocket;
 
         EnsurePhysicsSetup();
         if (itemRigidbody != null)
         {
             wasRigidbodyKinematicBeforeCarry = itemRigidbody.isKinematic;
             wasRigidbodyUsingGravityBeforeCarry = itemRigidbody.useGravity;
+            wasRigidbodyDetectingCollisionsBeforeCarry = itemRigidbody.detectCollisions;
             itemRigidbody.isKinematic = true;
             itemRigidbody.useGravity = false;
+            itemRigidbody.detectCollisions = false;
             itemRigidbody.velocity = Vector3.zero;
             itemRigidbody.angularVelocity = Vector3.zero;
         }
@@ -268,23 +304,89 @@ public class ConveyorItem : MonoBehaviour
             }
         }
 
-        transform.SetParent(socket, false);
-        transform.localPosition = localPosition;
-        transform.localRotation = Quaternion.Euler(localEulerAngles);
+        transform.SetParent(socket, !snapToSocket);
+        if (snapToSocket)
+        {
+            transform.localPosition = carriedLocalPosition;
+            transform.localRotation = carriedLocalRotation;
+        }
+    }
+
+    public void MoveDuringSmoothRoboticCarry(Vector3 position, Quaternion rotation)
+    {
+        transform.SetPositionAndRotation(position, rotation);
+
+        if (itemRigidbody != null)
+        {
+            itemRigidbody.position = position;
+            itemRigidbody.rotation = rotation;
+            itemRigidbody.velocity = Vector3.zero;
+            itemRigidbody.angularVelocity = Vector3.zero;
+        }
+    }
+
+    public void FinishSmoothRoboticCarry()
+    {
+        if (carriedSocket == null)
+        {
+            return;
+        }
+
+        transform.SetParent(carriedSocket, false);
+        transform.localPosition = carriedLocalPosition;
+        transform.localRotation = carriedLocalRotation;
+        lockToCarriedSocket = true;
+
+        if (itemRigidbody != null)
+        {
+            itemRigidbody.position = transform.position;
+            itemRigidbody.rotation = transform.rotation;
+            itemRigidbody.velocity = Vector3.zero;
+            itemRigidbody.angularVelocity = Vector3.zero;
+        }
+    }
+
+    public void PrepareSmoothRoboticDrop(Transform destinationParent)
+    {
+        lockToCarriedSocket = false;
+        carriedSocket = null;
+        transform.SetParent(destinationParent, true);
+
+        EnsurePhysicsSetup();
+        if (itemRigidbody != null)
+        {
+            itemRigidbody.velocity = Vector3.zero;
+            itemRigidbody.angularVelocity = Vector3.zero;
+            itemRigidbody.position = transform.position;
+            itemRigidbody.rotation = transform.rotation;
+        }
+    }
+
+    public void MoveDuringSmoothRoboticDrop(Vector3 position, Quaternion rotation)
+    {
+        transform.SetPositionAndRotation(position, rotation);
+
+        if (itemRigidbody != null)
+        {
+            itemRigidbody.position = position;
+            itemRigidbody.rotation = rotation;
+            itemRigidbody.velocity = Vector3.zero;
+            itemRigidbody.angularVelocity = Vector3.zero;
+        }
     }
 
     public void CompleteRoboticDrop(ConveyorController destinationController, Transform dropPoint, bool keepDropRotation)
     {
+        lockToCarriedSocket = false;
+        carriedSocket = null;
         Transform destinationParent = destinationController != null ? destinationController.transform : null;
         transform.SetParent(destinationParent, true);
+        Vector3 dropPosition = dropPoint != null ? dropPoint.position : transform.position;
+        Quaternion dropRotation = dropPoint != null && keepDropRotation ? dropPoint.rotation : transform.rotation;
 
         if (dropPoint != null)
         {
-            transform.position = dropPoint.position;
-            if (keepDropRotation)
-            {
-                transform.rotation = dropPoint.rotation;
-            }
+            transform.SetPositionAndRotation(dropPosition, dropRotation);
         }
 
         if (destinationController != null && destinationController.ConveyorPath != null && destinationController.ConveyorPath.IsValid())
@@ -296,6 +398,12 @@ public class ConveyorItem : MonoBehaviour
             }
 
             Initialize(destinationController, destinationController.ConveyorPath, productId, dropDistance, 0f);
+            transform.SetPositionAndRotation(dropPosition, dropRotation);
+            if (itemRigidbody != null)
+            {
+                itemRigidbody.position = dropPosition;
+                itemRigidbody.rotation = dropRotation;
+            }
         }
         else
         {
@@ -306,12 +414,20 @@ public class ConveyorItem : MonoBehaviour
             reservedForCollection = false;
             collectionQueueIndex = -1;
             collectionQueueSlotIndex = -1;
+            currentMoveSpeed = 0f;
+            transform.SetPositionAndRotation(dropPosition, dropRotation);
+            if (itemRigidbody != null)
+            {
+                itemRigidbody.position = dropPosition;
+                itemRigidbody.rotation = dropRotation;
+            }
         }
 
         if (itemRigidbody != null)
         {
             itemRigidbody.isKinematic = wasRigidbodyKinematicBeforeCarry;
             itemRigidbody.useGravity = wasRigidbodyUsingGravityBeforeCarry;
+            itemRigidbody.detectCollisions = wasRigidbodyDetectingCollisionsBeforeCarry;
         }
 
         if (carriedColliders != null && carriedColliderTriggerStates != null)
@@ -327,6 +443,8 @@ public class ConveyorItem : MonoBehaviour
 
         carriedColliders = null;
         carriedColliderTriggerStates = null;
+        carriedLocalPosition = Vector3.zero;
+        carriedLocalRotation = Quaternion.identity;
 
         ReleaseReservation();
     }

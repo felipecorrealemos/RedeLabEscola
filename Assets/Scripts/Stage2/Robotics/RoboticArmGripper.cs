@@ -55,11 +55,11 @@ public class RoboticArmGripper : MonoBehaviour
         return MoveTo(leftClosedLocalPosition, rightClosedLocalPosition, speed, deltaTime);
     }
 
-    public void Attach(ConveyorItem item, Vector3 localPosition, Vector3 localEulerAngles)
+    public void Attach(ConveyorItem item, Vector3 localPosition, Vector3 localEulerAngles, bool snapToSocket)
     {
         if (item != null && itemSocket != null)
         {
-            item.BeginRoboticCarry(itemSocket, localPosition, localEulerAngles);
+            item.BeginRoboticCarry(itemSocket, localPosition, localEulerAngles, snapToSocket);
         }
     }
 

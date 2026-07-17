@@ -20,6 +20,124 @@ public static class Stage2RoboticArmSceneSetup
         Debug.Log("Robotic arms configured. Review points, poses and destination conveyors before saving the scene.");
     }
 
+    [MenuItem("Tools/RedeLabEscola/Stage2/Apply Pipes Tuning To Beams")]
+    public static void ApplyPipesTuningToBeams()
+    {
+        GameObject sourceArm = GameObject.Find("RoboticArm_Pipes");
+        GameObject targetArm = GameObject.Find("RoboticArm_Beams");
+        if (targetArm == null)
+        {
+            targetArm = GameObject.Find("Robotic Arms_Beams");
+        }
+
+        if (sourceArm == null || targetArm == null)
+        {
+            Debug.LogError("Could not find RoboticArm_Pipes and RoboticArm_Beams in the current scene.");
+            return;
+        }
+
+        RoboticArmController sourceController = sourceArm.GetComponent<RoboticArmController>();
+        RoboticArmController targetController = targetArm.GetComponent<RoboticArmController>();
+        if (sourceController == null)
+        {
+            Debug.LogError("RoboticArm_Pipes does not have RoboticArmController.");
+            return;
+        }
+
+        if (targetController == null)
+        {
+            ConfigureArm(targetArm.name, RoboticArmProductType.Beams, "RawMaterial_B");
+            targetController = targetArm.GetComponent<RoboticArmController>();
+        }
+
+        if (targetController == null)
+        {
+            Debug.LogError("Could not add RoboticArmController to the Beams arm.");
+            return;
+        }
+
+        Undo.RecordObject(targetController, "Apply Pipes robotic arm tuning to Beams");
+        CopyControllerTuning(sourceController, targetController);
+        targetController.ConfigureProduct(RoboticArmProductType.Beams, "RawMaterial_B", FindNearestConveyor(GetDropPointPosition(targetArm.transform)));
+        AssignAcceptedPrefab(targetController, "Assets/Prefabs/Peças/placa de circuito.prefab");
+
+        RoboticArmGripper sourceGripper = sourceArm.GetComponentInChildren<RoboticArmGripper>(true);
+        RoboticArmGripper targetGripper = targetArm.GetComponentInChildren<RoboticArmGripper>(true);
+        if (sourceGripper != null && targetGripper != null)
+        {
+            Undo.RecordObject(targetGripper, "Apply Pipes gripper tuning to Beams");
+            CopyGripperTuning(sourceGripper, targetGripper);
+            EditorUtility.SetDirty(targetGripper);
+        }
+
+        EditorUtility.SetDirty(targetController);
+        EditorSceneManager.MarkSceneDirty(targetArm.scene);
+        Debug.Log("Applied RoboticArm_Pipes tuning to RoboticArm_Beams. Product set to RawMaterial_B / placa de circuito. PickupPoint and DropPoint were preserved.");
+    }
+
+    [MenuItem("Tools/RedeLabEscola/Stage2/Apply Pipes Tuning To Ingots")]
+    public static void ApplyPipesTuningToIngots()
+    {
+        GameObject sourceArm = GameObject.Find("RoboticArm_Pipes");
+        GameObject targetArm = GameObject.Find("RoboticArm_Ingots");
+        if (targetArm == null)
+        {
+            targetArm = GameObject.Find("Robotic Arms_Ingots");
+        }
+        if (targetArm == null)
+        {
+            targetArm = GameObject.Find("RoboticArm_Inbox");
+        }
+        if (targetArm == null)
+        {
+            targetArm = GameObject.Find("Robotic Arms_Inbox");
+        }
+
+        if (sourceArm == null || targetArm == null)
+        {
+            Debug.LogError("Could not find RoboticArm_Pipes and RoboticArm_Ingots in the current scene.");
+            return;
+        }
+
+        RoboticArmController sourceController = sourceArm.GetComponent<RoboticArmController>();
+        RoboticArmController targetController = targetArm.GetComponent<RoboticArmController>();
+        if (sourceController == null)
+        {
+            Debug.LogError("RoboticArm_Pipes does not have RoboticArmController.");
+            return;
+        }
+
+        if (targetController == null)
+        {
+            ConfigureArm(targetArm.name, RoboticArmProductType.Ingots, "RawMaterial_C");
+            targetController = targetArm.GetComponent<RoboticArmController>();
+        }
+
+        if (targetController == null)
+        {
+            Debug.LogError("Could not add RoboticArmController to the Ingots arm.");
+            return;
+        }
+
+        Undo.RecordObject(targetController, "Apply Pipes robotic arm tuning to Ingots");
+        CopyControllerTuning(sourceController, targetController);
+        targetController.ConfigureProduct(RoboticArmProductType.Ingots, "RawMaterial_C", FindNearestConveyor(GetDropPointPosition(targetArm.transform)));
+        AssignAcceptedPrefab(targetController, "Assets/Prefabs/Peças/Carcaça mecanica com eixo.prefab");
+
+        RoboticArmGripper sourceGripper = sourceArm.GetComponentInChildren<RoboticArmGripper>(true);
+        RoboticArmGripper targetGripper = targetArm.GetComponentInChildren<RoboticArmGripper>(true);
+        if (sourceGripper != null && targetGripper != null)
+        {
+            Undo.RecordObject(targetGripper, "Apply Pipes gripper tuning to Ingots");
+            CopyGripperTuning(sourceGripper, targetGripper);
+            EditorUtility.SetDirty(targetGripper);
+        }
+
+        EditorUtility.SetDirty(targetController);
+        EditorSceneManager.MarkSceneDirty(targetArm.scene);
+        Debug.Log("Applied RoboticArm_Pipes tuning to RoboticArm_Ingots. Product set to RawMaterial_C / Carcaça mecanica com eixo. PickupPoint and DropPoint were preserved.");
+    }
+
     private static void ConfigureArm(string armName, RoboticArmProductType productType, string productId)
     {
         GameObject armObject = GameObject.Find(armName);
@@ -204,6 +322,210 @@ public static class Stage2RoboticArmSceneSetup
         box.isTrigger = true;
         box.size = size;
         return box;
+    }
+
+    private static void CopyControllerTuning(RoboticArmController source, RoboticArmController target)
+    {
+        SerializedObject sourceObject = new SerializedObject(source);
+        SerializedObject targetObject = new SerializedObject(target);
+
+        string[] copiedProperties =
+        {
+            "itemSocketLocalPosition",
+            "itemSocketLocalRotation",
+            "useDropPointRotation",
+            "homePose.baseRotation",
+            "homePose.shoulderRotation",
+            "homePose.elbowRotation",
+            "homePose.wristRotation",
+            "pickupPose.baseRotation",
+            "pickupPose.shoulderRotation",
+            "pickupPose.elbowRotation",
+            "pickupPose.wristRotation",
+            "liftPose.baseRotation",
+            "liftPose.shoulderRotation",
+            "liftPose.elbowRotation",
+            "liftPose.wristRotation",
+            "dropPose.baseRotation",
+            "dropPose.shoulderRotation",
+            "dropPose.elbowRotation",
+            "dropPose.wristRotation",
+            "baseRotationSpeed",
+            "shoulderSpeed",
+            "elbowSpeed",
+            "wristSpeed",
+            "gripperSpeed",
+            "pickupMovementSpeed",
+            "dropMovementSpeed",
+            "returnSpeed",
+            "delayBeforePickup",
+            "delayAfterClosingGripper",
+            "delayBeforeRelease",
+            "delayAfterRelease",
+            "delayBeforeReturn",
+            "rotationToDropAngle",
+            "angularTolerance",
+            "positionTolerance",
+            "invertDropRotation",
+            "keepProductOrientationWhileCarried",
+            "useSafeLiftPoint",
+            "pickupArrivalTimeout",
+            "pickupHoldTolerance",
+            "smoothItemToSocketAfterAttach",
+            "itemToSocketSpeed",
+            "itemToSocketRotationSpeed",
+            "itemToSocketTimeout",
+            "wristRaisedRotation",
+            "wristPickupLoweredRotation",
+            "wristDropLoweredRotation",
+            "wristPickupDropSpeedMultiplier",
+            "gripperCloseSpeedMultiplier",
+            "waitForDropAreaToClear",
+            "maxDropAreaWaitTime",
+            "useDropPoseBeforeRelease",
+            "handReleasedItemToDestinationConveyor",
+            "smoothReleaseToDropPoint",
+            "releaseSmoothDuration",
+            "maxPoseMoveTime",
+            "maxWristMoveTime",
+            "maxBaseRotationTime",
+            "showGizmos",
+            "logStateTransitions",
+            "logItemEvents"
+        };
+
+        CopyProperties(sourceObject, targetObject, copiedProperties);
+        targetObject.ApplyModifiedProperties();
+    }
+
+    private static void CopyGripperTuning(RoboticArmGripper source, RoboticArmGripper target)
+    {
+        SerializedObject sourceObject = new SerializedObject(source);
+        SerializedObject targetObject = new SerializedObject(target);
+
+        string[] copiedProperties =
+        {
+            "leftOpenLocalPosition",
+            "leftClosedLocalPosition",
+            "rightOpenLocalPosition",
+            "rightClosedLocalPosition",
+            "positionTolerance"
+        };
+
+        CopyProperties(sourceObject, targetObject, copiedProperties);
+        targetObject.ApplyModifiedProperties();
+    }
+
+    private static void CopyProperties(SerializedObject sourceObject, SerializedObject targetObject, string[] propertyNames)
+    {
+        for (int i = 0; i < propertyNames.Length; i++)
+        {
+            SerializedProperty sourceProperty = sourceObject.FindProperty(propertyNames[i]);
+            SerializedProperty targetProperty = targetObject.FindProperty(propertyNames[i]);
+            if (sourceProperty == null || targetProperty == null)
+            {
+                continue;
+            }
+
+            CopyPropertyValue(sourceProperty, targetProperty);
+        }
+    }
+
+    private static void CopyPropertyValue(SerializedProperty source, SerializedProperty target)
+    {
+        if (source.propertyType != target.propertyType)
+        {
+            return;
+        }
+
+        switch (source.propertyType)
+        {
+            case SerializedPropertyType.Integer:
+            case SerializedPropertyType.LayerMask:
+            case SerializedPropertyType.ArraySize:
+            case SerializedPropertyType.Character:
+                target.intValue = source.intValue;
+                break;
+            case SerializedPropertyType.Boolean:
+                target.boolValue = source.boolValue;
+                break;
+            case SerializedPropertyType.Float:
+                target.floatValue = source.floatValue;
+                break;
+            case SerializedPropertyType.String:
+                target.stringValue = source.stringValue;
+                break;
+            case SerializedPropertyType.Color:
+                target.colorValue = source.colorValue;
+                break;
+            case SerializedPropertyType.ObjectReference:
+                target.objectReferenceValue = source.objectReferenceValue;
+                break;
+            case SerializedPropertyType.Enum:
+                target.enumValueIndex = source.enumValueIndex;
+                break;
+            case SerializedPropertyType.Vector2:
+                target.vector2Value = source.vector2Value;
+                break;
+            case SerializedPropertyType.Vector3:
+                target.vector3Value = source.vector3Value;
+                break;
+            case SerializedPropertyType.Vector4:
+                target.vector4Value = source.vector4Value;
+                break;
+            case SerializedPropertyType.Rect:
+                target.rectValue = source.rectValue;
+                break;
+            case SerializedPropertyType.AnimationCurve:
+                target.animationCurveValue = source.animationCurveValue;
+                break;
+            case SerializedPropertyType.Bounds:
+                target.boundsValue = source.boundsValue;
+                break;
+            case SerializedPropertyType.Quaternion:
+                target.quaternionValue = source.quaternionValue;
+                break;
+            case SerializedPropertyType.ExposedReference:
+                target.exposedReferenceValue = source.exposedReferenceValue;
+                break;
+            case SerializedPropertyType.Vector2Int:
+                target.vector2IntValue = source.vector2IntValue;
+                break;
+            case SerializedPropertyType.Vector3Int:
+                target.vector3IntValue = source.vector3IntValue;
+                break;
+            case SerializedPropertyType.RectInt:
+                target.rectIntValue = source.rectIntValue;
+                break;
+            case SerializedPropertyType.BoundsInt:
+                target.boundsIntValue = source.boundsIntValue;
+                break;
+        }
+    }
+
+    private static void AssignAcceptedPrefab(RoboticArmController controller, string assetPath)
+    {
+        GameObject prefab = AssetDatabase.LoadAssetAtPath<GameObject>(assetPath);
+        if (prefab == null)
+        {
+            Debug.LogWarning($"Could not find accepted prefab at {assetPath}.");
+            return;
+        }
+
+        SerializedObject serializedController = new SerializedObject(controller);
+        SerializedProperty acceptedPrefab = serializedController.FindProperty("acceptedPrefab");
+        if (acceptedPrefab != null)
+        {
+            acceptedPrefab.objectReferenceValue = prefab;
+            serializedController.ApplyModifiedProperties();
+        }
+    }
+
+    private static Vector3 GetDropPointPosition(Transform arm)
+    {
+        Transform points = FindDirectChildOrAny(arm, "Points");
+        Transform dropPoint = points != null ? FindDirectChildOrAny(points, "DropPoint") : FindDirectChildOrAny(arm, "DropPoint");
+        return dropPoint != null ? dropPoint.position : arm.position;
     }
 
     private static ConveyorController FindNearestConveyor(Vector3 position)

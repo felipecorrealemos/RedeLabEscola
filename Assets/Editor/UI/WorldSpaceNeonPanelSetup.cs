@@ -157,6 +157,7 @@ public static class WorldSpaceNeonPanelSetup
         panelUI.ConfigureBehaviorDefaults(true, 2.4f, 0.22f, true);
         panelUI.ConfigurePresentationDefaults(WorldSpaceNeonPanelUI.PresentationMode.ScreenSpaceProjected, root.transform, new Vector2(0f, 64f));
         panelUI.ConfigureBillboardDefaults(true, true);
+        root.SetActive(false);
 
         Undo.CollapseUndoOperations(undoGroup);
         CleanupDuplicatePanels(root);
@@ -331,6 +332,7 @@ public static class WorldSpaceNeonPanelSetup
         panelUI.ConfigureBehaviorDefaults(true, 2.4f, 0.22f, true);
         panelUI.ConfigurePresentationDefaults(WorldSpaceNeonPanelUI.PresentationMode.ScreenSpaceProjected, root.transform, new Vector2(0f, 64f));
         panelUI.ConfigureBillboardDefaults(true, true);
+        root.SetActive(false);
     }
 
     private static Transform FindTransformByName(string targetName)
