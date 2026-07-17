@@ -95,6 +95,15 @@ public class ConveyorController : MonoBehaviour
         collectionZone = zone;
     }
 
+    public void ConfigureSpacing(float minimumSpacing, float detectionDistance, float detectionRadius, float safetyDistance, float blockingTolerance)
+    {
+        minimumItemSpacing = Mathf.Max(0.01f, minimumSpacing);
+        forwardDetectionDistance = Mathf.Max(minimumItemSpacing, detectionDistance);
+        forwardDetectionRadius = Mathf.Max(0.01f, detectionRadius);
+        longitudinalSafetyDistance = Mathf.Max(0.01f, safetyDistance);
+        lateralBlockingTolerance = Mathf.Max(0.01f, blockingTolerance);
+    }
+
     private void Awake()
     {
         ResolveReferences();
@@ -170,6 +179,48 @@ public class ConveyorController : MonoBehaviour
         activeItems.Add(item);
         activeItemCount = activeItems.Count;
         onItemSpawned?.Invoke(item.gameObject);
+    }
+
+    public bool CanReceiveItemAt(Transform receivePoint)
+    {
+        if (conveyorPath == null || !conveyorPath.IsValid())
+        {
+            return false;
+        }
+
+        float receiveDistance = receivePoint != null ? conveyorPath.GetClosestDistance(receivePoint.position) : 0f;
+        return !IsSpawnBlocked(receiveDistance);
+    }
+
+    public bool TryReceiveItem(GameObject itemObject, string nextProductId, Transform receivePoint, bool keepReceiveRotation, float lateralOffset)
+    {
+        if (itemObject == null || conveyorPath == null || !conveyorPath.IsValid())
+        {
+            return false;
+        }
+
+        float receiveDistance = receivePoint != null ? conveyorPath.GetClosestDistance(receivePoint.position) : 0f;
+        if (IsSpawnBlocked(receiveDistance))
+        {
+            return false;
+        }
+
+        ConveyorItem item = itemObject.GetComponent<ConveyorItem>();
+        if (item == null)
+        {
+            item = itemObject.AddComponent<ConveyorItem>();
+        }
+
+        itemObject.transform.SetParent(transform, true);
+        RegisterItem(item);
+        item.Initialize(this, conveyorPath, nextProductId, receiveDistance, lateralOffset);
+
+        if (receivePoint != null && keepReceiveRotation)
+        {
+            itemObject.transform.rotation = receivePoint.rotation;
+        }
+
+        return true;
     }
 
     public void UnregisterItem(ConveyorItem item)

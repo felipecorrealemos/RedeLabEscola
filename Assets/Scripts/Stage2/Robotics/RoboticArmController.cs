@@ -47,6 +47,11 @@ public class RoboticArmController : MonoBehaviour
     [SerializeField] private Vector3 itemSocketLocalRotation;
     [SerializeField] private bool useDropPointRotation = true;
 
+    [Header("Fallback Pickup")]
+    [SerializeField] private bool allowAnyProductWhenIdle;
+    [SerializeField, Min(0f)] private float fallbackPickupIdleTime = 4f;
+    [SerializeField] private bool fallbackOnlyWhenNoAcceptedItem = true;
+
     [Header("Poses")]
     [SerializeField] private RoboticArmPose homePose = new RoboticArmPose();
     [SerializeField] private RoboticArmPose pickupPose = new RoboticArmPose();
@@ -91,6 +96,7 @@ public class RoboticArmController : MonoBehaviour
     [SerializeField, Min(1f)] private float gripperCloseSpeedMultiplier = 3f;
     [SerializeField] private bool waitForDropAreaToClear;
     [SerializeField, Min(0f)] private float maxDropAreaWaitTime = 0.5f;
+    [SerializeField] private bool requireDestinationConveyorSpaceBeforeDrop = true;
     [SerializeField] private bool useDropPoseBeforeRelease;
     [SerializeField] private bool handReleasedItemToDestinationConveyor;
     [SerializeField] private bool smoothReleaseToDropPoint = true;
@@ -111,6 +117,7 @@ public class RoboticArmController : MonoBehaviour
     private Quaternion homeBaseRotation;
     private bool hasHomeBaseRotation;
     private float currentBaseDropOffset;
+    private float idleWithoutAcceptedItemTimer;
 
     public ArmState CurrentState => currentState;
     public RoboticArmProductType AcceptedProductType => acceptedProductType;
@@ -157,8 +164,22 @@ public class RoboticArmController : MonoBehaviour
         }
 
         ConveyorItem nextItem = pickupSensor != null ? pickupSensor.DequeueNextValid() : null;
+        if (nextItem == null)
+        {
+            idleWithoutAcceptedItemTimer += Time.deltaTime;
+            if (allowAnyProductWhenIdle && idleWithoutAcceptedItemTimer >= fallbackPickupIdleTime)
+            {
+                nextItem = fallbackOnlyWhenNoAcceptedItem && pickupSensor != null ? pickupSensor.DequeueNextValid() : null;
+                if (nextItem == null)
+                {
+                    nextItem = pickupSensor != null ? pickupSensor.DequeueNextAvailable() : null;
+                }
+            }
+        }
+
         if (nextItem != null)
         {
+            idleWithoutAcceptedItemTimer = 0f;
             cycleRoutine = StartCoroutine(RunCycle(nextItem));
         }
     }
@@ -204,6 +225,16 @@ public class RoboticArmController : MonoBehaviour
         acceptedProductType = type;
         acceptedProductId = productId;
         destinationConveyor = targetConveyor;
+        handReleasedItemToDestinationConveyor = targetConveyor != null;
+        waitForDropAreaToClear = targetConveyor != null;
+        requireDestinationConveyorSpaceBeforeDrop = targetConveyor != null;
+        maxDropAreaWaitTime = targetConveyor != null ? 0f : maxDropAreaWaitTime;
+    }
+
+    public void ConfigureAnyProductFallback(bool enabled, float idleTime)
+    {
+        allowAnyProductWhenIdle = enabled;
+        fallbackPickupIdleTime = Mathf.Max(0f, idleTime);
     }
 
     public void CaptureCurrentPoseAsHome()
@@ -322,10 +353,8 @@ public class RoboticArmController : MonoBehaviour
         if (waitForDropAreaToClear)
         {
             ChangeState(ArmState.WaitingForDropArea, Color.yellow);
-            float waited = 0f;
-            while (dropAreaSensor != null && dropAreaSensor.IsOccupied && waited < maxDropAreaWaitTime)
+            while (IsDropBlocked())
             {
-                waited += Time.deltaTime;
                 yield return null;
             }
         }
@@ -402,6 +431,19 @@ public class RoboticArmController : MonoBehaviour
         {
             Debug.Log($"{name}: released {releasedItem.ProductId}.", this);
         }
+    }
+
+    private bool IsDropBlocked()
+    {
+        if (dropAreaSensor != null && dropAreaSensor.IsOccupied)
+        {
+            return true;
+        }
+
+        return requireDestinationConveyorSpaceBeforeDrop
+            && handReleasedItemToDestinationConveyor
+            && destinationConveyor != null
+            && !destinationConveyor.CanReceiveItemAt(dropPoint);
     }
 
     private IEnumerator RecoverFromError()

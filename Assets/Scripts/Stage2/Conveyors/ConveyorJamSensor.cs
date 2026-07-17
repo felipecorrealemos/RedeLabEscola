@@ -11,6 +11,7 @@ public class ConveyorJamSensor : MonoBehaviour
     [SerializeField] private bool stopConveyorOnJam = false;
     [SerializeField] private bool stopSpawnerOnJam = true;
     [SerializeField] private bool restartAutomatically = true;
+    [SerializeField] private bool countOnlyStoppedItems = true;
     [SerializeField] private int restartItemThreshold = 1;
     [SerializeField] private float fallbackEndDistance = 2.5f;
     [SerializeField] private int currentItemCount;
@@ -23,6 +24,7 @@ public class ConveyorJamSensor : MonoBehaviour
     public bool StopConveyorOnJam => stopConveyorOnJam;
     public bool StopSpawnerOnJam => stopSpawnerOnJam;
     public bool RestartAutomatically => restartAutomatically;
+    public bool CountOnlyStoppedItems => countOnlyStoppedItems;
     public int RestartItemThreshold => Mathf.Max(0, restartItemThreshold);
     public int CurrentItemCount => currentItemCount;
     public float CurrentCongestionTime => currentCongestionTime;
@@ -41,6 +43,11 @@ public class ConveyorJamSensor : MonoBehaviour
         {
             jamSensorZone.isTrigger = true;
         }
+    }
+
+    public void SetCountOnlyStoppedItems(bool value)
+    {
+        countOnlyStoppedItems = value;
     }
 
     private void Reset()
@@ -86,7 +93,7 @@ public class ConveyorJamSensor : MonoBehaviour
                 continue;
             }
 
-            if (!item.IsStoppedForJamSensor)
+            if (countOnlyStoppedItems && !item.IsStoppedForJamSensor)
             {
                 continue;
             }

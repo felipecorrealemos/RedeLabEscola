@@ -36,6 +36,25 @@ public class RoboticArmPickupSensor : MonoBehaviour
         return null;
     }
 
+    public ConveyorItem DequeueNextAvailable()
+    {
+        RefreshOverlappingItems();
+
+        for (int i = 0; i < candidates.Count; i++)
+        {
+            ConveyorItem item = candidates[i];
+            if (item != null && !item.IsReservedForCollection && !item.IsBeingCarried)
+            {
+                candidates.RemoveAt(i);
+                queuedItems = candidates.Count;
+                return item;
+            }
+        }
+
+        CleanupCandidates();
+        return null;
+    }
+
     private void Reset()
     {
         controller = GetComponentInParent<RoboticArmController>();
@@ -73,10 +92,14 @@ public class RoboticArmPickupSensor : MonoBehaviour
         }
 
         ConveyorItem item = other.GetComponentInParent<ConveyorItem>();
-        if (item == null || !controller.CanAcceptItem(item))
+        if (item == null)
+        {
+            return;
+        }
+
+        if (!controller.CanAcceptItem(item))
         {
             controller.ReportRejectedItem(item, other.gameObject);
-            return;
         }
 
         if (candidates.Contains(item))
@@ -139,7 +162,7 @@ public class RoboticArmPickupSensor : MonoBehaviour
 
     private void CleanupCandidates()
     {
-        candidates.RemoveAll(item => item == null || controller == null || !controller.CanAcceptItem(item));
+        candidates.RemoveAll(item => item == null || item.CurrentState == ConveyorItemState.Removed || item.IsReservedForCollection || item.IsBeingCarried);
         queuedItems = candidates.Count;
     }
 

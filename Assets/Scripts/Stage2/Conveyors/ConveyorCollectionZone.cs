@@ -17,6 +17,8 @@ public class ConveyorCollectionZone : MonoBehaviour
     [SerializeField] private QueueDistributionMode distributionMode = QueueDistributionMode.ShortestQueue;
     [SerializeField] private float queueAlignmentSpeed = 2.5f;
     [SerializeField] private float queueRotationSpeed = 8f;
+    [SerializeField] private bool rotateQueuedItemsToSlot = true;
+    [SerializeField] private bool alignSlotsToPath = true;
     [SerializeField] private bool useSlotVariation = true;
     [SerializeField] private float slotLateralNoise = 0.035f;
     [SerializeField] private float slotLongitudinalNoise = 0.055f;
@@ -52,6 +54,8 @@ public class ConveyorCollectionZone : MonoBehaviour
     public QueueDistributionMode DistributionMode => distributionMode;
     public float LeftQueueOffset => leftQueueOffset;
     public float RightQueueOffset => rightQueueOffset;
+    public bool AlignSlotsToPath => alignSlotsToPath;
+    public bool RotateQueuedItemsToSlot => rotateQueuedItemsToSlot;
 
     public void Configure(Transform point, Collider zone, int maximumItems)
     {
@@ -76,6 +80,38 @@ public class ConveyorCollectionZone : MonoBehaviour
         maximumItemsPerQueue = Mathf.Max(1, maxPerQueue);
         maximumItemsInCollectionZone = maximumItemsPerQueue * 2;
         distributionMode = mode;
+        RefreshDebugCount();
+    }
+
+    public void ConfigureSingleQueue(float centerOffset, float spacing, int maxItems)
+    {
+        useDualQueue = false;
+        leftQueueOffset = centerOffset;
+        rightQueueOffset = centerOffset;
+        queueItemSpacing = Mathf.Max(0.05f, spacing);
+        maximumItemsInCollectionZone = Mathf.Max(1, maxItems);
+        maximumItemsPerQueue = Mathf.Max(1, maxItems);
+        distributionMode = QueueDistributionMode.ShortestQueue;
+        RefreshDebugCount();
+    }
+
+    public void SetQueueRotation(bool rotateItemsToSlot)
+    {
+        rotateQueuedItemsToSlot = rotateItemsToSlot;
+    }
+
+    public void ConfigureSingleStop(Transform point, Collider zone)
+    {
+        collectionPoint = point;
+        collectionZone = zone;
+        maximumItemsInCollectionZone = 1;
+        maximumItemsPerQueue = 1;
+        useDualQueue = false;
+        if (collectionZone != null)
+        {
+            collectionZone.isTrigger = true;
+        }
+
         RefreshDebugCount();
     }
 
@@ -122,6 +158,7 @@ public class ConveyorCollectionZone : MonoBehaviour
 
         if (!useDualQueue)
         {
+            CleanupNullItems();
             if (items.Count >= MaximumItemsInCollectionZone)
             {
                 waitingBeforeCollectionZone = 1;
@@ -129,9 +166,19 @@ public class ConveyorCollectionZone : MonoBehaviour
                 return false;
             }
 
-            RegisterItem(item);
-            item.AssignLegacyCollectionSlot();
+            if (!items.Contains(item))
+            {
+                items.Add(item);
+            }
+
+            if (!leftQueue.Contains(item))
+            {
+                leftQueue.Add(item);
+            }
+
+            item.AssignCollectionQueue(0, leftQueue.IndexOf(item));
             waitingBeforeCollectionZone = 0;
+            RefreshQueueAssignments();
             return true;
         }
 
@@ -201,13 +248,20 @@ public class ConveyorCollectionZone : MonoBehaviour
         if (itemRigidbody != null)
         {
             itemRigidbody.MovePosition(Vector3.MoveTowards(itemRigidbody.position, slotPosition, moveStep));
-            itemRigidbody.MoveRotation(Quaternion.Slerp(itemRigidbody.rotation, slotRotation, rotateStep));
+            if (rotateQueuedItemsToSlot)
+            {
+                itemRigidbody.MoveRotation(Quaternion.Slerp(itemRigidbody.rotation, slotRotation, rotateStep));
+            }
         }
         else
         {
+            Quaternion targetRotation = rotateQueuedItemsToSlot
+                ? Quaternion.Slerp(item.transform.rotation, slotRotation, rotateStep)
+                : item.transform.rotation;
+
             item.transform.SetPositionAndRotation(
                 Vector3.MoveTowards(item.transform.position, slotPosition, moveStep),
-                Quaternion.Slerp(item.transform.rotation, slotRotation, rotateStep));
+                targetRotation);
         }
     }
 
@@ -468,20 +522,28 @@ public class ConveyorCollectionZone : MonoBehaviour
 
     private Vector3 GetSlotPosition(int queueIndex, int slotIndex)
     {
-        Vector3 basePosition = collectionPoint != null ? collectionPoint.position : transform.position;
         Vector3 finalDirection = GetFinalDirection();
-        Vector3 lateral = GetLateral(finalDirection);
         float queueOffset = queueIndex == 0 ? leftQueueOffset : rightQueueOffset;
         float longitudinalOffset = Mathf.Max(0, slotIndex) * QueueItemSpacing;
         float lateralVariation = 0f;
+        float longitudinalVariation = 0f;
 
         if (useSlotVariation)
         {
             lateralVariation = GetSignedSlotNoise(queueIndex, slotIndex, 13) * slotLateralNoise;
-            float longitudinalVariation = GetSignedSlotNoise(queueIndex, slotIndex, 29) * slotLongitudinalNoise;
+            longitudinalVariation = GetSignedSlotNoise(queueIndex, slotIndex, 29) * slotLongitudinalNoise;
             longitudinalOffset = Mathf.Max(0f, longitudinalOffset + longitudinalVariation);
         }
 
+        if (alignSlotsToPath && path != null && path.IsValid())
+        {
+            float slotDistance = Mathf.Clamp(path.TotalLength - longitudinalOffset, 0f, path.TotalLength);
+            ConveyorPathSample sample = path.GetSample(slotDistance);
+            return sample.Position + sample.Lateral * (queueOffset + lateralVariation);
+        }
+
+        Vector3 basePosition = collectionPoint != null ? collectionPoint.position : transform.position;
+        Vector3 lateral = GetLateral(finalDirection);
         return basePosition - finalDirection * longitudinalOffset + lateral * (queueOffset + lateralVariation);
     }
 
