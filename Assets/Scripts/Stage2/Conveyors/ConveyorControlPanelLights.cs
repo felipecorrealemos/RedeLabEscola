@@ -1,8 +1,16 @@
 using UnityEngine;
 
+#if UNITY_EDITOR
+using UnityEditor;
+#endif
+
 [DisallowMultipleComponent]
 public class ConveyorControlPanelLights : MonoBehaviour
 {
+    private const string GreenMaterialPath = "Assets/Prefabs/materiais/verde.mat";
+    private const string YellowMaterialPath = "Assets/Prefabs/materiais/amarelo.mat";
+    private const string RedMaterialPath = "Assets/Prefabs/materiais/vermelho.mat";
+
     [SerializeField] private ConveyorController conveyorController;
     [SerializeField] private ConveyorJamSensor jamSensor;
     [SerializeField] private Renderer greenLightRenderer;
@@ -19,8 +27,16 @@ public class ConveyorControlPanelLights : MonoBehaviour
 
     public void Configure(ConveyorController controller, ConveyorJamSensor sensor)
     {
+        Configure(controller, sensor, null, null, null);
+    }
+
+    public void Configure(ConveyorController controller, ConveyorJamSensor sensor, Material greenMaterial, Material yellowMaterial, Material redMaterial)
+    {
         conveyorController = controller;
         jamSensor = sensor;
+        greenOnMaterial = greenMaterial != null ? greenMaterial : greenOnMaterial;
+        yellowOnMaterial = yellowMaterial != null ? yellowMaterial : yellowOnMaterial;
+        redOnMaterial = redMaterial != null ? redMaterial : redOnMaterial;
         ResolveRenderers();
         CacheOnMaterials();
         ConfigureBlinker();
@@ -60,28 +76,78 @@ public class ConveyorControlPanelLights : MonoBehaviour
     {
         if (greenLightRenderer == null)
         {
-            greenLightRenderer = FindChildRenderer("Light_Green");
+            greenLightRenderer = FindChildRenderer("Light_Green", "Light Green", "Head_Green", "Head Green", "Green", "LightGreen");
         }
 
         if (yellowLightRenderer == null)
         {
-            yellowLightRenderer = FindChildRenderer("Light_Yellow");
+            yellowLightRenderer = FindChildRenderer("Light_Yellow", "Light Yellow", "Head_Yellow", "Head Yellow", "Yellow", "LightYellow");
         }
 
         if (redLightRenderer == null)
         {
-            redLightRenderer = FindChildRenderer("Light_Red");
+            redLightRenderer = FindChildRenderer("Light_Red", "Light Red", "Head_Red", "Head Red", "Headlight", "Red", "LightRed");
         }
     }
 
-    private Renderer FindChildRenderer(string childName)
+    private Renderer FindChildRenderer(params string[] childNames)
     {
-        Transform child = transform.Find(childName);
-        return child != null ? child.GetComponent<Renderer>() : null;
+        for (int i = 0; i < childNames.Length; i++)
+        {
+            Transform child = FindChildRecursive(transform, childNames[i]);
+            Renderer renderer = child != null ? child.GetComponent<Renderer>() : null;
+            if (renderer != null)
+            {
+                return renderer;
+            }
+        }
+
+        return null;
+    }
+
+    private Transform FindChildRecursive(Transform root, string childName)
+    {
+        if (root == null)
+        {
+            return null;
+        }
+
+        if (root.name == childName)
+        {
+            return root;
+        }
+
+        for (int i = 0; i < root.childCount; i++)
+        {
+            Transform result = FindChildRecursive(root.GetChild(i), childName);
+            if (result != null)
+            {
+                return result;
+            }
+        }
+
+        return null;
     }
 
     private void CacheOnMaterials()
     {
+#if UNITY_EDITOR
+        if (greenOnMaterial == null)
+        {
+            greenOnMaterial = AssetDatabase.LoadAssetAtPath<Material>(GreenMaterialPath);
+        }
+
+        if (yellowOnMaterial == null)
+        {
+            yellowOnMaterial = AssetDatabase.LoadAssetAtPath<Material>(YellowMaterialPath);
+        }
+
+        if (redOnMaterial == null)
+        {
+            redOnMaterial = AssetDatabase.LoadAssetAtPath<Material>(RedMaterialPath);
+        }
+#endif
+
         if (greenOnMaterial == null && greenLightRenderer != null)
         {
             greenOnMaterial = greenLightRenderer.sharedMaterial;

@@ -1,3 +1,4 @@
+using System.Collections.Generic;
 using UnityEngine;
 
 [DisallowMultipleComponent]
@@ -8,6 +9,7 @@ public class PackagingMachineInputConsumer : MonoBehaviour
     [SerializeField] private bool logRejectedItems;
 
     private ConveyorItem lastRejectedItem;
+    private readonly HashSet<int> consumedItemIds = new HashSet<int>();
 
     public void Configure(PackagingMachineController machine)
     {
@@ -51,8 +53,15 @@ public class PackagingMachineInputConsumer : MonoBehaviour
             return;
         }
 
+        int itemId = item.GetInstanceID();
+        if (consumedItemIds.Contains(itemId))
+        {
+            return;
+        }
+
         if (packagingMachine.TryReceiveItem(item))
         {
+            consumedItemIds.Add(itemId);
             lastRejectedItem = null;
         }
         else if (logRejectedItems && lastRejectedItem != item)

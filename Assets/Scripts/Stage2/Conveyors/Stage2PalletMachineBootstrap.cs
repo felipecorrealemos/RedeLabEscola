@@ -46,6 +46,8 @@ public class Stage2PalletMachineBootstrap : MonoBehaviour
             machine = root.gameObject.AddComponent<PackagingMachineController>();
         }
 
+        ConfigureMachineGizmo(root, "Pallet Machine");
+
         Transform finishConveyor = FindChildRecursive(root, "FinishPartConveyor");
         if (finishConveyor == null)
         {
@@ -75,10 +77,11 @@ public class Stage2PalletMachineBootstrap : MonoBehaviour
             Debug.LogWarning("PalletMachine output conveyor setup skipped because FinishPartConveyor was not found.", root);
         }
 
-        machine.ConfigureInput(AcceptedBoxProductId, 3, 9);
+        machine.ConfigureInputDefaults(AcceptedBoxProductId, 3, 9);
         machine.ConfigureOutputProduct(PalletProductId, palletPrefab);
         machine.ConfigureOutputScale(true, Vector3.zero);
         machine.Configure(outputConveyor, outputSpawnPoint, null, palletPrefab);
+        ConfigureControlPanelLights(root, outputConveyor);
         inputConsumer?.Configure(machine);
     }
 
@@ -206,6 +209,42 @@ public class Stage2PalletMachineBootstrap : MonoBehaviour
         Transform child = GetOrCreateChild(parent, childName);
         T component = child.GetComponent<T>();
         return component != null ? component : child.gameObject.AddComponent<T>();
+    }
+
+    private static void ConfigureMachineGizmo(Transform root, string label)
+    {
+        Stage2MachineDebugGizmo gizmo = root.GetComponent<Stage2MachineDebugGizmo>();
+        if (gizmo == null)
+        {
+            gizmo = root.gameObject.AddComponent<Stage2MachineDebugGizmo>();
+        }
+
+        Bounds bounds = GetWorldBounds(root);
+        Vector3 worldPosition = bounds.center + Vector3.up * (bounds.extents.y + 0.65f);
+        Vector3 localOffset = root.InverseTransformPoint(worldPosition);
+        gizmo.Configure(label, localOffset, new Color(0.25f, 1f, 0.55f, 0.9f), 0.34f);
+    }
+
+    private static void ConfigureControlPanelLights(Transform root, ConveyorController controller)
+    {
+        Transform controlPanel = FindChildRecursive(root, "ControlPanel");
+        if (controlPanel == null)
+        {
+            controlPanel = FindChildRecursive(root, "Control Panel");
+        }
+
+        if (controlPanel == null)
+        {
+            return;
+        }
+
+        ConveyorControlPanelLights lights = controlPanel.GetComponent<ConveyorControlPanelLights>();
+        if (lights == null)
+        {
+            lights = controlPanel.gameObject.AddComponent<ConveyorControlPanelLights>();
+        }
+
+        lights.Configure(controller, null);
     }
 
     private static Transform GetOrCreateChild(Transform parent, string childName)

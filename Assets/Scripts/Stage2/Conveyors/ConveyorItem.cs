@@ -73,8 +73,7 @@ public class ConveyorItem : MonoBehaviour
             {
                 itemRigidbody.position = transform.position;
                 itemRigidbody.rotation = transform.rotation;
-                itemRigidbody.velocity = Vector3.zero;
-                itemRigidbody.angularVelocity = Vector3.zero;
+                ClearRigidbodyVelocityIfDynamic();
             }
         }
     }
@@ -240,11 +239,7 @@ public class ConveyorItem : MonoBehaviour
         currentMoveSpeed = 0f;
 
         EnsurePhysicsSetup();
-        if (itemRigidbody != null)
-        {
-            itemRigidbody.velocity = Vector3.zero;
-            itemRigidbody.angularVelocity = Vector3.zero;
-        }
+        ClearRigidbodyVelocityIfDynamic();
 
         if (!snapToHoldPoint || holdPoint == null)
         {
@@ -295,8 +290,7 @@ public class ConveyorItem : MonoBehaviour
             itemRigidbody.isKinematic = true;
             itemRigidbody.useGravity = false;
             itemRigidbody.detectCollisions = false;
-            itemRigidbody.velocity = Vector3.zero;
-            itemRigidbody.angularVelocity = Vector3.zero;
+            ClearRigidbodyVelocityIfDynamic();
         }
 
         carriedColliders = GetComponentsInChildren<Collider>();
@@ -326,8 +320,7 @@ public class ConveyorItem : MonoBehaviour
         {
             itemRigidbody.position = position;
             itemRigidbody.rotation = rotation;
-            itemRigidbody.velocity = Vector3.zero;
-            itemRigidbody.angularVelocity = Vector3.zero;
+            ClearRigidbodyVelocityIfDynamic();
         }
     }
 
@@ -347,8 +340,7 @@ public class ConveyorItem : MonoBehaviour
         {
             itemRigidbody.position = transform.position;
             itemRigidbody.rotation = transform.rotation;
-            itemRigidbody.velocity = Vector3.zero;
-            itemRigidbody.angularVelocity = Vector3.zero;
+            ClearRigidbodyVelocityIfDynamic();
         }
     }
 
@@ -361,10 +353,9 @@ public class ConveyorItem : MonoBehaviour
         EnsurePhysicsSetup();
         if (itemRigidbody != null)
         {
-            itemRigidbody.velocity = Vector3.zero;
-            itemRigidbody.angularVelocity = Vector3.zero;
             itemRigidbody.position = transform.position;
             itemRigidbody.rotation = transform.rotation;
+            ClearRigidbodyVelocityIfDynamic();
         }
     }
 
@@ -376,8 +367,7 @@ public class ConveyorItem : MonoBehaviour
         {
             itemRigidbody.position = position;
             itemRigidbody.rotation = rotation;
-            itemRigidbody.velocity = Vector3.zero;
-            itemRigidbody.angularVelocity = Vector3.zero;
+            ClearRigidbodyVelocityIfDynamic();
         }
     }
 
@@ -509,6 +499,17 @@ public class ConveyorItem : MonoBehaviour
                 itemColliders[i].isTrigger = false;
             }
         }
+    }
+
+    private void ClearRigidbodyVelocityIfDynamic()
+    {
+        if (itemRigidbody == null || itemRigidbody.isKinematic)
+        {
+            return;
+        }
+
+        itemRigidbody.velocity = Vector3.zero;
+        itemRigidbody.angularVelocity = Vector3.zero;
     }
 
     private void FitBoxColliderToRenderers(BoxCollider boxCollider)

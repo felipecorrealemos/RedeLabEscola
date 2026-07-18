@@ -44,6 +44,8 @@ public class Stage2PackagingMachineBootstrap : MonoBehaviour
             machine = root.gameObject.AddComponent<PackagingMachineController>();
         }
 
+        ConfigureMachineGizmo(root, "Packing Machine");
+
         Transform tunnelInput = FindChildRecursive(root, "TunnelOpening_Input");
         Transform tunnelOutput = FindChildRecursive(root, "TunnelOpening_Output");
         Transform central = FindDirectChild(root, "PackagingPartsConveyor_Central");
@@ -69,6 +71,7 @@ public class Stage2PackagingMachineBootstrap : MonoBehaviour
         }
 
         machine.Configure(outputConveyor, outputSpawnPoint, outputJamSensor, boxPrefab);
+        ConfigureControlPanelLights(root, outputConveyor, outputJamSensor);
         inputConsumer?.Configure(machine);
     }
 
@@ -245,6 +248,42 @@ public class Stage2PackagingMachineBootstrap : MonoBehaviour
         Transform child = GetOrCreateChild(parent, childName);
         T component = child.GetComponent<T>();
         return component != null ? component : child.gameObject.AddComponent<T>();
+    }
+
+    private static void ConfigureMachineGizmo(Transform root, string label)
+    {
+        Stage2MachineDebugGizmo gizmo = root.GetComponent<Stage2MachineDebugGizmo>();
+        if (gizmo == null)
+        {
+            gizmo = root.gameObject.AddComponent<Stage2MachineDebugGizmo>();
+        }
+
+        Bounds bounds = GetWorldBounds(root);
+        Vector3 worldPosition = bounds.center + Vector3.up * (bounds.extents.y + 0.65f);
+        Vector3 localOffset = root.InverseTransformPoint(worldPosition);
+        gizmo.Configure(label, localOffset, new Color(0.15f, 0.85f, 1f, 0.9f), 0.32f);
+    }
+
+    private static void ConfigureControlPanelLights(Transform root, ConveyorController controller, ConveyorJamSensor jamSensor)
+    {
+        Transform controlPanel = FindChildRecursive(root, "ControlPanel");
+        if (controlPanel == null)
+        {
+            controlPanel = FindChildRecursive(root, "Control Panel");
+        }
+
+        if (controlPanel == null)
+        {
+            return;
+        }
+
+        ConveyorControlPanelLights lights = controlPanel.GetComponent<ConveyorControlPanelLights>();
+        if (lights == null)
+        {
+            lights = controlPanel.gameObject.AddComponent<ConveyorControlPanelLights>();
+        }
+
+        lights.Configure(controller, jamSensor);
     }
 
     private static Transform GetOrCreateChild(Transform parent, string childName)

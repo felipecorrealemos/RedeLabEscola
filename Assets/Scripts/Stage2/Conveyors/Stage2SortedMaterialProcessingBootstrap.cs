@@ -58,6 +58,8 @@ public class Stage2SortedMaterialProcessingBootstrap : MonoBehaviour
             machineController = processingMachine.gameObject.AddComponent<ProcessingMachineController>();
         }
 
+        ConfigureMachineGizmo(processingMachine, "Processing Machine");
+
         Transform inputPipes = FindChildRecursive(processingMachine, "Input_Pipes");
         Transform inputBeams = FindChildRecursive(processingMachine, "Input_Beams");
         Transform inputIngots = FindChildRecursive(processingMachine, "Input_Ingots");
@@ -104,6 +106,7 @@ public class Stage2SortedMaterialProcessingBootstrap : MonoBehaviour
 
         machineController.Configure(outputController, outputSpawnPoint, processedPartPrefab);
         machineController.ConfigureOutputJamSensor(outputJamSensor);
+        ConfigureControlPanelLights(processingMachine, outputController, outputJamSensor);
         ConfigureRoboticArm("RoboticArm_Pipes", RoboticArmProductType.Pipes, "RawMaterial_A", pipesController);
         ConfigureRoboticArm("RoboticArm_Beams", RoboticArmProductType.Beams, "RawMaterial_B", beamsController);
         ConfigureRoboticArm("RoboticArm_Ingots", RoboticArmProductType.Ingots, "RawMaterial_C", ingotsController);
@@ -393,6 +396,42 @@ public class Stage2SortedMaterialProcessingBootstrap : MonoBehaviour
         Transform child = GetOrCreateChild(parent, childName);
         T component = child.GetComponent<T>();
         return component != null ? component : child.gameObject.AddComponent<T>();
+    }
+
+    private static void ConfigureMachineGizmo(Transform root, string label)
+    {
+        Stage2MachineDebugGizmo gizmo = root.GetComponent<Stage2MachineDebugGizmo>();
+        if (gizmo == null)
+        {
+            gizmo = root.gameObject.AddComponent<Stage2MachineDebugGizmo>();
+        }
+
+        Bounds bounds = GetWorldBounds(root);
+        Vector3 worldPosition = bounds.center + Vector3.up * (bounds.extents.y + 0.65f);
+        Vector3 localOffset = root.InverseTransformPoint(worldPosition);
+        gizmo.Configure(label, localOffset, new Color(0.3f, 0.65f, 1f, 0.9f), 0.32f);
+    }
+
+    private static void ConfigureControlPanelLights(Transform root, ConveyorController controller, ConveyorJamSensor jamSensor)
+    {
+        Transform controlPanel = FindChildRecursive(root, "ControlPanel");
+        if (controlPanel == null)
+        {
+            controlPanel = FindChildRecursive(root, "Control Panel");
+        }
+
+        if (controlPanel == null)
+        {
+            return;
+        }
+
+        ConveyorControlPanelLights lights = controlPanel.GetComponent<ConveyorControlPanelLights>();
+        if (lights == null)
+        {
+            lights = controlPanel.gameObject.AddComponent<ConveyorControlPanelLights>();
+        }
+
+        lights.Configure(controller, jamSensor);
     }
 
     private static Transform GetOrCreateChild(Transform parent, string childName)

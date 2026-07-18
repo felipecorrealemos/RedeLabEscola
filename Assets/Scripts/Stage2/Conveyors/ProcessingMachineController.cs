@@ -19,6 +19,11 @@ public class ProcessingMachineController : MonoBehaviour
     [SerializeField, Min(1)] private int maximumStoredBeams = 4;
     [SerializeField, Min(1)] private int maximumStoredIngots = 4;
     [SerializeField, Min(1)] private int maximumStoredTotalMaterials = 12;
+    [SerializeField] private int storedPipes;
+    [SerializeField] private int storedBeams;
+    [SerializeField] private int storedIngots;
+    [SerializeField] private int storedTotalMaterials;
+    [SerializeField] private string recipeProgress = "0 / 3";
 
     [Header("Processing")]
     [SerializeField, Min(0.05f)] private float processingTime = 3f;
@@ -53,10 +58,6 @@ public class ProcessingMachineController : MonoBehaviour
 
     [Header("Runtime Debug")]
     [SerializeField] private ProcessingMachineState currentState = ProcessingMachineState.PoweredOff;
-    [SerializeField] private int storedPipes;
-    [SerializeField] private int storedBeams;
-    [SerializeField] private int storedIngots;
-    [SerializeField] private int storedTotalMaterials;
     [SerializeField] private int pendingProcessedParts;
     [SerializeField] private float currentProcessingTimer;
     [SerializeField] private int stoppedItemsInOutputJamSensor;
@@ -101,12 +102,14 @@ public class ProcessingMachineController : MonoBehaviour
     private void Awake()
     {
         ResolveOutputReferences();
+        RefreshRecipeProgress();
         currentState = startPoweredOn ? ProcessingMachineState.WaitingForMaterials : ProcessingMachineState.PoweredOff;
         UpdateIndicators();
     }
 
     private void Update()
     {
+        RefreshRecipeProgress();
         if (currentState == ProcessingMachineState.PoweredOff || currentState == ProcessingMachineState.Error)
         {
             UpdateIndicators();
@@ -137,6 +140,19 @@ public class ProcessingMachineController : MonoBehaviour
         }
 
         UpdateIndicators();
+    }
+
+    private void OnValidate()
+    {
+        requiredPipes = Mathf.Max(1, requiredPipes);
+        requiredBeams = Mathf.Max(1, requiredBeams);
+        requiredIngots = Mathf.Max(1, requiredIngots);
+        requiredTotalMaterials = Mathf.Max(1, requiredTotalMaterials);
+        maximumStoredPipes = Mathf.Max(requiredPipes, maximumStoredPipes);
+        maximumStoredBeams = Mathf.Max(requiredBeams, maximumStoredBeams);
+        maximumStoredIngots = Mathf.Max(requiredIngots, maximumStoredIngots);
+        maximumStoredTotalMaterials = Mathf.Max(requiredTotalMaterials, maximumStoredTotalMaterials);
+        RefreshRecipeProgress();
     }
 
     private void UpdateDebugOutputGeneration(float deltaTime)
@@ -230,6 +246,7 @@ public class ProcessingMachineController : MonoBehaviour
         }
 
         onMaterialReceived?.Invoke();
+        RefreshRecipeProgress();
         ChangeState(HasRecipe() ? ProcessingMachineState.Ready : ProcessingMachineState.WaitingForMaterials);
         return true;
     }
@@ -271,6 +288,8 @@ public class ProcessingMachineController : MonoBehaviour
         {
             storedTotalMaterials -= requiredTotalMaterials;
         }
+
+        RefreshRecipeProgress();
 
         currentProcessingTimer = 0f;
         ChangeState(ProcessingMachineState.Processing);
@@ -508,6 +527,13 @@ public class ProcessingMachineController : MonoBehaviour
         {
             currentState = nextState;
         }
+    }
+
+    private void RefreshRecipeProgress()
+    {
+        recipeProgress = useRecipeRequirements
+            ? $"Pipes {storedPipes}/{requiredPipes} | Beams {storedBeams}/{requiredBeams} | Ingots {storedIngots}/{requiredIngots}"
+            : $"{storedTotalMaterials} / {requiredTotalMaterials}";
     }
 
     private void UpdateIndicators()

@@ -12,6 +12,8 @@ public class PackagingMachineController : MonoBehaviour
     [Header("Input")]
     [SerializeField] private string acceptedProductId = "ProcessedPart";
     [SerializeField, Min(1)] private int requiredInputItems = 1;
+    [SerializeField] private int storedInputItems;
+    [SerializeField] private string inputProgress = "0 / 1";
     [SerializeField, Min(1)] private int maximumStoredInputItems = 6;
 
     [Header("Packaging")]
@@ -37,7 +39,6 @@ public class PackagingMachineController : MonoBehaviour
 
     [Header("Runtime Debug")]
     [SerializeField] private ProcessingMachineState currentState = ProcessingMachineState.PoweredOff;
-    [SerializeField] private int storedInputItems;
     [SerializeField] private int pendingPackedBoxes;
     [SerializeField] private float currentPackagingTimer;
     [SerializeField] private int stoppedItemsInOutputJamSensor;
@@ -56,6 +57,8 @@ public class PackagingMachineController : MonoBehaviour
     public int StoredInputItems => storedInputItems;
     public int PendingPackedBoxes => pendingPackedBoxes;
     public bool AcceptsInput => storedInputItems < maximumStoredInputItems;
+    public int RequiredInputItems => Mathf.Max(1, requiredInputItems);
+    public int MaximumStoredInputItems => Mathf.Max(RequiredInputItems, maximumStoredInputItems);
 
     public void Configure(ConveyorController conveyor, Transform spawnPoint, ConveyorJamSensor jamSensor, GameObject boxPrefab)
     {
@@ -73,6 +76,30 @@ public class PackagingMachineController : MonoBehaviour
         acceptedProductId = productId;
         requiredInputItems = Mathf.Max(1, requiredItems);
         maximumStoredInputItems = Mathf.Max(requiredInputItems, maximumStoredItems);
+        RefreshInputProgress();
+    }
+
+    public void ConfigureInputDefaults(string productId, int requiredItems, int maximumStoredItems)
+    {
+        if (string.IsNullOrWhiteSpace(acceptedProductId) || acceptedProductId == "ProcessedPart")
+        {
+            acceptedProductId = productId;
+        }
+
+        requiredInputItems = Mathf.Max(1, requiredInputItems);
+        maximumStoredInputItems = Mathf.Max(requiredInputItems, maximumStoredInputItems);
+
+        if (requiredInputItems == 1)
+        {
+            requiredInputItems = Mathf.Max(1, requiredItems);
+        }
+
+        if (maximumStoredInputItems <= 6)
+        {
+            maximumStoredInputItems = Mathf.Max(requiredInputItems, maximumStoredItems);
+        }
+
+        RefreshInputProgress();
     }
 
     public void ConfigureOutputProduct(string productId, GameObject prefab)
@@ -97,11 +124,13 @@ public class PackagingMachineController : MonoBehaviour
     private void Awake()
     {
         ResolveOutputReferences();
+        RefreshInputProgress();
         currentState = ProcessingMachineState.WaitingForMaterials;
     }
 
     private void Update()
     {
+        RefreshInputProgress();
         UpdateOutputJamState(Time.deltaTime);
         TryReleasePendingOutput();
 
@@ -124,6 +153,13 @@ public class PackagingMachineController : MonoBehaviour
         {
             ChangeState(storedInputItems >= requiredInputItems ? ProcessingMachineState.Ready : ProcessingMachineState.WaitingForMaterials);
         }
+    }
+
+    private void OnValidate()
+    {
+        requiredInputItems = Mathf.Max(1, requiredInputItems);
+        maximumStoredInputItems = Mathf.Max(requiredInputItems, maximumStoredInputItems);
+        RefreshInputProgress();
     }
 
     private void UpdateDebugBoxGeneration(float deltaTime)
@@ -163,6 +199,11 @@ public class PackagingMachineController : MonoBehaviour
             return false;
         }
 
+        if (item.CurrentState == ConveyorItemState.Removed || item.CurrentState == ConveyorItemState.BeingCollected)
+        {
+            return false;
+        }
+
         return string.IsNullOrWhiteSpace(acceptedProductId)
             || string.Equals(item.ProductId, acceptedProductId, System.StringComparison.OrdinalIgnoreCase);
     }
@@ -175,6 +216,7 @@ public class PackagingMachineController : MonoBehaviour
         }
 
         storedInputItems++;
+        RefreshInputProgress();
         ConveyorController sourceController = item.CurrentController;
         if (sourceController != null)
         {
@@ -194,6 +236,7 @@ public class PackagingMachineController : MonoBehaviour
     private IEnumerator PackageItem()
     {
         storedInputItems -= requiredInputItems;
+        RefreshInputProgress();
         currentPackagingTimer = 0f;
         ChangeState(ProcessingMachineState.Processing);
         onPackagingStarted?.Invoke();
@@ -407,5 +450,10 @@ public class PackagingMachineController : MonoBehaviour
     private void ChangeState(ProcessingMachineState nextState)
     {
         currentState = nextState;
+    }
+
+    private void RefreshInputProgress()
+    {
+        inputProgress = $"{storedInputItems} / {Mathf.Max(1, requiredInputItems)}";
     }
 }

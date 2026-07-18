@@ -22,15 +22,15 @@ PrefabInstance:
       objectReference: {fileID: 0}
     - target: {fileID: -8679921383154817045, guid: 273f7938416f881448b26ac39f2f2a69, type: 3}
       propertyPath: m_LocalPosition.x
-      value: -1.11
+      value: -1.02
       objectReference: {fileID: 0}
     - target: {fileID: -8679921383154817045, guid: 273f7938416f881448b26ac39f2f2a69, type: 3}
       propertyPath: m_LocalPosition.y
-      value: 7.42
+      value: 1.97
       objectReference: {fileID: 0}
     - target: {fileID: -8679921383154817045, guid: 273f7938416f881448b26ac39f2f2a69, type: 3}
       propertyPath: m_LocalPosition.z
-      value: 54.85
+      value: 54.35
       objectReference: {fileID: 0}
     - target: {fileID: -8679921383154817045, guid: 273f7938416f881448b26ac39f2f2a69, type: 3}
       propertyPath: m_LocalRotation.w
@@ -68,6 +68,10 @@ PrefabInstance:
       propertyPath: m_Name
       value: Pallet com caixas
       objectReference: {fileID: 0}
+    - target: {fileID: 919132149155446097, guid: 273f7938416f881448b26ac39f2f2a69, type: 3}
+      propertyPath: m_Layer
+      value: 3
+      objectReference: {fileID: 0}
     m_RemovedComponents: []
     m_RemovedGameObjects: []
     m_AddedGameObjects: []
@@ -78,9 +82,6 @@ PrefabInstance:
     - targetCorrespondingSourceObject: {fileID: 919132149155446097, guid: 273f7938416f881448b26ac39f2f2a69, type: 3}
       insertIndex: -1
       addedObject: {fileID: 5239038199041237985}
-    - targetCorrespondingSourceObject: {fileID: 919132149155446097, guid: 273f7938416f881448b26ac39f2f2a69, type: 3}
-      insertIndex: -1
-      addedObject: {fileID: 7933208192183159971}
   m_SourcePrefab: {fileID: 100100000, guid: 273f7938416f881448b26ac39f2f2a69, type: 3}
 --- !u!1 &9026882285369367349 stripped
 GameObject:
@@ -135,16 +136,3 @@ BoxCollider:
   serializedVersion: 3
   m_Size: {x: 0.018295988, y: 0.01752694, z: 0.018984381}
   m_Center: {x: -0.000007374678, y: -0.000019080006, z: -0.000008140225}
---- !u!114 &7933208192183159971
-MonoBehaviour:
-  m_ObjectHideFlags: 0
-  m_CorrespondingSourceObject: {fileID: 0}
-  m_PrefabInstance: {fileID: 0}
-  m_PrefabAsset: {fileID: 0}
-  m_GameObject: {fileID: 9026882285369367349}
-  m_Enabled: 1
-  m_EditorHideFlags: 0
-  m_Script: {fileID: 11500000, guid: fb3fa71af4754fd29489d16a689d760c, type: 3}
-  m_Name: 
-  m_EditorClassIdentifier: 
-  palletType: Default
