@@ -136,7 +136,7 @@ public class ConveyorItem : MonoBehaviour
             return;
         }
 
-        if (!IsAssignedToCollectionQueue && progressDistance >= path.TotalLength - controller.CollectionQueueAssignmentDistance)
+        if (!controller.RemoveItemsAtPathEnd && !IsAssignedToCollectionQueue && progressDistance >= path.TotalLength - controller.CollectionQueueAssignmentDistance)
         {
             currentMoveSpeed = 0f;
             if (!controller.TryQueueItemForCollection(this))
@@ -183,6 +183,12 @@ public class ConveyorItem : MonoBehaviour
         {
             progressDistance = path.TotalLength;
             currentMoveSpeed = 0f;
+            if (controller.RemoveItemsAtPathEnd)
+            {
+                controller.NotifyItemCollected(this);
+                return;
+            }
+
             if (controller.TryQueueItemForCollection(this))
             {
                 waitingForCollectionSpace = false;

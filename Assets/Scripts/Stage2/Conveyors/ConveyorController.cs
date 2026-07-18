@@ -38,6 +38,9 @@ public class ConveyorController : MonoBehaviour
     [SerializeField] private float lateralNoise = 0.04f;
     [SerializeField] private float maximumLateralOffset = 0.45f;
 
+    [Header("End Behavior")]
+    [SerializeField] private bool removeItemsAtPathEnd;
+
     [Header("Optional Visual Signals")]
     [SerializeField] private Light runningGreenLight;
     [SerializeField] private Light congestedYellowLight;
@@ -86,6 +89,7 @@ public class ConveyorController : MonoBehaviour
     public float CollectionQueueAssignmentDistance => collectionZone != null ? collectionZone.QueueAssignmentDistance : MinimumItemSpacing;
     public bool IsJammed => currentState == ConveyorState.Jammed;
     public bool CanSpawn => movementRequested && currentState != ConveyorState.Jammed;
+    public bool RemoveItemsAtPathEnd => removeItemsAtPathEnd;
 
     public void Configure(ConveyorPath path, ConveyorItemSpawner spawner, ConveyorJamSensor sensor, ConveyorCollectionZone zone)
     {
@@ -102,6 +106,11 @@ public class ConveyorController : MonoBehaviour
         forwardDetectionRadius = Mathf.Max(0.01f, detectionRadius);
         longitudinalSafetyDistance = Mathf.Max(0.01f, safetyDistance);
         lateralBlockingTolerance = Mathf.Max(0.01f, blockingTolerance);
+    }
+
+    public void ConfigureEndBehavior(bool removeAtPathEnd)
+    {
+        removeItemsAtPathEnd = removeAtPathEnd;
     }
 
     private void Awake()

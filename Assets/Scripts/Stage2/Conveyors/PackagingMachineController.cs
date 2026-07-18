@@ -22,6 +22,7 @@ public class PackagingMachineController : MonoBehaviour
     [SerializeField] private string packedBoxProductId = "PackedBox";
     [SerializeField] private bool autoStartPackaging = true;
     [SerializeField] private bool usePlaceholderWhenPrefabMissing = true;
+    [SerializeField] private bool preservePrefabScale;
     [SerializeField] private Vector3 packedBoxScale = Vector3.one;
 
     [Header("Output Jam Sensor")]
@@ -65,6 +66,32 @@ public class PackagingMachineController : MonoBehaviour
         {
             packedBoxPrefab = boxPrefab;
         }
+    }
+
+    public void ConfigureInput(string productId, int requiredItems, int maximumStoredItems)
+    {
+        acceptedProductId = productId;
+        requiredInputItems = Mathf.Max(1, requiredItems);
+        maximumStoredInputItems = Mathf.Max(requiredInputItems, maximumStoredItems);
+    }
+
+    public void ConfigureOutputProduct(string productId, GameObject prefab)
+    {
+        if (!string.IsNullOrWhiteSpace(productId))
+        {
+            packedBoxProductId = productId;
+        }
+
+        if (packedBoxPrefab == null)
+        {
+            packedBoxPrefab = prefab;
+        }
+    }
+
+    public void ConfigureOutputScale(bool preserveScale, Vector3 explicitScale)
+    {
+        preservePrefabScale = preserveScale;
+        packedBoxScale = explicitScale;
     }
 
     private void Awake()
@@ -231,7 +258,7 @@ public class PackagingMachineController : MonoBehaviour
         if (packedBoxPrefab != null)
         {
             GameObject instance = Instantiate(packedBoxPrefab, spawnPosition, spawnRotation);
-            if (packedBoxScale != Vector3.zero)
+            if (!preservePrefabScale && packedBoxScale != Vector3.zero)
             {
                 instance.transform.localScale = packedBoxScale;
             }
@@ -259,7 +286,11 @@ public class PackagingMachineController : MonoBehaviour
 
         GameObject placeholder = GameObject.CreatePrimitive(PrimitiveType.Cube);
         placeholder.transform.SetPositionAndRotation(spawnPosition, spawnRotation);
-        placeholder.transform.localScale = packedBoxScale == Vector3.zero ? new Vector3(0.8f, 0.55f, 0.8f) : packedBoxScale;
+        if (!preservePrefabScale)
+        {
+            placeholder.transform.localScale = packedBoxScale == Vector3.zero ? new Vector3(0.8f, 0.55f, 0.8f) : packedBoxScale;
+        }
+
         placeholder.name = packedBoxProductId + "_Placeholder";
         return placeholder;
     }
