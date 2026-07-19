@@ -116,6 +116,19 @@ BoxCollider:
   serializedVersion: 3
   m_Size: {x: 1.01, y: 1.1, z: 1.44}
   m_Center: {x: 0, y: -0.29, z: -0.6}
+--- !u!114 &7304285197312956102
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 5831796520277301476}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 4ac05695ffc5d5f49b09340181e21416, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: 
+  controller: {fileID: 7304285197312956101}
 --- !u!1 &7003550189711592331
 GameObject:
   m_ObjectHideFlags: 0
@@ -126,6 +139,7 @@ GameObject:
   m_Component:
   - component: {fileID: 3248506979964727938}
   - component: {fileID: 7074758530641946107}
+  - component: {fileID: 4462157992510314301}
   m_Layer: 0
   m_Name: ForkPickupSensor
   m_TagString: Untagged
@@ -142,8 +156,8 @@ Transform:
   m_GameObject: {fileID: 7003550189711592331}
   serializedVersion: 2
   m_LocalRotation: {x: 0, y: 0, z: 0, w: 1}
-  m_LocalPosition: {x: -0, y: 0.002, z: 0.0066}
-  m_LocalScale: {x: 0.0033333334, y: 0.0033333336, z: 0.0033333334}
+  m_LocalPosition: {x: 0, y: 0, z: 0}
+  m_LocalScale: {x: 0.01, y: 0.01, z: 0.01}
   m_ConstrainProportionsScale: 1
   m_Children: []
   m_Father: {fileID: 7881775265983903}
@@ -167,8 +181,21 @@ BoxCollider:
   m_ProvidesContacts: 0
   m_Enabled: 1
   serializedVersion: 3
-  m_Size: {x: 1.15, y: 0.16, z: 1.75}
-  m_Center: {x: 0, y: 0.08, z: 0}
+  m_Size: {x: 0.56, y: 0.16, z: 0.08}
+  m_Center: {x: 0, y: 0.08, z: 0.59}
+--- !u!114 &4462157992510314301
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 7003550189711592331}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: a473c4c7cb3d41f4cabf1542ed0e1ab3, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: 
+  controller: {fileID: 7304285197312956101}
 --- !u!1001 &6662656491511120474
 PrefabInstance:
   m_ObjectHideFlags: 0
@@ -270,9 +297,6 @@ PrefabInstance:
       addedObject: {fileID: 962525806810452028}
     - targetCorrespondingSourceObject: {fileID: 919132149155446097, guid: 8e1b56ac281b338488ad3fb8905fcac4, type: 3}
       insertIndex: -1
-      addedObject: {fileID: 6374099474286477287}
-    - targetCorrespondingSourceObject: {fileID: 919132149155446097, guid: 8e1b56ac281b338488ad3fb8905fcac4, type: 3}
-      insertIndex: -1
       addedObject: {fileID: 7304285197312956101}
   m_SourcePrefab: {fileID: 100100000, guid: 8e1b56ac281b338488ad3fb8905fcac4, type: 3}
 --- !u!4 &7881775265983903 stripped
@@ -312,27 +336,6 @@ Rigidbody:
   m_Interpolate: 1
   m_Constraints: 80
   m_CollisionDetection: 2
---- !u!65 &6374099474286477287
-BoxCollider:
-  m_ObjectHideFlags: 0
-  m_CorrespondingSourceObject: {fileID: 0}
-  m_PrefabInstance: {fileID: 0}
-  m_PrefabAsset: {fileID: 0}
-  m_GameObject: {fileID: 5816375926597205771}
-  m_Material: {fileID: 0}
-  m_IncludeLayers:
-    serializedVersion: 2
-    m_Bits: 0
-  m_ExcludeLayers:
-    serializedVersion: 2
-    m_Bits: 0
-  m_LayerOverridePriority: 0
-  m_IsTrigger: 0
-  m_ProvidesContacts: 0
-  m_Enabled: 1
-  serializedVersion: 3
-  m_Size: {x: 0.782, y: 1.1855, z: 1.49}
-  m_Center: {x: -0.011, y: 0.5912, z: -0.161}
 --- !u!114 &7304285197312956101
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -347,33 +350,55 @@ MonoBehaviour:
   m_EditorClassIdentifier: 
   playerNearby: 0
   playerDriving: 0
-  nearbyPlayer: {fileID: 0}
-  currentPlayer: {fileID: 0}
-  forwardForce: 8
-  reverseForce: 5
+  debugForkAtRest: 0
+  debugPalletDetected: 0
+  debugPalletFitted: 0
+  debugPalletCarried: 0
+  debugInsideDropZone: 0
+  forwardForce: 30
+  reverseForce: 20
+  steeringTorque: 500
+  maxForwardSpeed: 5
+  maxReverseSpeed: 3.5
+  lateralGrip: 7
+  yawDamping: 5
+  maxYawSpeed: 1.2
   localMovementDirection: {x: 0, y: 0, z: 1}
+  frontLeftWheel: {fileID: 0}
+  frontRightWheel: {fileID: 0}
+  rearLeftWheel: {fileID: 0}
+  rearRightWheel: {fileID: 0}
+  rearWheelVisualAngle: 28
+  rearWheelVisualResponse: 12
+  invertRearWheelVisualDirection: 1
+  wheelSpinMultiplier: 180
+  wheelSpinAxis: {x: 1, y: 0, z: 0}
+  forkLiftTransform: {fileID: 7881775265983903}
+  forkMinLocalY: 0
+  forkMaxLocalY: 0.7
+  forkLiftSpeed: 0.55
+  forkLowerSpeed: 0.55
+  forkLowerKey: 49
+  forkLiftKey: 50
+  forkPickupSensor: {fileID: 7074758530641946107}
+  palletLayers:
+    serializedVersion: 2
+    m_Bits: 4294967295
+  palletNameFilter: Pallet
+  forkRestTolerance: 0.01
+  centerOfMass: {x: 0, y: 0.25, z: 0}
+  linearDrag: 1.5
+  angularDrag: 8
   interactionTrigger: {fileID: 1498997013749547090}
   driverSeatPoint: {fileID: 8280288567297144117}
   playerExitPoint: {fileID: 2680316282194783291}
   interactionKey: 101
   enterPromptText: Aperte E para entrar na empilhadeira
-  exitPromptText: Aperte E para sair da empilhadeira
   canvas: {fileID: 0}
   promptObject: {fileID: 0}
   promptLabel: {fileID: 0}
---- !u!114 &7304285197312956102
-MonoBehaviour:
-  m_ObjectHideFlags: 0
-  m_CorrespondingSourceObject: {fileID: 0}
-  m_PrefabInstance: {fileID: 0}
-  m_PrefabAsset: {fileID: 0}
-  m_GameObject: {fileID: 5831796520277301476}
-  m_Enabled: 1
-  m_EditorHideFlags: 0
-  m_Script: {fileID: 11500000, guid: 4ac05695ffc5d5f49b09340181e21416, type: 3}
-  m_Name: 
-  m_EditorClassIdentifier: 
-  controller: {fileID: 7304285197312956101}
+  drivingPanelObject: {fileID: 0}
+  drivingPanelLabel: {fileID: 0}
 --- !u!4 &6628238422207489457 stripped
 Transform:
   m_CorrespondingSourceObject: {fileID: -8679921383154817045, guid: 8e1b56ac281b338488ad3fb8905fcac4, type: 3}
