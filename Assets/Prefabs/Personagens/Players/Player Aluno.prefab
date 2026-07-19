@@ -56,6 +56,11 @@ MonoBehaviour:
   collisionMask:
     serializedVersion: 2
     m_Bits: 4294967295
+  stepOffset: 0.45
+  slopeLimit: 50
+  skinWidth: 0.03
+  groundedStickForce: -2
+  gravity: -20
   pushRigidbodies: 1
   pushForce: 0.65
   maxPushSpeed: 0.75
@@ -73,8 +78,10 @@ MonoBehaviour:
   speedParameter: Speed
   carryingParameter: IsCarrying
   pushButtonParameter: PushButton
---- !u!136 &7838474012237785112
-CapsuleCollider:
+  drivingForkliftParameter: IsDrivingForklift
+  drivingForkliftStateName: dirigindo
+--- !u!143 &7838474012237785112
+CharacterController:
   m_ObjectHideFlags: 0
   m_CorrespondingSourceObject: {fileID: 0}
   m_PrefabInstance: {fileID: 0}
@@ -92,9 +99,12 @@ CapsuleCollider:
   m_ProvidesContacts: 0
   m_Enabled: 1
   serializedVersion: 2
-  m_Radius: 0.28
   m_Height: 1.45
-  m_Direction: 1
+  m_Radius: 0.28
+  m_SlopeLimit: 50
+  m_StepOffset: 0.45
+  m_SkinWidth: 0.03
+  m_MinMoveDistance: 0
   m_Center: {x: 0, y: 0.72, z: 0}
 --- !u!114 &6129768440774329011
 MonoBehaviour:

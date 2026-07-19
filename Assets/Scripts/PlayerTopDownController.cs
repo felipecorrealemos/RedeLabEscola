@@ -15,6 +15,11 @@ public class PlayerTopDownController : MonoBehaviour
     [SerializeField] private float collisionRadius = 0.28f;
     [SerializeField] private float collisionHeight = 1.45f;
     [SerializeField] private LayerMask collisionMask = ~0;
+    [SerializeField] private float stepOffset = 0.45f;
+    [SerializeField, Range(0f, 89f)] private float slopeLimit = 50f;
+    [SerializeField] private float skinWidth = 0.03f;
+    [SerializeField] private float groundedStickForce = -2f;
+    [SerializeField] private float gravity = -20f;
 
     [Header("Physics Push")]
     [SerializeField] private bool pushRigidbodies = true;
@@ -50,6 +55,8 @@ public class PlayerTopDownController : MonoBehaviour
     private RouterInteractable openRouter;
     private ComputerInteractable openComputer;
     private readonly Collider[] interactionHits = new Collider[16];
+    private CharacterController characterController;
+    private float verticalVelocity;
     private bool movementLocked;
     private bool externalMovementLocked;
 
@@ -77,10 +84,13 @@ public class PlayerTopDownController : MonoBehaviour
     private void Reset()
     {
         animator = GetComponentInChildren<Animator>();
+        characterController = GetComponent<CharacterController>();
     }
 
     private void Awake()
     {
+        EnsureCharacterController();
+
         if (animator == null)
         {
             animator = GetComponentInChildren<Animator>();
@@ -115,7 +125,7 @@ public class PlayerTopDownController : MonoBehaviour
         float targetSpeed = isRunning ? runSpeed : walkSpeed;
         Vector3 movement = input * (targetSpeed * Time.deltaTime);
 
-        MoveWithCollision(movement);
+        MoveWithCharacterController(movement);
         RotateTowardsMovement(input);
         UpdateAnimator(input, isRunning);
         UpdateInteractionHighlight();
@@ -1141,73 +1151,65 @@ public class PlayerTopDownController : MonoBehaviour
         carryAnchor.localScale = Vector3.one;
     }
 
-    private void MoveWithCollision(Vector3 movement)
+    private void MoveWithCharacterController(Vector3 horizontalMovement)
     {
-        if (movement.sqrMagnitude <= 0f)
-        {
-            return;
-        }
-
-        if (!IsBlocked(movement))
-        {
-            transform.position += movement;
-            return;
-        }
-
-        Vector3 horizontalMovement = new Vector3(movement.x, 0f, 0f);
-        if (horizontalMovement.sqrMagnitude > 0f && !IsBlocked(horizontalMovement))
+        EnsureCharacterController();
+        if (characterController == null)
         {
             transform.position += horizontalMovement;
+            return;
         }
 
-        Vector3 verticalMovement = new Vector3(0f, 0f, movement.z);
-        if (verticalMovement.sqrMagnitude > 0f && !IsBlocked(verticalMovement))
+        if (characterController.isGrounded && verticalVelocity < 0f)
         {
-            transform.position += verticalMovement;
+            verticalVelocity = groundedStickForce;
+        }
+
+        verticalVelocity += gravity * Time.deltaTime;
+        Vector3 movement = horizontalMovement + Vector3.up * (verticalVelocity * Time.deltaTime);
+        CollisionFlags flags = characterController.Move(movement);
+
+        if ((flags & CollisionFlags.Below) != 0 && verticalVelocity < 0f)
+        {
+            verticalVelocity = groundedStickForce;
         }
     }
 
-    private bool IsBlocked(Vector3 movement)
+    private void EnsureCharacterController()
     {
-        Vector3 direction = movement.normalized;
-        float distance = movement.magnitude + 0.02f;
-        GetCapsulePoints(out Vector3 bottom, out Vector3 top);
-
-        RaycastHit[] hits = Physics.CapsuleCastAll(
-            bottom,
-            top,
-            collisionRadius,
-            direction,
-            distance,
-            collisionMask,
-            QueryTriggerInteraction.Ignore);
-
-        foreach (RaycastHit hit in hits)
+        if (characterController == null)
         {
-            if (hit.collider == null || hit.collider.transform.IsChildOf(transform))
-            {
-                continue;
-            }
-
-            if (hit.collider.bounds.max.y <= 0.15f)
-            {
-                continue;
-            }
-
-            if (TryPushRigidbody(hit, direction))
-            {
-                return true;
-            }
-
-            return true;
+            characterController = GetComponent<CharacterController>();
         }
 
-        return false;
+        if (characterController == null)
+        {
+            characterController = gameObject.AddComponent<CharacterController>();
+        }
+
+        characterController.radius = collisionRadius;
+        characterController.height = collisionHeight;
+        characterController.center = Vector3.up * (collisionHeight * 0.5f);
+        characterController.stepOffset = Mathf.Min(stepOffset, collisionHeight);
+        characterController.slopeLimit = slopeLimit;
+        characterController.skinWidth = skinWidth;
+        characterController.minMoveDistance = 0f;
+
+        CapsuleCollider legacyCapsule = GetComponent<CapsuleCollider>();
+        if (legacyCapsule != null)
+        {
+            legacyCapsule.enabled = false;
+        }
     }
 
-    private bool TryPushRigidbody(RaycastHit hit, Vector3 direction)
+    private void OnControllerColliderHit(ControllerColliderHit hit)
     {
-        if (!pushRigidbodies || hit.rigidbody == null)
+        TryPushRigidbody(hit);
+    }
+
+    private bool TryPushRigidbody(ControllerColliderHit hit)
+    {
+        if (!pushRigidbodies || hit == null || hit.rigidbody == null)
         {
             return false;
         }
@@ -1218,7 +1220,7 @@ public class PlayerTopDownController : MonoBehaviour
             return false;
         }
 
-        Vector3 pushDirection = new Vector3(direction.x, 0f, direction.z);
+        Vector3 pushDirection = new Vector3(hit.moveDirection.x, 0f, hit.moveDirection.z);
         if (pushDirection.sqrMagnitude <= 0.001f)
         {
             return false;
@@ -1234,14 +1236,6 @@ public class PlayerTopDownController : MonoBehaviour
         }
 
         return true;
-    }
-
-    private void GetCapsulePoints(out Vector3 bottom, out Vector3 top)
-    {
-        Vector3 position = transform.position;
-        float halfHeight = Mathf.Max(collisionHeight * 0.5f, collisionRadius);
-        bottom = position + Vector3.up * collisionRadius;
-        top = position + Vector3.up * ((halfHeight * 2f) - collisionRadius);
     }
 
     private void GetInteractionCapsulePoints(out Vector3 bottom, out Vector3 top)
