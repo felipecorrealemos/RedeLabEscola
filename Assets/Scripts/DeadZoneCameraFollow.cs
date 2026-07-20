@@ -37,6 +37,8 @@ public class DeadZoneCameraFollow : MonoBehaviour
     private bool zoomLocked;
     private bool initialized;
 
+    public Transform Target => target;
+
     private void Reset()
     {
         followCamera = GetComponent<Camera>();
@@ -273,5 +275,26 @@ public class DeadZoneCameraFollow : MonoBehaviour
     public void SetZoomLocked(bool locked)
     {
         zoomLocked = locked;
+    }
+
+    public void SetTarget(Transform newTarget, bool snapCamera = false, bool preserveCurrentOffset = true)
+    {
+        if (target == newTarget)
+        {
+            return;
+        }
+
+        if (preserveCurrentOffset && target != null)
+        {
+            CaptureCurrentOffset();
+        }
+
+        target = newTarget;
+        initialized = false;
+
+        if (target != null)
+        {
+            InitializeForTarget(snapCamera);
+        }
     }
 }
