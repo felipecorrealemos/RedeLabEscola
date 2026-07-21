@@ -25,8 +25,8 @@ public class ScrapCraneInputController : MonoBehaviour
         }
 
         Vector2 horizontalInput = new Vector2(
-            GetAxis(KeyCode.A, KeyCode.D),
-            GetAxis(KeyCode.S, KeyCode.W));
+            GetAxis(KeyCode.W, KeyCode.S),
+            GetAxis(KeyCode.A, KeyCode.D));
         craneController.MoveHorizontal(horizontalInput, Time.deltaTime);
 
         if (Input.GetKeyDown(actionKey) || (allowKeypadNumbers && Input.GetKeyDown(KeyCode.Keypad1)))

@@ -4,12 +4,16 @@ using UnityEngine;
 public static class ScrapCraneRuntimeBootstrap
 {
     private static readonly Vector3 DefaultCameraTargetLocalPosition = new Vector3(1.77f, -14.4f, 1.8f);
+    private static readonly Vector2 DefaultCraneShadowSize = new Vector2(2.35f, 2.35f);
+    private static readonly Vector3 DefaultGrabZoneLocalPosition = new Vector3(0f, -1.45f, 0f);
+    private static readonly Vector3 DefaultGrabZoneSize = new Vector3(2.8f, 2.2f, 2.8f);
+    private const float DefaultCraneShadowFloorLocalY = -22.62f;
 
     [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.AfterSceneLoad)]
     private static void ConfigureScrapCraneIfPresent()
     {
         GameObject areaObject = GameObject.Find("AreaGarra");
-        if (areaObject == null || areaObject.GetComponent<ScrapCraneController>() != null)
+        if (areaObject == null)
         {
             return;
         }
@@ -26,6 +30,14 @@ public static class ScrapCraneRuntimeBootstrap
             return;
         }
 
+        ConfigureGroundShadow(area, claw);
+        ScrapGrabDetectionZone grabZone = ConfigureGrabZone(claw);
+
+        if (areaObject.GetComponent<ScrapCraneController>() != null)
+        {
+            return;
+        }
+
         ScrapCraneBounds bounds = movementArea.gameObject.GetComponent<ScrapCraneBounds>();
         if (bounds == null)
         {
@@ -33,21 +45,6 @@ public static class ScrapCraneRuntimeBootstrap
         }
 
         bounds.AssignReferences(movementArea, FindBoundaryColliders(movementArea, movingAxis), movingAxis.GetComponent<BoxCollider>());
-
-        Transform grabZoneTransform = GetOrCreateChild(claw, "GrabDetectionZone", new Vector3(0f, -0.9f, 0f));
-        BoxCollider grabZoneCollider = grabZoneTransform.GetComponent<BoxCollider>();
-        if (grabZoneCollider == null)
-        {
-            grabZoneCollider = grabZoneTransform.gameObject.AddComponent<BoxCollider>();
-        }
-
-        grabZoneCollider.isTrigger = true;
-        grabZoneCollider.size = new Vector3(2.2f, 1.5f, 2.2f);
-        ScrapGrabDetectionZone grabZone = grabZoneTransform.GetComponent<ScrapGrabDetectionZone>();
-        if (grabZone == null)
-        {
-            grabZone = grabZoneTransform.gameObject.AddComponent<ScrapGrabDetectionZone>();
-        }
 
         Transform carryPoint = GetOrCreateChild(claw, "CarryPoint", new Vector3(0f, -0.85f, 0f));
         Transform cameraTarget = GetOrCreateChild(area, "CraneCameraTarget", GetCameraTargetLocalPosition(area, movementArea));
@@ -58,6 +55,8 @@ public static class ScrapCraneRuntimeBootstrap
         controller.AssignReferences(area, movementArea, movingAxis, claw, bounds, grabZone, carryPoint);
         input.AssignController(controller);
         controller.ConfigureDefaultBladeRotations();
+        controller.ConfigureDefaultTimings();
+        controller.ConfigureDefaultRestPose();
 
         Transform[] bladePivots = GuessBladePivots(claw);
         controller.AssignBladePivots(
@@ -75,6 +74,51 @@ public static class ScrapCraneRuntimeBootstrap
         controlStation.AssignReferences(controller, input, null, cameraFollow, cameraTarget, null, null, null, null, null);
 
         Debug.Log($"ScrapCraneRuntimeBootstrap configured AreaGarra at runtime. Blade pivots guessed: {bladePivots.Length}. Run the Stage2 setup menu to persist and tune references.");
+    }
+
+    private static ScrapGrabDetectionZone ConfigureGrabZone(Transform claw)
+    {
+        Transform grabZoneTransform = GetOrCreateChild(claw, "GrabDetectionZone", DefaultGrabZoneLocalPosition);
+        grabZoneTransform.localPosition = DefaultGrabZoneLocalPosition;
+        grabZoneTransform.localRotation = Quaternion.identity;
+        grabZoneTransform.localScale = Vector3.one;
+        BoxCollider grabZoneCollider = grabZoneTransform.GetComponent<BoxCollider>();
+        if (grabZoneCollider == null)
+        {
+            grabZoneCollider = grabZoneTransform.gameObject.AddComponent<BoxCollider>();
+        }
+
+        grabZoneCollider.isTrigger = true;
+        grabZoneCollider.size = DefaultGrabZoneSize;
+        Rigidbody grabZoneBody = grabZoneTransform.GetComponent<Rigidbody>();
+        if (grabZoneBody == null)
+        {
+            grabZoneBody = grabZoneTransform.gameObject.AddComponent<Rigidbody>();
+        }
+
+        grabZoneBody.isKinematic = true;
+        grabZoneBody.useGravity = false;
+        grabZoneBody.detectCollisions = true;
+        ScrapGrabDetectionZone grabZone = grabZoneTransform.GetComponent<ScrapGrabDetectionZone>();
+        if (grabZone == null)
+        {
+            grabZone = grabZoneTransform.gameObject.AddComponent<ScrapGrabDetectionZone>();
+        }
+
+        return grabZone;
+    }
+
+    private static void ConfigureGroundShadow(Transform area, Transform claw)
+    {
+        Transform shadowTransform = GetOrCreateChild(area, "CraneGroundShadow", Vector3.zero);
+        ScrapCraneGroundShadow shadow = shadowTransform.GetComponent<ScrapCraneGroundShadow>();
+        if (shadow == null)
+        {
+            shadow = shadowTransform.gameObject.AddComponent<ScrapCraneGroundShadow>();
+        }
+
+        shadow.AssignReferences(claw, area);
+        shadow.ConfigureDefaults(null, DefaultCraneShadowSize, DefaultCraneShadowFloorLocalY);
     }
 
     private static BoxCollider[] FindBoundaryColliders(Transform movementArea, Transform movingAxis)

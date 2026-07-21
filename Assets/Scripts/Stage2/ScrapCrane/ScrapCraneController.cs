@@ -77,8 +77,8 @@ public class ScrapCraneController : MonoBehaviour
     };
     [SerializeField, Min(0.01f)] private float bladeMovementDuration = 0.55f;
     [SerializeField] private AnimationCurve bladeMovementCurve = AnimationCurve.EaseInOut(0f, 0f, 1f, 1f);
-    [SerializeField] private BladeState initialBladeState = BladeState.Closed;
-    [SerializeField] private BladeState currentBladeState = BladeState.Closed;
+    [SerializeField] private BladeState initialBladeState = BladeState.Open;
+    [SerializeField] private BladeState currentBladeState = BladeState.Open;
 
     [Header("Capture")]
     [SerializeField] private bool allowCapture = true;
@@ -86,6 +86,15 @@ public class ScrapCraneController : MonoBehaviour
     [SerializeField] private Transform carryPoint;
     [SerializeField] private Vector3 carriedLocalPosition;
     [SerializeField] private Vector3 carriedLocalEulerAngles;
+    [SerializeField, Min(0.01f)] private float captureMoveDuration = 0.65f;
+    [SerializeField] private AnimationCurve captureMoveCurve = AnimationCurve.EaseInOut(0f, 0f, 1f, 1f);
+    [SerializeField] private bool sendReleasedScrapToCrusher = true;
+    [SerializeField] private bool dropToGroundWhenNoCrusher = false;
+    [SerializeField] private LayerMask groundDropLayers = ~0;
+    [SerializeField, Min(0.1f)] private float groundDropProbeDistance = 12f;
+    [SerializeField, Min(0f)] private float groundDropOffset = 0.02f;
+    [SerializeField, Min(0.1f)] private float crusherDropProbeDistance = 30f;
+    [SerializeField, Min(0f)] private float physicsDropInitialDownVelocity = 0.75f;
 
     [Header("Debug")]
     [SerializeField] private bool showGizmos = true;
@@ -109,7 +118,9 @@ public class ScrapCraneController : MonoBehaviour
 
     private void Awake()
     {
+        ApplyMinimumRuntimeTimings();
         ResolveReferences();
+        initialBladeState = BladeState.Open;
         ApplyInitialBladeState();
     }
 
@@ -122,6 +133,12 @@ public class ScrapCraneController : MonoBehaviour
         delayAfterClosingBeforeRaise = Mathf.Max(0f, delayAfterClosingBeforeRaise);
         delayAfterOpeningBeforeRaise = Mathf.Max(0f, delayAfterOpeningBeforeRaise);
         bladeMovementDuration = Mathf.Max(0.01f, bladeMovementDuration);
+        captureMoveDuration = Mathf.Max(0.01f, captureMoveDuration);
+        groundDropProbeDistance = Mathf.Max(0.1f, groundDropProbeDistance);
+        groundDropOffset = Mathf.Max(0f, groundDropOffset);
+        crusherDropProbeDistance = Mathf.Max(0.1f, crusherDropProbeDistance);
+        physicsDropInitialDownVelocity = Mathf.Max(0f, physicsDropInitialDownVelocity);
+        ApplyMinimumRuntimeTimings();
     }
 
     public void SetControlActive(bool active)
@@ -296,6 +313,23 @@ public class ScrapCraneController : MonoBehaviour
         blade03.openLocalEuler = DefaultBlade03OpenEuler;
     }
 
+    public void ConfigureDefaultTimings()
+    {
+        captureMoveDuration = 0.65f;
+    }
+
+    public void ConfigureDefaultRestPose()
+    {
+        initialBladeState = BladeState.Open;
+        currentBladeState = BladeState.Open;
+        ApplyBladePose(true);
+    }
+
+    private void ApplyMinimumRuntimeTimings()
+    {
+        captureMoveDuration = Mathf.Max(captureMoveDuration, 0.65f);
+    }
+
     private IEnumerator AnimateBlades(bool opening)
     {
         currentBladeState = opening ? BladeState.Opening : BladeState.Closing;
@@ -342,7 +376,7 @@ public class ScrapCraneController : MonoBehaviour
         }
         else
         {
-            TryCaptureScrap();
+            yield return TryCaptureScrap();
         }
     }
 
@@ -359,7 +393,11 @@ public class ScrapCraneController : MonoBehaviour
 
             yield return MoveClawToLocalY(lowerLocalY);
             yield return AnimateBladesAndWait(false);
-            if (delayAfterClosingBeforeRaise > 0f)
+            if (carriedScrap == null)
+            {
+                yield return AnimateBladesAndWait(true);
+            }
+            else if (delayAfterClosingBeforeRaise > 0f)
             {
                 yield return new WaitForSeconds(delayAfterClosingBeforeRaise);
             }
@@ -368,7 +406,12 @@ public class ScrapCraneController : MonoBehaviour
         }
         else
         {
-            yield return MoveClawToLocalY(releaseLowerLocalY);
+            if (!CanCurrentScrapDropToCrusherFromAbove())
+            {
+                actionRoutine = null;
+                yield break;
+            }
+
             yield return AnimateBladesAndWait(true);
             if (delayAfterOpeningBeforeRaise > 0f)
             {
@@ -416,17 +459,17 @@ public class ScrapCraneController : MonoBehaviour
         yield return bladeRoutine;
     }
 
-    private void TryCaptureScrap()
+    private IEnumerator TryCaptureScrap()
     {
         if (!allowCapture || carriedScrap != null || grabDetectionZone == null || carryPoint == null)
         {
-            return;
+            yield break;
         }
 
         ScrapItem item = grabDetectionZone.GetClosestValidScrap(carryPoint.position);
         if (item == null)
         {
-            return;
+            yield break;
         }
 
         Transform root = item.GrabRoot;
@@ -444,14 +487,15 @@ public class ScrapCraneController : MonoBehaviour
             Colliders = colliders,
             ColliderTriggerStates = triggerStates
         };
+        item.SetCanBeGrabbed(false);
+        item.ClearCrusherDropState();
 
         if (body != null)
         {
             carriedScrap.WasKinematic = body.isKinematic;
             carriedScrap.UsedGravity = body.useGravity;
             carriedScrap.DetectedCollisions = body.detectCollisions;
-            body.velocity = Vector3.zero;
-            body.angularVelocity = Vector3.zero;
+            ClearRigidbodyVelocityIfDynamic(body);
             body.isKinematic = true;
             body.useGravity = false;
             body.detectCollisions = false;
@@ -468,9 +512,41 @@ public class ScrapCraneController : MonoBehaviour
             colliders[i].isTrigger = true;
         }
 
-        root.SetParent(carryPoint, false);
-        root.localPosition = carriedLocalPosition;
-        root.localRotation = Quaternion.Euler(carriedLocalEulerAngles);
+        yield return MoveCapturedScrapToCarryPoint(root);
+    }
+
+    private IEnumerator MoveCapturedScrapToCarryPoint(Transform root)
+    {
+        if (root == null || carryPoint == null)
+        {
+            yield break;
+        }
+
+        root.SetParent(carryPoint, true);
+        Vector3 startLocalPosition = root.localPosition;
+        Quaternion startLocalRotation = root.localRotation;
+        Quaternion targetLocalRotation = Quaternion.Euler(carriedLocalEulerAngles);
+
+        float elapsed = 0f;
+        while (elapsed < captureMoveDuration && root != null)
+        {
+            elapsed += Time.deltaTime;
+            float t = Mathf.Clamp01(elapsed / captureMoveDuration);
+            if (captureMoveCurve != null)
+            {
+                t = captureMoveCurve.Evaluate(t);
+            }
+
+            root.localPosition = Vector3.Lerp(startLocalPosition, carriedLocalPosition, t);
+            root.localRotation = Quaternion.Slerp(startLocalRotation, targetLocalRotation, t);
+            yield return null;
+        }
+
+        if (root != null)
+        {
+            root.localPosition = carriedLocalPosition;
+            root.localRotation = targetLocalRotation;
+        }
     }
 
     private void ReleaseCarriedScrap()
@@ -481,8 +557,27 @@ public class ScrapCraneController : MonoBehaviour
             return;
         }
 
+        ScrapItem releasedItem = carriedScrap.Item;
         Transform root = carriedScrap.Root;
+        Vector3 releaseWorldPosition = root.position;
+        Quaternion releaseWorldRotation = root.rotation;
+        bool shouldUsePhysicsDrop = sendReleasedScrapToCrusher && CanScrapDropToCrusherFromAbove(carriedScrap);
+
         root.SetParent(carriedScrap.OriginalParent, true);
+        root.SetPositionAndRotation(releaseWorldPosition, releaseWorldRotation);
+        if (releasedItem != null)
+        {
+            if (shouldUsePhysicsDrop)
+            {
+                releasedItem.MarkReleasedForCrusherDrop();
+            }
+            else
+            {
+                releasedItem.ClearCrusherDropState();
+            }
+
+            releasedItem.SetCanBeGrabbed(true);
+        }
 
         if (carriedScrap.Body != null)
         {
@@ -494,6 +589,9 @@ public class ScrapCraneController : MonoBehaviour
                 carriedScrap.Body.velocity = Vector3.zero;
                 carriedScrap.Body.angularVelocity = Vector3.zero;
             }
+
+            carriedScrap.Body.position = releaseWorldPosition;
+            carriedScrap.Body.rotation = releaseWorldRotation;
         }
 
         if (carriedScrap.Colliders != null && carriedScrap.ColliderTriggerStates != null)
@@ -507,7 +605,174 @@ public class ScrapCraneController : MonoBehaviour
             }
         }
 
+        CarriedScrapState releasedState = carriedScrap;
         carriedScrap = null;
+
+        if (shouldUsePhysicsDrop)
+        {
+            EnablePhysicsDrop(releasedState);
+        }
+
+        if (!shouldUsePhysicsDrop && dropToGroundWhenNoCrusher)
+        {
+            PlaceReleasedScrapOnGround(releasedState);
+        }
+    }
+
+    private bool CanCurrentScrapDropToCrusherFromAbove()
+    {
+        if (!sendReleasedScrapToCrusher || carriedScrap == null || carriedScrap.Root == null)
+        {
+            return false;
+        }
+
+        return CanScrapDropToCrusherFromAbove(carriedScrap);
+    }
+
+    private bool CanScrapDropToCrusherFromAbove(CarriedScrapState scrapState)
+    {
+        if (!sendReleasedScrapToCrusher || scrapState == null || scrapState.Root == null)
+        {
+            return false;
+        }
+
+        Vector3[] probeOrigins = GetScrapDropProbeOrigins(scrapState);
+        ScrapCrusherController[] crushers = FindObjectsOfType<ScrapCrusherController>();
+        for (int i = 0; i < crushers.Length; i++)
+        {
+            if (crushers[i] == null)
+            {
+                continue;
+            }
+
+            for (int probeIndex = 0; probeIndex < probeOrigins.Length; probeIndex++)
+            {
+                if (crushers[i].IsDropRayOverIntake(probeOrigins[probeIndex], crusherDropProbeDistance))
+                {
+                    return true;
+                }
+            }
+        }
+
+        return false;
+    }
+
+    private Vector3[] GetScrapDropProbeOrigins(CarriedScrapState scrapState)
+    {
+        if (scrapState == null || scrapState.Root == null)
+        {
+            Vector3 fallback = carryPoint != null ? carryPoint.position : transform.position;
+            return new[] { fallback };
+        }
+
+        Bounds bounds = GetWorldBounds(scrapState.Root, scrapState.Colliders);
+        float y = bounds.center.y + 0.25f;
+        return new[]
+        {
+            new Vector3(bounds.center.x, y, bounds.center.z),
+            new Vector3(bounds.min.x, y, bounds.min.z),
+            new Vector3(bounds.min.x, y, bounds.max.z),
+            new Vector3(bounds.max.x, y, bounds.min.z),
+            new Vector3(bounds.max.x, y, bounds.max.z)
+        };
+    }
+
+    private void EnablePhysicsDrop(CarriedScrapState releasedState)
+    {
+        if (releasedState == null || releasedState.Root == null)
+        {
+            return;
+        }
+
+        Rigidbody body = releasedState.Body;
+        if (body == null)
+        {
+            body = releasedState.Root.gameObject.AddComponent<Rigidbody>();
+            releasedState.Body = body;
+            releasedState.HadRigidbody = true;
+        }
+
+        body.isKinematic = false;
+        body.useGravity = true;
+        body.detectCollisions = true;
+        body.position = releasedState.Root.position;
+        body.rotation = releasedState.Root.rotation;
+
+        body.WakeUp();
+        body.velocity = Vector3.down * physicsDropInitialDownVelocity;
+        body.angularVelocity = Vector3.zero;
+    }
+
+    private static void ClearRigidbodyVelocityIfDynamic(Rigidbody body)
+    {
+        if (body == null || body.isKinematic)
+        {
+            return;
+        }
+
+        body.velocity = Vector3.zero;
+        body.angularVelocity = Vector3.zero;
+    }
+
+    private void PlaceReleasedScrapOnGround(CarriedScrapState releasedState)
+    {
+        if (releasedState == null || releasedState.Root == null)
+        {
+            return;
+        }
+
+        Transform root = releasedState.Root;
+        Bounds bounds = GetWorldBounds(root, releasedState.Colliders);
+        Vector3 probeStart = bounds.center + Vector3.up * 0.25f;
+        RaycastHit[] hits = Physics.RaycastAll(probeStart, Vector3.down, groundDropProbeDistance, groundDropLayers, QueryTriggerInteraction.Ignore);
+        if (hits == null || hits.Length == 0)
+        {
+            return;
+        }
+
+        System.Array.Sort(hits, (a, b) => a.distance.CompareTo(b.distance));
+        for (int i = 0; i < hits.Length; i++)
+        {
+            Collider hitCollider = hits[i].collider;
+            if (hitCollider == null || hitCollider.transform.IsChildOf(root) || (claw != null && hitCollider.transform.IsChildOf(claw)))
+            {
+                continue;
+            }
+
+            float bottomY = bounds.min.y;
+            float deltaY = hits[i].point.y + groundDropOffset - bottomY;
+            root.position += Vector3.up * deltaY;
+            return;
+        }
+    }
+
+    private static Bounds GetWorldBounds(Transform root, Collider[] colliders)
+    {
+        bool hasBounds = false;
+        Bounds bounds = new Bounds(root.position, Vector3.zero);
+        if (colliders != null)
+        {
+            for (int i = 0; i < colliders.Length; i++)
+            {
+                Collider collider = colliders[i];
+                if (collider == null)
+                {
+                    continue;
+                }
+
+                if (!hasBounds)
+                {
+                    bounds = collider.bounds;
+                    hasBounds = true;
+                }
+                else
+                {
+                    bounds.Encapsulate(collider.bounds);
+                }
+            }
+        }
+
+        return bounds;
     }
 
     private void ResolveReferences()

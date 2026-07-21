@@ -7,7 +7,12 @@ using UnityEngine.UI;
 public static class Stage2ScrapCraneSceneSetup
 {
     private const string ScenePath = "Assets/Scenes/Stage2/Stage2_Factory.unity";
+    private const string FakeShadowMaterialPath = "Assets/Materials/Player_FakeShadow.mat";
     private static readonly Vector3 DefaultCameraTargetLocalPosition = new Vector3(1.77f, -14.4f, 1.8f);
+    private static readonly Vector2 DefaultCraneShadowSize = new Vector2(2.35f, 2.35f);
+    private static readonly Vector3 DefaultGrabZoneLocalPosition = new Vector3(0f, -1.45f, 0f);
+    private static readonly Vector3 DefaultGrabZoneSize = new Vector3(2.8f, 2.2f, 2.8f);
+    private const float DefaultCraneShadowFloorLocalY = -22.62f;
 
     [MenuItem("Tools/RedeLabEscola/Stage2/Setup Scrap Crane")]
     public static void ApplyToStage2Factory()
@@ -44,22 +49,34 @@ public static class Stage2ScrapCraneSceneSetup
         BoxCollider movingAxisCollider = movingAxis.GetComponent<BoxCollider>();
         ConfigureBounds(craneBounds, movementArea, limits, movingAxisCollider);
 
-        Transform grabZoneTransform = GetOrCreateChild(claw, "GrabDetectionZone", new Vector3(0f, -0.9f, 0f));
+        Transform grabZoneTransform = GetOrCreateChild(claw, "GrabDetectionZone", DefaultGrabZoneLocalPosition);
+        Undo.RecordObject(grabZoneTransform, "Set scrap grab zone transform");
+        grabZoneTransform.localPosition = DefaultGrabZoneLocalPosition;
+        grabZoneTransform.localRotation = Quaternion.identity;
+        grabZoneTransform.localScale = Vector3.one;
         BoxCollider grabZoneCollider = GetOrAddComponent<BoxCollider>(grabZoneTransform.gameObject);
+        Undo.RecordObject(grabZoneCollider, "Set scrap grab zone collider");
         grabZoneCollider.isTrigger = true;
-        grabZoneCollider.size = new Vector3(2.2f, 1.5f, 2.2f);
+        grabZoneCollider.size = DefaultGrabZoneSize;
+        Rigidbody grabZoneBody = GetOrAddComponent<Rigidbody>(grabZoneTransform.gameObject);
+        grabZoneBody.isKinematic = true;
+        grabZoneBody.useGravity = false;
+        grabZoneBody.detectCollisions = true;
         ScrapGrabDetectionZone grabZone = GetOrAddComponent<ScrapGrabDetectionZone>(grabZoneTransform.gameObject);
 
         Transform carryPoint = GetOrCreateChild(claw, "CarryPoint", new Vector3(0f, -0.85f, 0f));
         Transform cameraTarget = GetOrCreateChild(area, "CraneCameraTarget", GetCameraTargetLocalPosition(area, movementArea));
         Undo.RecordObject(cameraTarget, "Set Scrap Crane camera target");
         cameraTarget.localPosition = DefaultCameraTargetLocalPosition;
+        ScrapCraneGroundShadow groundShadow = ConfigureGroundShadow(area, claw);
 
         ScrapCraneController craneController = GetOrAddComponent<ScrapCraneController>(areaObject);
         ScrapCraneInputController inputController = GetOrAddComponent<ScrapCraneInputController>(areaObject);
         craneController.AssignReferences(area, movementArea, movingAxis, claw, craneBounds, grabZone, carryPoint);
         inputController.AssignController(craneController);
         craneController.ConfigureDefaultBladeRotations();
+        craneController.ConfigureDefaultTimings();
+        craneController.ConfigureDefaultRestPose();
 
         Transform[] bladePivots = GuessBladePivots(claw);
         craneController.AssignBladePivots(
@@ -85,6 +102,10 @@ public static class Stage2ScrapCraneSceneSetup
         triggerForwarder.AssignStation(controlStation);
 
         EditorUtility.SetDirty(areaObject);
+        if (groundShadow != null)
+        {
+            EditorUtility.SetDirty(groundShadow);
+        }
         EditorUtility.SetDirty(movementArea.gameObject);
         EditorUtility.SetDirty(station.gameObject);
         EditorSceneManager.MarkSceneDirty(areaObject.scene);
@@ -92,6 +113,16 @@ public static class Stage2ScrapCraneSceneSetup
         Undo.CollapseUndoOperations(undoGroup);
 
         Debug.Log($"Scrap crane setup complete. Boundary colliders found: {limits.Length}. Blade pivots guessed: {bladePivots.Length}. Review blade pivot assignments, especially blade03, before final tuning.", areaObject);
+    }
+
+    private static ScrapCraneGroundShadow ConfigureGroundShadow(Transform area, Transform claw)
+    {
+        Transform shadowTransform = GetOrCreateChild(area, "CraneGroundShadow", Vector3.zero);
+        ScrapCraneGroundShadow shadow = GetOrAddComponent<ScrapCraneGroundShadow>(shadowTransform.gameObject);
+        Material material = AssetDatabase.LoadAssetAtPath<Material>(FakeShadowMaterialPath);
+        shadow.AssignReferences(claw, area);
+        shadow.ConfigureDefaults(material, DefaultCraneShadowSize, DefaultCraneShadowFloorLocalY);
+        return shadow;
     }
 
     private static void ConfigureBounds(ScrapCraneBounds craneBounds, Transform movementArea, BoxCollider[] limits, BoxCollider movingAxisCollider)

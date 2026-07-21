@@ -3,6 +3,7 @@ using UnityEngine;
 
 [DisallowMultipleComponent]
 [RequireComponent(typeof(Collider))]
+[RequireComponent(typeof(Rigidbody))]
 public class ScrapGrabDetectionZone : MonoBehaviour
 {
     [SerializeField] private LayerMask scrapLayers = ~0;
@@ -11,17 +12,20 @@ public class ScrapGrabDetectionZone : MonoBehaviour
 
     private readonly HashSet<ScrapItem> candidates = new HashSet<ScrapItem>();
     private Collider zoneCollider;
+    private Rigidbody zoneBody;
 
     public Collider ZoneCollider => zoneCollider;
 
     private void Awake()
     {
         ConfigureCollider();
+        ConfigureRigidbody();
     }
 
     private void Reset()
     {
         ConfigureCollider();
+        ConfigureRigidbody();
     }
 
     private void OnValidate()
@@ -104,6 +108,21 @@ public class ScrapGrabDetectionZone : MonoBehaviour
         if (zoneCollider != null)
         {
             zoneCollider.isTrigger = true;
+        }
+    }
+
+    private void ConfigureRigidbody()
+    {
+        if (zoneBody == null)
+        {
+            zoneBody = GetComponent<Rigidbody>();
+        }
+
+        if (zoneBody != null)
+        {
+            zoneBody.isKinematic = true;
+            zoneBody.useGravity = false;
+            zoneBody.detectCollisions = true;
         }
     }
 
