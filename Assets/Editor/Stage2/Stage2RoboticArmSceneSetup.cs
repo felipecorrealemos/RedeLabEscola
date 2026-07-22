@@ -20,6 +20,22 @@ public static class Stage2RoboticArmSceneSetup
         Debug.Log("Robotic arms configured. Review points, poses and destination conveyors before saving the scene.");
     }
 
+    [MenuItem("Tools/RedeLabEscola/Stage2/Setup Robotic Arm Network Components")]
+    public static void ApplyNetworkComponentsToOpenScene()
+    {
+        int configuredCount = 0;
+        configuredCount += ConfigureArmNetwork("RoboticArm_Pipes", "Braço Robótico 1", "stage2-robotic-arm-01") ? 1 : 0;
+        configuredCount += ConfigureArmNetwork("RoboticArm_Beams", "Braço Robótico 2", "stage2-robotic-arm-02") ? 1 : 0;
+        configuredCount += ConfigureArmNetwork("RoboticArm_Ingots", "Braço Robótico 3", "stage2-robotic-arm-03") ? 1 : 0;
+
+        if (configuredCount > 0)
+        {
+            EditorSceneManager.MarkSceneDirty(SceneManager.GetActiveScene());
+        }
+
+        Debug.Log("Robotic arm network components configured: " + configuredCount + ".");
+    }
+
     [MenuItem("Tools/RedeLabEscola/Stage2/Apply Pipes Tuning To Beams")]
     public static void ApplyPipesTuningToBeams()
     {
@@ -213,6 +229,7 @@ public static class Stage2RoboticArmSceneSetup
         }
 
         Renderer indicatorRenderer = indicatorLight != null ? indicatorLight.GetComponent<Renderer>() : null;
+        ConfigureArmNetwork(armObject, GetArmDeviceName(armObject.name), GetArmDeviceId(armObject.name), indicatorRenderer);
         controller.ConfigureReferences(
             pivotBase,
             pivotShoulder,
@@ -234,6 +251,109 @@ public static class Stage2RoboticArmSceneSetup
         gripperComponent?.CaptureCurrentAsOpen();
         gripperComponent?.SetClosedFromOpen(0.14f);
         EditorUtility.SetDirty(armObject);
+    }
+
+    private static bool ConfigureArmNetwork(string armName, string deviceName, string deviceId)
+    {
+        GameObject armObject = GameObject.Find(armName);
+        if (armObject == null)
+        {
+            Debug.LogWarning("Could not find " + armName + " in the open scene.");
+            return false;
+        }
+
+        return ConfigureArmNetwork(armObject, deviceName, deviceId, FindStatusRenderer(armObject.transform));
+    }
+
+    private static bool ConfigureArmNetwork(GameObject armObject, string deviceName, string deviceId, Renderer statusRenderer)
+    {
+        if (armObject == null)
+        {
+            return false;
+        }
+
+        WiFiDevice existingWiFi = armObject.GetComponent<WiFiDevice>();
+        WiFiDevice wiFiDevice = existingWiFi != null ? existingWiFi : Undo.AddComponent<WiFiDevice>(armObject);
+        if (existingWiFi == null)
+        {
+            wiFiDevice.Configure(WiFiDeviceType.RoboticArm, deviceId, 0.65f);
+        }
+        else
+        {
+            wiFiDevice.ConfigureIdentity(WiFiDeviceType.RoboticArm, deviceId);
+        }
+
+        RoboticArmNetworkAdapter adapter = armObject.GetComponent<RoboticArmNetworkAdapter>();
+        if (adapter == null)
+        {
+            adapter = Undo.AddComponent<RoboticArmNetworkAdapter>(armObject);
+        }
+
+        adapter.ConfigureIdentity(deviceName, deviceId);
+        adapter.ConfigureReferences(wiFiDevice, statusRenderer, null);
+        EditorUtility.SetDirty(wiFiDevice);
+        EditorUtility.SetDirty(adapter);
+        EditorUtility.SetDirty(armObject);
+        return true;
+    }
+
+    private static string GetArmDeviceName(string armName)
+    {
+        if (armName == "RoboticArm_Beams")
+        {
+            return "Braço Robótico 2";
+        }
+
+        if (armName == "RoboticArm_Ingots")
+        {
+            return "Braço Robótico 3";
+        }
+
+        return "Braço Robótico 1";
+    }
+
+    private static string GetArmDeviceId(string armName)
+    {
+        if (armName == "RoboticArm_Beams")
+        {
+            return "stage2-robotic-arm-02";
+        }
+
+        if (armName == "RoboticArm_Ingots")
+        {
+            return "stage2-robotic-arm-03";
+        }
+
+        return "stage2-robotic-arm-01";
+    }
+
+    private static Renderer FindStatusRenderer(Transform root)
+    {
+        if (root == null)
+        {
+            return null;
+        }
+
+        Renderer[] renderers = root.GetComponentsInChildren<Renderer>(true);
+        for (int i = 0; i < renderers.Length; i++)
+        {
+            Renderer renderer = renderers[i];
+            if (renderer == null)
+            {
+                continue;
+            }
+
+            string lowerName = renderer.name.ToLowerInvariant();
+            if (lowerName.Contains("light_yellow")
+                || lowerName.Contains("light_red")
+                || lowerName.Contains("indicator")
+                || lowerName.Contains("status"))
+            {
+                return renderer;
+            }
+        }
+
+        return null;
     }
 
     private static Transform FindDirectChild(Transform parent, string childName)

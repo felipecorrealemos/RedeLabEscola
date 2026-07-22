@@ -268,10 +268,7 @@ public class Stage2RawMaterialConveyorBootstrap : MonoBehaviour
 
     private static BoxCollider CreateOrUpdateZone(Transform parent, string zoneName, Vector3 worldCenter, Vector3 size)
     {
-        Transform zone = GetOrCreateChild(parent, zoneName);
-        zone.position = worldCenter;
-        zone.rotation = Quaternion.identity;
-        zone.localScale = Vector3.one;
+        Transform zone = GetOrCreateChild(parent, zoneName, out bool created);
 
         BoxCollider box = zone.GetComponent<BoxCollider>();
         if (box == null)
@@ -280,8 +277,15 @@ public class Stage2RawMaterialConveyorBootstrap : MonoBehaviour
         }
 
         box.isTrigger = true;
-        box.center = Vector3.zero;
-        box.size = size;
+        if (created)
+        {
+            zone.position = worldCenter;
+            zone.rotation = Quaternion.identity;
+            zone.localScale = Vector3.one;
+            box.center = Vector3.zero;
+            box.size = size;
+        }
+
         return box;
     }
 

@@ -37,6 +37,7 @@ public class ScrapCraneControlStation : MonoBehaviour
     [SerializeField] private Text promptLabel;
     [SerializeField] private GameObject commandsPanelObject;
     [SerializeField] private Text commandsPanelLabel;
+    [SerializeField] private Sprite craneIconSprite;
 
     [Header("Debug")]
     [SerializeField] private ControlState currentState = ControlState.Inactive;
@@ -328,6 +329,7 @@ public class ScrapCraneControlStation : MonoBehaviour
 
     private void EnsurePrompt()
     {
+        bool createdPrompt = false;
         if (promptObject == null && canvas != null)
         {
             Transform existing = canvas.transform.Find("ScrapCranePrompt");
@@ -360,9 +362,10 @@ public class ScrapCraneControlStation : MonoBehaviour
             labelRect.offsetMin = Vector2.zero;
             labelRect.offsetMax = Vector2.zero;
             promptLabel = labelObject.AddComponent<Text>();
+            createdPrompt = true;
         }
 
-        if (promptLabel != null)
+        if (promptLabel != null && createdPrompt)
         {
             promptLabel.alignment = TextAnchor.MiddleCenter;
             promptLabel.color = Color.white;
@@ -384,6 +387,7 @@ public class ScrapCraneControlStation : MonoBehaviour
             }
         }
 
+        bool createdPanel = false;
         if (commandsPanelObject == null && canvas != null)
         {
             commandsPanelObject = new GameObject("ScrapCraneCommandsPanel");
@@ -393,7 +397,7 @@ public class ScrapCraneControlStation : MonoBehaviour
             rect.anchorMax = new Vector2(0f, 1f);
             rect.pivot = new Vector2(0f, 1f);
             rect.anchoredPosition = new Vector2(24f, -96f);
-            rect.sizeDelta = new Vector2(285f, 190f);
+            rect.sizeDelta = new Vector2(285f, 280f);
 
             Image background = commandsPanelObject.AddComponent<Image>();
             background.color = new Color(0f, 0f, 0f, 0.62f);
@@ -406,9 +410,12 @@ public class ScrapCraneControlStation : MonoBehaviour
             labelRect.offsetMin = new Vector2(12f, 10f);
             labelRect.offsetMax = new Vector2(-12f, -10f);
             commandsPanelLabel = labelObject.AddComponent<Text>();
+            createdPanel = true;
         }
 
-        if (commandsPanelLabel != null)
+        EnsureCommandsPanelChildren(createdPanel);
+
+        if (commandsPanelLabel != null && createdPanel)
         {
             commandsPanelLabel.alignment = TextAnchor.UpperLeft;
             commandsPanelLabel.color = Color.white;
@@ -422,6 +429,72 @@ public class ScrapCraneControlStation : MonoBehaviour
                 "1 - Coletar/Soltar\n" +
                 "E ou Esc - Sair";
         }
+    }
+
+    private void EnsureCommandsPanelChildren(bool applyDefaultLayout)
+    {
+        if (commandsPanelObject == null)
+        {
+            return;
+        }
+
+        ConfigureCraneIcon(commandsPanelObject.transform, craneIconSprite, applyDefaultLayout);
+
+        if (commandsPanelLabel != null && applyDefaultLayout)
+        {
+            RectTransform labelRect = commandsPanelLabel.GetComponent<RectTransform>();
+            if (labelRect != null)
+            {
+                labelRect.anchorMin = Vector2.zero;
+                labelRect.anchorMax = Vector2.one;
+                labelRect.offsetMin = new Vector2(12f, 10f);
+                labelRect.offsetMax = new Vector2(-12f, -118f);
+            }
+        }
+    }
+
+    private static void ConfigureCraneIcon(Transform panel, Sprite sprite, bool applyDefaultLayout)
+    {
+        Transform iconTransform = panel.Find("CraneIcon");
+        bool createdIcon = false;
+        if (iconTransform == null)
+        {
+            GameObject iconObject = new GameObject("CraneIcon", typeof(RectTransform));
+            iconObject.transform.SetParent(panel, false);
+            iconTransform = iconObject.transform;
+            createdIcon = true;
+        }
+
+        RectTransform iconRect = iconTransform.GetComponent<RectTransform>();
+        if (iconRect == null)
+        {
+            iconRect = iconTransform.gameObject.AddComponent<RectTransform>();
+            iconTransform = iconRect.transform;
+            createdIcon = true;
+        }
+
+        if (applyDefaultLayout || createdIcon)
+        {
+            iconRect.anchorMin = new Vector2(0.5f, 1f);
+            iconRect.anchorMax = new Vector2(0.5f, 1f);
+            iconRect.pivot = new Vector2(0.5f, 1f);
+            iconRect.anchoredPosition = new Vector2(0f, -12f);
+            iconRect.sizeDelta = new Vector2(104f, 104f);
+        }
+
+        Image icon = iconTransform.GetComponent<Image>();
+        if (icon == null)
+        {
+            icon = iconTransform.gameObject.AddComponent<Image>();
+        }
+
+        if (sprite != null && icon.sprite == null)
+        {
+            icon.sprite = sprite;
+        }
+
+        icon.preserveAspect = true;
+        icon.raycastTarget = false;
     }
 
     private void UpdatePrompt()

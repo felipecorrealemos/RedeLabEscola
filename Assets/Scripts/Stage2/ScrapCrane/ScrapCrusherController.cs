@@ -233,6 +233,7 @@ public class ScrapCrusherController : MonoBehaviour
 
         consumeRoutine = null;
         spinTimer = spinAfterConsumeDuration;
+        MissionManager.NotifyStage2ScrapConsumed();
     }
 
     private bool IsInsideIntake(Transform root)

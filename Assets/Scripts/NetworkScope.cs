@@ -133,6 +133,48 @@ public class NetworkScope : MonoBehaviour
         return !string.IsNullOrWhiteSpace(address) && leases.Exists(lease => lease.Address == address);
     }
 
+    public bool TryReserveIpForDevice(string address, string deviceName)
+    {
+        if (string.IsNullOrWhiteSpace(address))
+        {
+            return false;
+        }
+
+        IpLease targetLease = leases.Find(lease => lease.Address == address);
+        if (targetLease == null || targetLease.IsRouter || !targetLease.IsAvailable)
+        {
+            return false;
+        }
+
+        targetLease.AssignedDeviceName = string.IsNullOrWhiteSpace(deviceName) ? "Dispositivo" : deviceName;
+        targetLease.ConnectionType = NetworkConnectionType.WiFi;
+        NotifyPoolChanged();
+        return true;
+    }
+
+    public void ReleaseReservedIp(string address, string deviceName)
+    {
+        if (string.IsNullOrWhiteSpace(address))
+        {
+            return;
+        }
+
+        IpLease targetLease = leases.Find(lease => lease.Address == address);
+        if (targetLease == null || targetLease.AssignedComputer != null || string.IsNullOrWhiteSpace(targetLease.AssignedDeviceName))
+        {
+            return;
+        }
+
+        if (!string.IsNullOrWhiteSpace(deviceName) && targetLease.AssignedDeviceName != deviceName)
+        {
+            return;
+        }
+
+        targetLease.AssignedDeviceName = string.Empty;
+        targetLease.ConnectionType = NetworkConnectionType.Cable;
+        NotifyPoolChanged();
+    }
+
     private void ReleaseIp(ComputerInteractable computer, bool notify)
     {
         if (computer == null)
@@ -231,6 +273,11 @@ public class NetworkScope : MonoBehaviour
         if (lease.AssignedComputer != null)
         {
             return lease.Address + " - " + lease.AssignedComputer.DeviceTitle + " (" + GetConnectionTypeLabel(lease.ConnectionType) + ")";
+        }
+
+        if (!string.IsNullOrWhiteSpace(lease.AssignedDeviceName))
+        {
+            return lease.Address + " - " + lease.AssignedDeviceName + " (" + GetConnectionTypeLabel(lease.ConnectionType) + ")";
         }
 
         return lease.Address + " - Em uso";

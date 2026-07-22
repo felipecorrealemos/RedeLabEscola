@@ -2446,6 +2446,7 @@ MonoBehaviour:
   panelAnchorMax: {x: 0.98, y: 0.9}
   panelOpacity: 0.9
   scrollSensitivity: 40
+  terminalAutoRefreshInterval: 0.5
   rowHeight: 40
   statusColumnWidth: 88
   rowHorizontalPadding: 8

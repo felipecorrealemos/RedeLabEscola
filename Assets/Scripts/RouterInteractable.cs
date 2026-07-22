@@ -25,6 +25,11 @@ public class RouterInteractable : MonoBehaviour
     [SerializeField] private float wifiDetectionInterval = 1f;
     [SerializeField] private LayerMask wifiDeviceLayerMask = ~0;
 
+    [Header("Industrial DHCP")]
+    [SerializeField] private bool industrialDhcpEnabled = true;
+    [SerializeField] private float industrialDhcpDiscoveryInterval = 1f;
+    [SerializeField] private bool logIndustrialDhcpEvents;
+
     [Header("Panel")]
     [SerializeField] private Vector2 panelAnchorMin = new Vector2(0.52f, 0.14f);
     [SerializeField] private Vector2 panelAnchorMax = new Vector2(0.96f, 0.86f);
@@ -61,7 +66,10 @@ public class RouterInteractable : MonoBehaviour
     private MovableDevice movableDevice;
     private Button wifiToggleButton;
     private Text wifiToggleLabel;
+    private GameObject dhcpIndicatorObject;
+    private Text dhcpIndicatorLabel;
     private readonly HashSet<WiFiDevice> detectedWiFiDevices = new HashSet<WiFiDevice>();
+    private readonly List<IndustrialDhcpLease> industrialDhcpLeases = new List<IndustrialDhcpLease>();
 
     public event Action OnIpPoolChanged;
     public bool IsOpen => isOpen;
@@ -73,6 +81,41 @@ public class RouterInteractable : MonoBehaviour
     public int WiFiRange => Mathf.Max(wifiRange, 0);
     public string WiFiNetworkName => (ActiveNetworkScope != null ? ActiveNetworkScope.NetworkPrefix : networkPrefix).TrimEnd('.');
     public bool AllowMovement => allowMovement;
+    public bool IndustrialDhcpEnabled => industrialDhcpEnabled;
+    public float IndustrialDhcpDiscoveryInterval => Mathf.Max(industrialDhcpDiscoveryInterval, 0.1f);
+    public bool IsRouterOperational => isActiveAndEnabled;
+    public bool CanProvideIndustrialDhcp => IsRouterOperational && isWiFiEnabled && industrialDhcpEnabled;
+    public IReadOnlyList<IndustrialDhcpLease> ConnectedIndustrialDevices => industrialDhcpLeases;
+
+    [Serializable]
+    public class IndustrialDhcpLease
+    {
+        [SerializeField] private RoboticArmNetworkAdapter adapter;
+        [SerializeField] private string deviceName;
+        [SerializeField] private string deviceId;
+        [SerializeField] private string ipAddress;
+        [SerializeField] private string networkId;
+
+        public RoboticArmNetworkAdapter Adapter => adapter;
+        public string DeviceName => deviceName;
+        public string DeviceId => deviceId;
+        public string IpAddress => ipAddress;
+        public string NetworkId => networkId;
+
+        public IndustrialDhcpLease(RoboticArmNetworkAdapter adapter, string ipAddress, string networkId)
+        {
+            Update(adapter, ipAddress, networkId);
+        }
+
+        public void Update(RoboticArmNetworkAdapter nextAdapter, string nextIpAddress, string nextNetworkId)
+        {
+            adapter = nextAdapter;
+            deviceName = nextAdapter != null ? nextAdapter.DeviceName : string.Empty;
+            deviceId = nextAdapter != null ? nextAdapter.DeviceId : string.Empty;
+            ipAddress = nextIpAddress;
+            networkId = nextNetworkId;
+        }
+    }
 
     private void Awake()
     {
@@ -110,8 +153,13 @@ public class RouterInteractable : MonoBehaviour
         ResolveNetworkScope(false);
         wifiRange = Mathf.Max(wifiRange, 0);
         wifiDetectionInterval = Mathf.Max(wifiDetectionInterval, 0.1f);
+        industrialDhcpDiscoveryInterval = Mathf.Max(industrialDhcpDiscoveryInterval, 0.1f);
         ApplyUiSettings();
         RefreshIpRows();
+        if (Application.isPlaying && !CanProvideIndustrialDhcp)
+        {
+            ReleaseAllIndustrialDhcpDevices();
+        }
     }
 
     private void OnDestroy()
@@ -262,12 +310,200 @@ public class RouterInteractable : MonoBehaviour
         isWiFiEnabled = enabled;
         if (!isWiFiEnabled)
         {
+            ReleaseAllIndustrialDhcpDevices();
             DisconnectAllWiFiDevices();
             ClearDetectedWiFiDevices();
         }
 
         ApplyWiFiToggleButton();
+        ApplyDhcpIndicator();
         RefreshIpRows();
+    }
+
+    public void SetIndustrialDhcpEnabled(bool enabled)
+    {
+        if (industrialDhcpEnabled == enabled)
+        {
+            return;
+        }
+
+        industrialDhcpEnabled = enabled;
+        if (!CanProvideIndustrialDhcp)
+        {
+            ReleaseAllIndustrialDhcpDevices();
+        }
+
+        ApplyDhcpIndicator();
+    }
+
+    public bool TryAssignIndustrialDhcp(RoboticArmNetworkAdapter adapter, out string ipAddress)
+    {
+        ipAddress = string.Empty;
+        if (!CanProvideIndustrialDhcp || adapter == null)
+        {
+            return false;
+        }
+
+        CleanupIndustrialDhcpLeases();
+
+        IndustrialDhcpLease existingLease = FindIndustrialLease(adapter);
+        if (existingLease != null)
+        {
+            NetworkScope scope = ResolveNetworkScope(false);
+            if (scope != null && scope.ContainsAddress(existingLease.IpAddress))
+            {
+                ipAddress = existingLease.IpAddress;
+                return true;
+            }
+
+            industrialDhcpLeases.Remove(existingLease);
+        }
+
+        NetworkScope activeScope = ResolveNetworkScope(true);
+        string networkId = WiFiNetworkName;
+        if (activeScope == null)
+        {
+            return false;
+        }
+
+        foreach (NetworkScope.IpLease lease in activeScope.Leases)
+        {
+            if (lease == null || lease.IsRouter || !lease.IsAvailable || IsIndustrialAddressInUse(lease.Address))
+            {
+                continue;
+            }
+
+            if (!activeScope.TryReserveIpForDevice(lease.Address, adapter.DeviceName))
+            {
+                continue;
+            }
+
+            IndustrialDhcpLease industrialLease = new IndustrialDhcpLease(adapter, lease.Address, networkId);
+            industrialDhcpLeases.Add(industrialLease);
+            ipAddress = lease.Address;
+            LogIndustrialDhcp("IP " + lease.Address + " atribuido ao " + adapter.DeviceName + ".");
+            return true;
+        }
+
+        return false;
+    }
+
+    public void ReleaseIndustrialDhcp(RoboticArmNetworkAdapter adapter)
+    {
+        if (adapter == null)
+        {
+            return;
+        }
+
+        for (int i = industrialDhcpLeases.Count - 1; i >= 0; i--)
+        {
+            IndustrialDhcpLease lease = industrialDhcpLeases[i];
+            if (lease == null || lease.Adapter == adapter || lease.DeviceId == adapter.DeviceId)
+            {
+                if (lease != null)
+                {
+                    ReleaseIndustrialLeaseReservation(lease);
+                    LogIndustrialDhcp("IP " + lease.IpAddress + " liberado.");
+                }
+
+                industrialDhcpLeases.RemoveAt(i);
+            }
+        }
+    }
+
+    private void ReleaseAllIndustrialDhcpDevices()
+    {
+        if (industrialDhcpLeases.Count == 0)
+        {
+            return;
+        }
+
+        for (int i = industrialDhcpLeases.Count - 1; i >= 0; i--)
+        {
+            IndustrialDhcpLease lease = industrialDhcpLeases[i];
+            if (lease != null)
+            {
+                ReleaseIndustrialLeaseReservation(lease);
+                lease.Adapter?.HandleIndustrialDhcpRouterUnavailable(this);
+                LogIndustrialDhcp("IP " + lease.IpAddress + " liberado.");
+            }
+        }
+
+        industrialDhcpLeases.Clear();
+    }
+
+    private void CleanupIndustrialDhcpLeases()
+    {
+        for (int i = industrialDhcpLeases.Count - 1; i >= 0; i--)
+        {
+            IndustrialDhcpLease lease = industrialDhcpLeases[i];
+            if (lease == null || lease.Adapter == null)
+            {
+                if (lease != null)
+                {
+                    ReleaseIndustrialLeaseReservation(lease);
+                }
+
+                industrialDhcpLeases.RemoveAt(i);
+            }
+        }
+    }
+
+    private IndustrialDhcpLease FindIndustrialLease(RoboticArmNetworkAdapter adapter)
+    {
+        if (adapter == null)
+        {
+            return null;
+        }
+
+        for (int i = 0; i < industrialDhcpLeases.Count; i++)
+        {
+            IndustrialDhcpLease lease = industrialDhcpLeases[i];
+            if (lease != null && (lease.Adapter == adapter || lease.DeviceId == adapter.DeviceId))
+            {
+                return lease;
+            }
+        }
+
+        return null;
+    }
+
+    private bool IsIndustrialAddressInUse(string address)
+    {
+        for (int i = 0; i < industrialDhcpLeases.Count; i++)
+        {
+            IndustrialDhcpLease lease = industrialDhcpLeases[i];
+            if (lease != null && lease.IpAddress == address)
+            {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    private void ReleaseIndustrialLeaseReservation(IndustrialDhcpLease lease)
+    {
+        if (lease == null)
+        {
+            return;
+        }
+
+        NetworkScope scope = ResolveNetworkScope(false);
+        if (scope == null)
+        {
+            return;
+        }
+
+        scope.ReleaseReservedIp(lease.IpAddress, lease.DeviceName);
+    }
+
+    private void LogIndustrialDhcp(string message)
+    {
+        if (logIndustrialDhcpEvents)
+        {
+            Debug.Log("[" + name + "] " + message, this);
+        }
     }
 
     public bool IsWiFiDeviceInRange(WiFiDevice wiFiDevice)
@@ -335,7 +571,7 @@ public class RouterInteractable : MonoBehaviour
             }
 
             WiFiDevice wiFiDevice = hit.GetComponentInParent<WiFiDevice>();
-            if (wiFiDevice == null)
+            if (wiFiDevice == null || !IsWiFiDeviceInRange(wiFiDevice))
             {
                 continue;
             }
@@ -627,6 +863,7 @@ public class RouterInteractable : MonoBehaviour
         rangeLabel = rangeObject.AddComponent<Text>();
 
         CreateWiFiToggleButton(parent);
+        CreateDhcpIndicator(parent);
         CreateFooter(parent, hint);
     }
 
@@ -741,6 +978,11 @@ public class RouterInteractable : MonoBehaviour
         if (lease.IsRouter)
         {
             return "Roteador";
+        }
+
+        if (!string.IsNullOrWhiteSpace(lease.AssignedDeviceName))
+        {
+            return lease.AssignedDeviceName;
         }
 
         return lease.IsAvailable ? "Disponivel" : NetworkScope.GetConnectionTypeLabel(lease.ConnectionType);
@@ -929,6 +1171,72 @@ public class RouterInteractable : MonoBehaviour
             wifiToggleLabel.fontSize = 13;
             wifiToggleLabel.fontStyle = FontStyle.Bold;
         }
+
+        ApplyDhcpIndicator();
+    }
+
+    private void CreateDhcpIndicator(Transform parent)
+    {
+        GameObject indicatorObject = CreateUiObject("DhcpIndicator", parent);
+        RectTransform indicatorRect = indicatorObject.AddComponent<RectTransform>();
+        indicatorRect.anchorMin = new Vector2(1f, 1f);
+        indicatorRect.anchorMax = new Vector2(1f, 1f);
+        indicatorRect.pivot = new Vector2(1f, 1f);
+        indicatorRect.anchoredPosition = new Vector2(-138f, -22f);
+        indicatorRect.sizeDelta = new Vector2(74f, 28f);
+
+        indicatorObject.AddComponent<Image>();
+
+        GameObject labelObject = CreateUiObject("Text", indicatorObject.transform);
+        RectTransform labelRect = labelObject.AddComponent<RectTransform>();
+        labelRect.anchorMin = Vector2.zero;
+        labelRect.anchorMax = Vector2.one;
+        labelRect.offsetMin = Vector2.zero;
+        labelRect.offsetMax = Vector2.zero;
+
+        dhcpIndicatorObject = indicatorObject;
+        dhcpIndicatorLabel = labelObject.AddComponent<Text>();
+        ApplyDhcpIndicator();
+    }
+
+    private void ApplyDhcpIndicator()
+    {
+        if (dhcpIndicatorObject == null && panelObject != null)
+        {
+            Transform indicator = panelObject.transform.Find("DhcpIndicator");
+            if (indicator != null)
+            {
+                dhcpIndicatorObject = indicator.gameObject;
+                dhcpIndicatorLabel = indicator.GetComponentInChildren<Text>(true);
+            }
+        }
+
+        if (dhcpIndicatorObject == null)
+        {
+            return;
+        }
+
+        bool active = CanProvideIndustrialDhcp;
+        Image indicatorImage = dhcpIndicatorObject.GetComponent<Image>();
+        if (indicatorImage != null)
+        {
+            indicatorImage.color = active ? new Color(0.08f, 0.62f, 0.26f, 0.96f) : new Color(0.42f, 0.42f, 0.42f, 0.58f);
+        }
+
+        if (dhcpIndicatorLabel == null)
+        {
+            dhcpIndicatorLabel = dhcpIndicatorObject.GetComponentInChildren<Text>(true);
+        }
+
+        if (dhcpIndicatorLabel != null)
+        {
+            dhcpIndicatorLabel.text = "DHCP";
+            dhcpIndicatorLabel.alignment = TextAnchor.MiddleCenter;
+            dhcpIndicatorLabel.color = Color.white;
+            dhcpIndicatorLabel.font = GetDefaultFont();
+            dhcpIndicatorLabel.fontSize = 13;
+            dhcpIndicatorLabel.fontStyle = FontStyle.Bold;
+        }
     }
 
     private void ApplyContentPadding()
@@ -999,6 +1307,13 @@ public class RouterInteractable : MonoBehaviour
             wifiToggleLabel = wifiToggle.GetComponentInChildren<Text>(true);
         }
 
+        Transform dhcpIndicator = panelObject.transform.Find("DhcpIndicator");
+        if (dhcpIndicator != null)
+        {
+            dhcpIndicatorObject = dhcpIndicator.gameObject;
+            dhcpIndicatorLabel = dhcpIndicator.GetComponentInChildren<Text>(true);
+        }
+
         Transform scrollView = panelObject.transform.Find("IpScrollView");
         if (scrollView != null)
         {
@@ -1032,6 +1347,8 @@ public class RouterInteractable : MonoBehaviour
         ipScrollRect = null;
         wifiToggleButton = null;
         wifiToggleLabel = null;
+        dhcpIndicatorObject = null;
+        dhcpIndicatorLabel = null;
     }
 
     private Canvas FindCanvasByName(string canvasName)

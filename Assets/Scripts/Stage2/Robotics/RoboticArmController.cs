@@ -35,9 +35,11 @@ public class RoboticArmController : MonoBehaviour
     [SerializeField] private RoboticArmPickupSensor pickupSensor;
     [SerializeField] private RoboticArmDropAreaSensor dropAreaSensor;
     [SerializeField] private RoboticArmGripper gripper;
+    [SerializeField] private RoboticArmNetworkAdapter networkAdapter;
     [SerializeField] private ConveyorController destinationConveyor;
     [SerializeField] private Renderer indicatorLightRenderer;
     [SerializeField] private Light indicatorLight;
+    [SerializeField] private bool useOperationalIndicator;
 
     [Header("Product")]
     [SerializeField] private RoboticArmProductType acceptedProductType = RoboticArmProductType.Custom;
@@ -123,6 +125,7 @@ public class RoboticArmController : MonoBehaviour
     public RoboticArmProductType AcceptedProductType => acceptedProductType;
     public string AcceptedProductId => acceptedProductId;
     public bool IsBusy => currentState != ArmState.Idle && currentState != ArmState.Error;
+    public bool CanStartAuthorizedCycle => networkAdapter != null && networkAdapter.CanStartNewCycle;
 
     private void Awake()
     {
@@ -160,6 +163,17 @@ public class RoboticArmController : MonoBehaviour
                 StartCoroutine(RecoverFromError());
             }
 
+            return;
+        }
+
+        if (networkAdapter == null)
+        {
+            networkAdapter = GetComponent<RoboticArmNetworkAdapter>();
+        }
+
+        if (!CanStartAuthorizedCycle)
+        {
+            idleWithoutAcceptedItemTimer = 0f;
             return;
         }
 
@@ -664,6 +678,11 @@ public class RoboticArmController : MonoBehaviour
             dropAreaSensor = GetComponentInChildren<RoboticArmDropAreaSensor>();
         }
 
+        if (networkAdapter == null)
+        {
+            networkAdapter = GetComponent<RoboticArmNetworkAdapter>();
+        }
+
         if (gripper == null)
         {
             gripper = GetComponentInChildren<RoboticArmGripper>();
@@ -718,6 +737,11 @@ public class RoboticArmController : MonoBehaviour
 
     private void SetIndicator(Color color)
     {
+        if (!useOperationalIndicator)
+        {
+            return;
+        }
+
         if (indicatorLight != null)
         {
             indicatorLight.color = color;

@@ -484,6 +484,9 @@ MonoBehaviour:
   wifiDeviceLayerMask:
     serializedVersion: 2
     m_Bits: 4294967295
+  industrialDhcpEnabled: 1
+  industrialDhcpDiscoveryInterval: 1
+  logIndustrialDhcpEvents: 0
   panelAnchorMin: {x: 0.52, y: 0.14}
   panelAnchorMax: {x: 0.96, y: 0.86}
   panelOpacity: 0.88

@@ -13,6 +13,7 @@ public class WiFiDevice : MonoBehaviour
 
     public WiFiDeviceType DeviceType => deviceType;
     public string DeviceIdentifier => string.IsNullOrWhiteSpace(deviceIdentifier) ? name : deviceIdentifier;
+    public float SensorRadius => sensorRadius;
     public IReadOnlyCollection<RouterInteractable> AvailableRouters => availableRouters;
     public ComputerInteractable Computer { get; private set; }
 
@@ -74,6 +75,33 @@ public class WiFiDevice : MonoBehaviour
         return router != null && availableRouters.Contains(router);
     }
 
+    public void Configure(WiFiDeviceType type, string identifier, float radius)
+    {
+        deviceType = type;
+        if (!string.IsNullOrWhiteSpace(identifier))
+        {
+            deviceIdentifier = identifier;
+        }
+
+        sensorRadius = Mathf.Max(radius, 0.05f);
+        EnsureSensorCollider();
+        if (sensorCollider != null)
+        {
+            sensorCollider.radius = sensorRadius;
+        }
+    }
+
+    public void ConfigureIdentity(WiFiDeviceType type, string identifier)
+    {
+        deviceType = type;
+        if (!string.IsNullOrWhiteSpace(identifier))
+        {
+            deviceIdentifier = identifier;
+        }
+
+        EnsureSensorCollider();
+    }
+
     public bool IsWiFiSensorCollider(Collider candidate)
     {
         return candidate != null && candidate.isTrigger && candidate.GetComponentInParent<WiFiDevice>() == this;
@@ -92,17 +120,16 @@ public class WiFiDevice : MonoBehaviour
 
     private void EnsureSensorCollider()
     {
-        Collider[] existingColliders = GetComponentsInChildren<Collider>(true);
-        foreach (Collider existingCollider in existingColliders)
+        SphereCollider[] sphereColliders = GetComponents<SphereCollider>();
+        for (int i = 0; i < sphereColliders.Length; i++)
         {
-            if (existingCollider != null && existingCollider.isTrigger)
+            if (sphereColliders[i] != null && sphereColliders[i].isTrigger)
             {
-                sensorCollider = existingCollider as SphereCollider;
-                return;
+                sensorCollider = sphereColliders[i];
+                break;
             }
         }
 
-        sensorCollider = GetComponent<SphereCollider>();
         if (sensorCollider == null)
         {
             sensorCollider = gameObject.AddComponent<SphereCollider>();

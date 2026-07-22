@@ -8,6 +8,7 @@ public static class Stage2ScrapCraneSceneSetup
 {
     private const string ScenePath = "Assets/Scenes/Stage2/Stage2_Factory.unity";
     private const string FakeShadowMaterialPath = "Assets/Materials/Player_FakeShadow.mat";
+    private const string CraneIconSpritePath = "Assets/Imagens/Garra/imagem garra.png";
     private static readonly Vector3 DefaultCameraTargetLocalPosition = new Vector3(1.77f, -14.4f, 1.8f);
     private static readonly Vector2 DefaultCraneShadowSize = new Vector2(2.35f, 2.35f);
     private static readonly Vector3 DefaultGrabZoneLocalPosition = new Vector3(0f, -1.45f, 0f);
@@ -97,6 +98,7 @@ public static class Stage2ScrapCraneSceneSetup
         Text commandsText = commandsPanel.GetComponentInChildren<Text>(true);
 
         ScrapCraneControlStation controlStation = GetOrAddComponent<ScrapCraneControlStation>(station.gameObject);
+        ConfigureControlStationIconSprite(controlStation);
         DeadZoneCameraFollow cameraFollow = Camera.main != null ? Camera.main.GetComponent<DeadZoneCameraFollow>() : Object.FindObjectOfType<DeadZoneCameraFollow>();
         controlStation.AssignReferences(craneController, inputController, triggerCollider, cameraFollow, cameraTarget, canvas, promptObject, promptText, commandsPanel, commandsText);
         triggerForwarder.AssignStation(controlStation);
@@ -267,12 +269,7 @@ public static class Stage2ScrapCraneSceneSetup
         Transform existing = canvas.Find("ScrapCraneCommandsPanel");
         if (existing != null)
         {
-            Text existingText = existing.GetComponentInChildren<Text>(true);
-            if (existingText != null)
-            {
-                ConfigureCommandsText(existingText);
-            }
-
+            EnsureCommandsPanelChildren(existing.gameObject, false);
             return existing.gameObject;
         }
 
@@ -284,13 +281,108 @@ public static class Stage2ScrapCraneSceneSetup
         rect.anchorMax = new Vector2(0f, 1f);
         rect.pivot = new Vector2(0f, 1f);
         rect.anchoredPosition = new Vector2(24f, -96f);
-        rect.sizeDelta = new Vector2(285f, 190f);
+        rect.sizeDelta = new Vector2(285f, 280f);
         Image background = panel.AddComponent<Image>();
         background.color = new Color(0f, 0f, 0f, 0.62f);
         Text text = CreateText(panel.transform, "Text", TextAnchor.UpperLeft, 15);
+        EnsureCommandsPanelChildren(panel, true);
         ConfigureCommandsText(text);
         panel.SetActive(false);
         return panel;
+    }
+
+    private static void EnsureCommandsPanelChildren(GameObject panel, bool applyDefaultLayout)
+    {
+        RectTransform panelRect = panel.GetComponent<RectTransform>();
+        if (panelRect != null && applyDefaultLayout)
+        {
+            panelRect.sizeDelta = new Vector2(285f, 280f);
+        }
+
+        Image background = panel.GetComponent<Image>();
+        if (background != null && applyDefaultLayout)
+        {
+            background.color = new Color(0f, 0f, 0f, 0.62f);
+        }
+
+        ConfigureCraneIcon(panel.transform, applyDefaultLayout);
+
+        Text text = panel.GetComponentInChildren<Text>(true);
+        if (text != null && applyDefaultLayout)
+        {
+            RectTransform textRect = text.GetComponent<RectTransform>();
+            if (textRect != null)
+            {
+                textRect.anchorMin = Vector2.zero;
+                textRect.anchorMax = Vector2.one;
+                textRect.offsetMin = new Vector2(12f, 10f);
+                textRect.offsetMax = new Vector2(-12f, -118f);
+            }
+        }
+    }
+
+    private static void ConfigureCraneIcon(Transform panel, bool applyDefaultLayout)
+    {
+        Transform iconTransform = panel.Find("CraneIcon");
+        bool createdIcon = false;
+        if (iconTransform == null)
+        {
+            GameObject iconObject = new GameObject("CraneIcon", typeof(RectTransform));
+            Undo.RegisterCreatedObjectUndo(iconObject, "Create Crane Icon");
+            iconObject.transform.SetParent(panel, false);
+            iconTransform = iconObject.transform;
+            createdIcon = true;
+        }
+
+        RectTransform iconRect = iconTransform.GetComponent<RectTransform>();
+        if (iconRect == null)
+        {
+            iconRect = iconTransform.gameObject.AddComponent<RectTransform>();
+            iconTransform = iconRect.transform;
+            createdIcon = true;
+        }
+
+        if (applyDefaultLayout || createdIcon)
+        {
+            iconRect.anchorMin = new Vector2(0.5f, 1f);
+            iconRect.anchorMax = new Vector2(0.5f, 1f);
+            iconRect.pivot = new Vector2(0.5f, 1f);
+            iconRect.anchoredPosition = new Vector2(0f, -12f);
+            iconRect.sizeDelta = new Vector2(104f, 104f);
+        }
+
+        Image icon = iconTransform.GetComponent<Image>();
+        if (icon == null)
+        {
+            icon = iconTransform.gameObject.AddComponent<Image>();
+        }
+
+        Sprite sprite = AssetDatabase.LoadAssetAtPath<Sprite>(CraneIconSpritePath);
+        if (sprite != null && icon.sprite == null)
+        {
+            icon.sprite = sprite;
+        }
+
+        icon.color = Color.white;
+        icon.preserveAspect = true;
+        icon.raycastTarget = false;
+    }
+
+    private static void ConfigureControlStationIconSprite(ScrapCraneControlStation controlStation)
+    {
+        Sprite sprite = AssetDatabase.LoadAssetAtPath<Sprite>(CraneIconSpritePath);
+        if (sprite == null || controlStation == null)
+        {
+            return;
+        }
+
+        SerializedObject serialized = new SerializedObject(controlStation);
+        SerializedProperty iconSpriteProperty = serialized.FindProperty("craneIconSprite");
+        if (iconSpriteProperty != null && iconSpriteProperty.objectReferenceValue == null)
+        {
+            iconSpriteProperty.objectReferenceValue = sprite;
+            serialized.ApplyModifiedProperties();
+        }
     }
 
     private static void ConfigureCommandsText(Text text)

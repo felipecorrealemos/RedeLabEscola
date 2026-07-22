@@ -1,4 +1,5 @@
 public enum WiFiDeviceType
 {
-    Notebook
+    Notebook,
+    RoboticArm
 }

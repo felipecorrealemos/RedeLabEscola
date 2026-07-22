@@ -1,5 +1,6 @@
 using System.Collections;
 using System.Collections.Generic;
+using System.Text;
 using UnityEngine;
 using UnityEngine.EventSystems;
 using UnityEngine.Serialization;
@@ -18,7 +19,7 @@ public class ComputerInteractable : MonoBehaviour
     [Header("Interaction")]
     [SerializeField] private string carryPromptText = "E pegar computador";
     [SerializeField] private string networkPromptText = "F configurar rede";
-    [SerializeField] private string useComputerPromptText = "F usar computador";
+    [SerializeField] private string useComputerPromptText = "Enter usar notebook";
     [SerializeField] private string deviceTitle = "Computador";
     [SerializeField] private bool stationaryNetworkDevice;
     [HideInInspector]
@@ -39,6 +40,7 @@ public class ComputerInteractable : MonoBehaviour
     [SerializeField] private Vector2 panelAnchorMax = new Vector2(0.98f, 0.9f);
     [SerializeField] private float panelOpacity = 0.9f;
     [SerializeField] private float scrollSensitivity = 40f;
+    [SerializeField, Min(0.1f)] private float terminalAutoRefreshInterval = 0.5f;
 
     [Header("Rows")]
     [SerializeField] private float rowHeight = 40f;
@@ -85,12 +87,23 @@ public class ComputerInteractable : MonoBehaviour
     private bool connectedByWiFi;
     private Button wifiToggleButton;
     private Text wifiToggleLabel;
+    private float nextTerminalAutoRefreshTime;
+    private string lastFactorySystemRowsSignature;
 
     public bool IsOpen => isOpen;
     public string AssignedIp => assignedIp;
     public string DeviceTitle => deviceTitle;
     public bool IsStationaryNetworkDevice => stationaryNetworkDevice;
     public NetworkScope ActiveNetworkScope => ResolveNetworkScope(false);
+    public RouterInteractable ActiveRouter
+    {
+        get
+        {
+            EnsureRouter();
+            return HasWiFiInterface && !IsConnectedToNetworkJack && selectedWiFiRouter != null ? selectedWiFiRouter : router;
+        }
+    }
+
     public bool IsConnectedToNetworkJack => connectedJack != null && connectedJack.IsConnected(this);
     public bool HasWiFiInterface => wiFiDevice != null && wiFiDevice.DeviceType == WiFiDeviceType.Notebook;
     public bool IsNotebookWiFiEnabled => notebookWiFiEnabled;
@@ -125,6 +138,17 @@ public class ComputerInteractable : MonoBehaviour
     {
         TryAssignPreferredIp();
         StartCoroutine(UpdateStatusLightAfterFirstFrame());
+    }
+
+    private void Update()
+    {
+        if (!isOpen || !showingTerminalPanel || Time.unscaledTime < nextTerminalAutoRefreshTime)
+        {
+            return;
+        }
+
+        nextTerminalAutoRefreshTime = Time.unscaledTime + Mathf.Max(terminalAutoRefreshInterval, 0.1f);
+        RefreshIpRows();
     }
 
     private IEnumerator UpdateStatusLightAfterFirstFrame()
@@ -239,14 +263,7 @@ public class ComputerInteractable : MonoBehaviour
     public void SetTerminalPromptVisible(bool visible)
     {
         EnsureUi();
-        if (promptLabel != null)
-        {
-            promptLabel.text = useComputerPromptText;
-            promptLabel.alignment = TextAnchor.MiddleCenter;
-            promptLabel.color = Color.white;
-            promptLabel.font = GetDefaultFont();
-            promptLabel.fontSize = 18;
-        }
+        ApplyPromptSettings();
 
         if (promptObject != null)
         {
@@ -287,6 +304,7 @@ public class ComputerInteractable : MonoBehaviour
         EnsureNetworkPrinterDevices();
         EnsureUi();
         showingTerminalPanel = true;
+        nextTerminalAutoRefreshTime = 0f;
         RefreshIpRows();
         isOpen = true;
         SetTerminalPromptVisible(false);
@@ -571,6 +589,12 @@ public class ComputerInteractable : MonoBehaviour
         {
             sourceDescription = "RJ-45: " + connectedJack.name;
             return connectedJack.NetworkScope;
+        }
+
+        if (HasWiFiInterface && selectedWiFiRouter != null && (connectedByWiFi || !string.IsNullOrWhiteSpace(assignedIp)))
+        {
+            sourceDescription = "Wi-Fi: " + selectedWiFiRouter.WiFiNetworkName;
+            return selectedWiFiRouter.ActiveNetworkScope;
         }
 
         if (currentDropZone != null && currentDropZone.NetworkScope != null)
@@ -1142,6 +1166,25 @@ public class ComputerInteractable : MonoBehaviour
         EnsureNetworkDoorDevices();
         EnsureNetworkPrinterDevices();
         ApplyContentPadding();
+        if (titleLabel != null)
+        {
+            titleLabel.text = showingTerminalPanel ? "Sistema da Fábrica" : deviceTitle;
+        }
+
+        if (showingTerminalPanel)
+        {
+            string factoryRowsSignature = BuildFactorySystemRowsSignature();
+            if (factoryRowsSignature == lastFactorySystemRowsSignature && ipScrollRect.content.childCount > 0)
+            {
+                return;
+            }
+
+            lastFactorySystemRowsSignature = factoryRowsSignature;
+        }
+        else
+        {
+            lastFactorySystemRowsSignature = string.Empty;
+        }
 
         for (int i = ipScrollRect.content.childCount - 1; i >= 0; i--)
         {
@@ -1244,95 +1287,287 @@ public class ComputerInteractable : MonoBehaviour
     private void CreateNetworkDeviceRows()
     {
         Transform areaRoot = FindAreaRoot(transform);
-        DualNetworkDoorController[] dualDoors = FindObjectsOfType<DualNetworkDoorController>(true);
-        HashSet<NetworkDoorDevice> devicesControlledByDualDoors = new HashSet<NetworkDoorDevice>();
-        NetworkDoorDevice[] doorDevices = FindObjectsOfType<NetworkDoorDevice>(true);
-        NetworkPrinterDevice[] printerDevices = FindObjectsOfType<NetworkPrinterDevice>(true);
-        List<NetworkDoorDevice> visibleDoorDevices = new List<NetworkDoorDevice>();
-        Dictionary<Transform, NetworkPrinterDevice> visiblePrinterDevices = new Dictionary<Transform, NetworkPrinterDevice>();
+        if (!IsNetworkOperational || ActiveNetworkScope == null)
+        {
+            CreateMessageRow("Nenhuma rede conectada.\n\nConecte o notebook a uma rede para localizar os dispositivos da fábrica.");
+            return;
+        }
+
+        if (CreateRoboticArmConflictRows(areaRoot))
+        {
+            CreateMessageRow("Mais de uma rede compatível foi detectada nas proximidades do equipamento.\nMantenha apenas um roteador DHCP no alcance dos braços robóticos.");
+            return;
+        }
+
+        if (!CreateRoboticArmRowsFromActiveRouter())
+        {
+            CreateMessageRow("Nenhum dispositivo industrial encontrado nesta rede.");
+        }
+    }
+
+    private string BuildFactorySystemRowsSignature()
+    {
+        StringBuilder builder = new StringBuilder(128);
+        NetworkScope scope = ActiveNetworkScope;
+        RouterInteractable activeRouter = ActiveRouter;
+        builder.Append(IsNetworkOperational ? "online" : "offline");
+        builder.Append('|');
+        builder.Append(scope != null ? scope.GetInstanceID().ToString() : "no-scope");
+        builder.Append('|');
+        builder.Append(activeRouter != null ? activeRouter.GetInstanceID().ToString() : "no-router");
+
+        RoboticArmNetworkAdapter[] adapters = FindObjectsOfType<RoboticArmNetworkAdapter>(true);
+        for (int i = 0; i < adapters.Length; i++)
+        {
+            RoboticArmNetworkAdapter adapter = adapters[i];
+            if (adapter == null)
+            {
+                continue;
+            }
+
+            builder.Append('|');
+            builder.Append(adapter.DeviceId);
+            builder.Append(':');
+            builder.Append(adapter.isActiveAndEnabled ? "active" : "inactive");
+            builder.Append(':');
+            builder.Append(adapter.AssignedIp);
+            builder.Append(':');
+            builder.Append(adapter.ConnectedRouter != null ? adapter.ConnectedRouter.GetInstanceID().ToString() : "no-router");
+            builder.Append(':');
+            builder.Append(adapter.CurrentNetworkState);
+            builder.Append(':');
+            builder.Append(adapter.CurrentOperationalState);
+        }
+
+        return builder.ToString();
+    }
+
+    private bool CreateRoboticArmRowsFromActiveRouter()
+    {
+        RouterInteractable activeRouter = ActiveRouter;
+        NetworkScope computerScope = ActiveNetworkScope;
+        if (activeRouter == null || computerScope == null)
+        {
+            return false;
+        }
+
         bool createdAny = false;
-        bool createdDualDoor = false;
-
-        foreach (DualNetworkDoorController dualDoor in dualDoors)
+        HashSet<RoboticArmNetworkAdapter> createdAdapters = new HashSet<RoboticArmNetworkAdapter>();
+        foreach (RouterInteractable.IndustrialDhcpLease lease in activeRouter.ConnectedIndustrialDevices)
         {
-            if (dualDoor == null || !dualDoor.isActiveAndEnabled || !IsInSameArea(dualDoor.transform, areaRoot))
+            RoboticArmNetworkAdapter adapter = lease != null ? lease.Adapter : null;
+            if (!CanShowRoboticArmInFactorySystem(adapter, activeRouter, computerScope) || createdAdapters.Contains(adapter))
             {
                 continue;
             }
 
-            CreateDualNetworkDoorRow(dualDoor);
+            CreateRoboticArmRow(adapter);
+            createdAdapters.Add(adapter);
             createdAny = true;
-            createdDualDoor = true;
-
-            if (dualDoor.FirstDevice != null)
-            {
-                devicesControlledByDualDoors.Add(dualDoor.FirstDevice);
-            }
-
-            if (dualDoor.SecondDevice != null)
-            {
-                devicesControlledByDualDoors.Add(dualDoor.SecondDevice);
-            }
         }
 
-        foreach (NetworkDoorDevice device in doorDevices)
+        RoboticArmNetworkAdapter[] adapters = FindObjectsOfType<RoboticArmNetworkAdapter>(true);
+        foreach (RoboticArmNetworkAdapter adapter in adapters)
         {
-            if (device == null || !device.isActiveAndEnabled || devicesControlledByDualDoors.Contains(device) || !IsInSameArea(device.transform, areaRoot))
+            if (!CanShowRoboticArmInFactorySystem(adapter, activeRouter, computerScope) || createdAdapters.Contains(adapter))
             {
                 continue;
             }
 
-            visibleDoorDevices.Add(device);
-        }
-
-        if (!createdDualDoor && visibleDoorDevices.Count == 2)
-        {
-            CreateImplicitDualNetworkDoorRow(visibleDoorDevices[0], visibleDoorDevices[1]);
-            createdAny = true;
-            visibleDoorDevices.Clear();
-        }
-
-        foreach (NetworkDoorDevice device in visibleDoorDevices)
-        {
-            CreateNetworkDeviceRow(device);
+            CreateRoboticArmRow(adapter);
+            createdAdapters.Add(adapter);
             createdAny = true;
         }
 
-        foreach (NetworkPrinterDevice printer in printerDevices)
+        return createdAny;
+    }
+
+    private bool CanShowRoboticArmInFactorySystem(RoboticArmNetworkAdapter adapter, RouterInteractable activeRouter, NetworkScope computerScope)
+    {
+        if (adapter == null
+            || !adapter.isActiveAndEnabled
+            || !adapter.IsAccessibleByFactorySystem
+            || activeRouter == null
+            || computerScope == null)
         {
-            if (printer == null || !printer.isActiveAndEnabled)
+            return false;
+        }
+
+        if (adapter.ConnectedRouter == activeRouter)
+        {
+            return true;
+        }
+
+        return adapter.ConnectedRouter != null && adapter.ConnectedRouter.ActiveNetworkScope == computerScope;
+    }
+
+    private bool CreateRoboticArmConflictRows(Transform areaRoot)
+    {
+        bool createdAny = false;
+        RoboticArmNetworkAdapter[] adapters = FindObjectsOfType<RoboticArmNetworkAdapter>(true);
+        foreach (RoboticArmNetworkAdapter adapter in adapters)
+        {
+            if (adapter == null
+                || !adapter.isActiveAndEnabled
+                || !adapter.HasNetworkConflict
+                || !IsInSameArea(adapter.transform, areaRoot))
             {
                 continue;
             }
 
-            NetworkPrinterDevice canonicalPrinter = ResolveCanonicalPrinterDevice(printer);
-            if (canonicalPrinter == null || !canonicalPrinter.isActiveAndEnabled || !IsInSameArea(canonicalPrinter.transform, areaRoot))
-            {
-                continue;
-            }
-
-            Transform printerRoot = ResolvePrinterRootTransform(canonicalPrinter.transform);
-            if (printerRoot == null)
-            {
-                printerRoot = canonicalPrinter.transform;
-            }
-
-            if (!visiblePrinterDevices.TryGetValue(printerRoot, out NetworkPrinterDevice existingPrinter)
-                || (!existingPrinter.CanPrint && canonicalPrinter.CanPrint))
-            {
-                visiblePrinterDevices[printerRoot] = canonicalPrinter;
-            }
-        }
-
-        foreach (NetworkPrinterDevice printer in visiblePrinterDevices.Values)
-        {
-            CreatePrinterDeviceRow(printer);
+            CreateRoboticArmRow(adapter);
             createdAny = true;
         }
 
-        if (!createdAny)
+        return createdAny;
+    }
+
+    private void CreateRoboticArmRow(RoboticArmNetworkAdapter adapter)
+    {
+        GameObject rowObject = CreateUiObject("RoboticArm_" + adapter.DeviceId, ipScrollRect.content);
+        RectTransform rowRect = rowObject.AddComponent<RectTransform>();
+        rowRect.sizeDelta = new Vector2(0f, 132f);
+
+        LayoutElement rowLayout = rowObject.AddComponent<LayoutElement>();
+        rowLayout.minHeight = 132f;
+        rowLayout.preferredHeight = 132f;
+
+        Image rowImage = rowObject.AddComponent<Image>();
+        rowImage.raycastTarget = true;
+        HoverFadeOutline hoverOutline = rowObject.AddComponent<HoverFadeOutline>();
+        hoverOutline.Configure(rowImage, new Color(0.05f, 0.05f, 0.05f, 0.95f), 0.16f);
+
+        GameObject cardObject = CreateUiObject("Card", rowObject.transform);
+        RectTransform cardRect = cardObject.AddComponent<RectTransform>();
+        cardRect.anchorMin = Vector2.zero;
+        cardRect.anchorMax = Vector2.one;
+        cardRect.offsetMin = new Vector2(3f, 3f);
+        cardRect.offsetMax = new Vector2(-3f, -3f);
+
+        Image cardImage = cardObject.AddComponent<Image>();
+        bool isConflict = adapter.HasNetworkConflict;
+        bool isRunning = adapter.CurrentOperationalState == RoboticArmNetworkAdapter.OperationalState.Running;
+        cardImage.color = isConflict ? new Color(1f, 0.86f, 0.82f, 0.96f)
+            : isRunning ? new Color(0.84f, 1f, 0.86f, 0.96f)
+            : new Color(1f, 0.96f, 0.78f, 0.96f);
+
+        GameObject textObject = CreateUiObject("Text", cardObject.transform);
+        RectTransform textRect = textObject.AddComponent<RectTransform>();
+        textRect.anchorMin = Vector2.zero;
+        textRect.anchorMax = Vector2.one;
+        textRect.offsetMin = new Vector2(rowHorizontalPadding + 6f, 12f);
+        textRect.offsetMax = new Vector2(-166f, -12f);
+
+        Text armText = textObject.AddComponent<Text>();
+        string communicationLabel = GetFactoryCommunicationLabel(adapter);
+        string operationLabel = GetFactoryOperationLabel(adapter);
+        armText.text = "Dispositivo: " + adapter.DeviceName
+            + "\nComunicação: " + communicationLabel
+            + "\nOperação: " + operationLabel;
+        armText.alignment = TextAnchor.MiddleLeft;
+        armText.color = new Color(0.08f, 0.08f, 0.08f, 1f);
+        armText.font = GetDefaultFont();
+        armText.fontSize = 15;
+        armText.horizontalOverflow = HorizontalWrapMode.Wrap;
+        armText.verticalOverflow = VerticalWrapMode.Truncate;
+
+        GameObject buttonObject = CreateUiObject("Action", cardObject.transform);
+        RectTransform buttonRect = buttonObject.AddComponent<RectTransform>();
+        buttonRect.anchorMin = new Vector2(1f, 0.5f);
+        buttonRect.anchorMax = new Vector2(1f, 0.5f);
+        buttonRect.pivot = new Vector2(1f, 0.5f);
+        buttonRect.anchoredPosition = new Vector2(-rowHorizontalPadding - 6f, 0f);
+        buttonRect.sizeDelta = new Vector2(146f, 46f);
+
+        bool canStart = adapter.IsAccessibleByFactorySystem && adapter.CurrentOperationalState == RoboticArmNetworkAdapter.OperationalState.Off;
+        bool canStop = adapter.IsAccessibleByFactorySystem && adapter.CurrentOperationalState == RoboticArmNetworkAdapter.OperationalState.Running;
+        bool canClick = canStart || canStop;
+        Image buttonImage = buttonObject.AddComponent<Image>();
+        buttonImage.color = canClick ? new Color(0.16f, 0.45f, 0.92f, 0.92f) : new Color(0.62f, 0.62f, 0.62f, 0.72f);
+
+        Button button = buttonObject.AddComponent<Button>();
+        button.interactable = canClick;
+        button.targetGraphic = buttonImage;
+        if (canClick)
         {
-            CreateMessageRow("Nenhum dispositivo de rede encontrado");
+            button.onClick.AddListener(() =>
+            {
+                bool accepted = canStop ? adapter.RequestStopWork() : adapter.RequestStartWork();
+                if (accepted)
+                {
+                    Debug.Log("[FactorySystem] Comando enviado ao " + adapter.DeviceName + ".", this);
+                }
+
+                RefreshIpRows();
+            });
+        }
+
+        GameObject labelObject = CreateUiObject("Text", buttonObject.transform);
+        RectTransform labelRect = labelObject.AddComponent<RectTransform>();
+        labelRect.anchorMin = Vector2.zero;
+        labelRect.anchorMax = Vector2.one;
+        labelRect.offsetMin = Vector2.zero;
+        labelRect.offsetMax = Vector2.zero;
+
+        Text buttonText = labelObject.AddComponent<Text>();
+        buttonText.text = GetFactoryActionLabel(adapter);
+        buttonText.alignment = TextAnchor.MiddleCenter;
+        buttonText.color = Color.white;
+        buttonText.font = GetDefaultFont();
+        buttonText.fontSize = 12;
+        buttonText.fontStyle = FontStyle.Bold;
+        buttonText.horizontalOverflow = HorizontalWrapMode.Wrap;
+        buttonText.verticalOverflow = VerticalWrapMode.Truncate;
+    }
+
+    private string GetFactoryCommunicationLabel(RoboticArmNetworkAdapter adapter)
+    {
+        if (adapter == null)
+        {
+            return "Dispositivo desconectado";
+        }
+
+        if (adapter.HasNetworkConflict)
+        {
+            return "Conflito de rede";
+        }
+
+        return adapter.IsAccessibleByFactorySystem ? "Conectado" : "Dispositivo desconectado";
+    }
+
+    private string GetFactoryOperationLabel(RoboticArmNetworkAdapter adapter)
+    {
+        if (adapter == null || adapter.HasNetworkConflict || !adapter.IsAccessibleByFactorySystem)
+        {
+            return "Indisponível";
+        }
+
+        switch (adapter.CurrentOperationalState)
+        {
+            case RoboticArmNetworkAdapter.OperationalState.Running:
+                return "Em funcionamento";
+            case RoboticArmNetworkAdapter.OperationalState.Stopping:
+                return "Parando";
+            default:
+                return "Desligado";
+        }
+    }
+
+    private string GetFactoryActionLabel(RoboticArmNetworkAdapter adapter)
+    {
+        if (adapter == null)
+        {
+            return "Indisponível";
+        }
+
+        switch (adapter.CurrentOperationalState)
+        {
+            case RoboticArmNetworkAdapter.OperationalState.Running:
+                return "Parar trabalho";
+            case RoboticArmNetworkAdapter.OperationalState.Stopping:
+                return "Parando";
+            default:
+                return adapter.IsAccessibleByFactorySystem ? "Iniciar trabalho" : "Indisponível";
         }
     }
 
@@ -1585,11 +1820,18 @@ public class ComputerInteractable : MonoBehaviour
     {
         GameObject rowObject = CreateUiObject("Message", ipScrollRect.content);
         RectTransform rowRect = rowObject.AddComponent<RectTransform>();
-        rowRect.sizeDelta = new Vector2(0f, rowHeight);
+        int lineCount = string.IsNullOrEmpty(message) ? 1 : message.Split('\n').Length;
+        float messageHeight = Mathf.Max(rowHeight, lineCount * 24f + 20f);
+        rowRect.sizeDelta = new Vector2(0f, messageHeight);
+
+        LayoutElement rowLayout = rowObject.AddComponent<LayoutElement>();
+        rowLayout.minHeight = messageHeight;
+        rowLayout.preferredHeight = messageHeight;
 
         Text text = rowObject.AddComponent<Text>();
         ApplyRowText(text, message, new Color(0.25f, 0.25f, 0.25f, 1f), FontStyle.Normal);
         text.fontSize = 16;
+        text.verticalOverflow = VerticalWrapMode.Overflow;
     }
 
     private Text CreateFullRowText(Transform parent, string value, Color color, FontStyle fontStyle)
@@ -1805,22 +2047,62 @@ public class ComputerInteractable : MonoBehaviour
             return;
         }
 
-        if (CanInteract)
+        if (string.IsNullOrWhiteSpace(useComputerPromptText) || useComputerPromptText.StartsWith("F usar"))
         {
-            promptLabel.text = CanBePickedUp ? carryPromptText + "  |  " + networkPromptText : networkPromptText;
+            useComputerPromptText = "Enter usar notebook";
         }
-        else if (HasWiFiInterface)
+
+        string promptText = CanBePickedUp ? FormatPromptAction(carryPromptText) : string.Empty;
+        if (CanInteract || HasWiFiInterface)
         {
-            promptLabel.text = CanBePickedUp ? carryPromptText + "  |  " + networkPromptText : networkPromptText;
+            promptText = AppendPromptAction(promptText, FormatPromptAction(networkPromptText));
         }
-        else
+
+        if (IsNetworkOperational && HasWiFiInterface)
         {
-            promptLabel.text = carryPromptText;
+            promptText = AppendPromptAction(promptText, FormatPromptAction(useComputerPromptText));
         }
+
+        if (string.IsNullOrWhiteSpace(promptText))
+        {
+            promptText = FormatPromptAction(carryPromptText);
+        }
+
+        promptLabel.text = promptText;
         promptLabel.alignment = TextAnchor.MiddleCenter;
         promptLabel.color = Color.white;
         promptLabel.font = GetDefaultFont();
-        promptLabel.fontSize = 18;
+        promptLabel.fontSize = 16;
+    }
+
+    private string AppendPromptAction(string current, string action)
+    {
+        if (string.IsNullOrWhiteSpace(action))
+        {
+            return current;
+        }
+
+        return string.IsNullOrWhiteSpace(current) ? action : current + "\n" + action;
+    }
+
+    private string FormatPromptAction(string action)
+    {
+        if (string.IsNullOrWhiteSpace(action))
+        {
+            return string.Empty;
+        }
+
+        if (action.StartsWith("Enter "))
+        {
+            return "Enter - " + action.Substring("Enter ".Length);
+        }
+
+        if (action.Length > 2 && action[1] == ' ')
+        {
+            return action[0] + " - " + action.Substring(2);
+        }
+
+        return action;
     }
 
     private void ApplySelectedIpLabel()
@@ -1832,7 +2114,7 @@ public class ComputerInteractable : MonoBehaviour
 
         if (showingTerminalPanel)
         {
-            selectedIpLabel.text = "Dispositivos de rede";
+            selectedIpLabel.text = "Dispositivos da fábrica";
         }
         else if (HasWiFiInterface && !IsConnectedToNetworkJack && selectedWiFiRouter == null)
         {

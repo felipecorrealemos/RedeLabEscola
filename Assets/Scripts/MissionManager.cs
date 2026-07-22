@@ -1,3 +1,4 @@
+using System.Collections;
 using System.Collections.Generic;
 using UnityEngine;
 using UnityEngine.EventSystems;
@@ -26,6 +27,7 @@ public class MissionManager : MonoBehaviour
     private const string MissionCanvasName = "MissionCanvas";
     private const string MissionPanelName = "MissionPanel";
     private const string GameplaySceneName = "SampleScene";
+    private const string Stage2SceneName = "Stage2_Factory";
 
     [SerializeField] private List<Mission> missions = new List<Mission>();
     [SerializeField] private int startingMissionNumber = 1;
@@ -39,8 +41,12 @@ public class MissionManager : MonoBehaviour
     [SerializeField] private GameObject expandedContent;
     [SerializeField] private Vector2 panelAnchorMin = new Vector2(0.02f, 0.34f);
     [SerializeField] private Vector2 panelAnchorMax = new Vector2(0.42f, 0.96f);
+    [SerializeField] private Vector2 panelOffsetMin = Vector2.zero;
+    [SerializeField] private Vector2 panelOffsetMax = Vector2.zero;
     [SerializeField] private Vector2 collapsedPanelAnchorMin = new Vector2(0.02f, 0.90f);
     [SerializeField] private Vector2 collapsedPanelAnchorMax = new Vector2(0.22f, 0.96f);
+    [SerializeField] private Vector2 collapsedPanelOffsetMin = Vector2.zero;
+    [SerializeField] private Vector2 collapsedPanelOffsetMax = Vector2.zero;
     [SerializeField] private float panelOpacity = 0.78f;
     [SerializeField] private float taskRowHeight = 34f;
     [SerializeField] private int taskFontSize = 13;
@@ -52,12 +58,19 @@ public class MissionManager : MonoBehaviour
     [SerializeField] private float routerMissionDetectionRadius = 8f;
     [SerializeField] private float missionAreaRefreshInterval = 1f;
     [SerializeField] private float fadeDuration = 0.18f;
+    [SerializeField] private float stage2MissionStateRefreshInterval = 0.5f;
 
     private readonly Dictionary<int, Mission> missionsByNumber = new Dictionary<int, Mission>();
     private Mission currentMission;
     private bool isExpanded = true;
+    private bool usingStage2MissionProfile;
+    private bool stage2RoboticArmRefreshQueued;
+    private bool capturedScenePanelLayout;
+    [SerializeField] private int stage2RoboticArmOperatingCount;
+    private string lastUiStateSignature;
     private float collapseAtTime;
     private float nextMissionAreaRefreshTime;
+    private float nextStage2MissionStateRefreshTime;
     private float fadeTarget = 1f;
 
     public static MissionManager Instance { get; private set; }
@@ -72,7 +85,35 @@ public class MissionManager : MonoBehaviour
 
     private static void HandleSceneLoaded(Scene scene, LoadSceneMode mode)
     {
-        if (!IsGameplayScene(scene))
+        EnsureForScene(scene);
+    }
+
+    [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.AfterSceneLoad)]
+    public static void EnsureForCurrentScene()
+    {
+        Scene activeScene = SceneManager.GetActiveScene();
+        if (IsMissionScene(activeScene))
+        {
+            EnsureForScene(activeScene);
+            return;
+        }
+
+        for (int i = 0; i < SceneManager.sceneCount; i++)
+        {
+            Scene scene = SceneManager.GetSceneAt(i);
+            if (IsMissionScene(scene))
+            {
+                EnsureForScene(scene);
+                return;
+            }
+        }
+
+        DestroySceneMissionUi();
+    }
+
+    public static void EnsureForScene(Scene scene)
+    {
+        if (!IsMissionScene(scene))
         {
             DestroySceneMissionUi();
             return;
@@ -83,12 +124,46 @@ public class MissionManager : MonoBehaviour
             return;
         }
 
-        new GameObject("MissionManager").AddComponent<MissionManager>();
+        GameObject managerObject = new GameObject("MissionManager");
+        if (scene.IsValid() && scene.isLoaded)
+        {
+            SceneManager.MoveGameObjectToScene(managerObject, scene);
+        }
+
+        managerObject.AddComponent<MissionManager>();
     }
+
+#if UNITY_EDITOR
+    public void EnsureEditorPreview()
+    {
+        if (Application.isPlaying || !IsMissionScene(GetMissionSceneContext()))
+        {
+            return;
+        }
+
+        ConfigureMissionsForActiveScene();
+        RebuildMissionLookup();
+        EnsureUi();
+        SetMission(startingMissionNumber);
+
+        UnityEditor.EditorUtility.SetDirty(this);
+        if (canvas != null)
+        {
+            UnityEditor.EditorUtility.SetDirty(canvas.gameObject);
+        }
+
+        if (panelRect != null)
+        {
+            UnityEditor.EditorUtility.SetDirty(panelRect.gameObject);
+        }
+
+        UnityEditor.SceneManagement.EditorSceneManager.MarkSceneDirty(GetMissionSceneContext());
+    }
+#endif
 
     private void Awake()
     {
-        if (!IsGameplayScene(SceneManager.GetActiveScene()))
+        if (!IsMissionScene(GetMissionSceneContext()))
         {
             Destroy(gameObject);
             return;
@@ -101,10 +176,11 @@ public class MissionManager : MonoBehaviour
         }
 
         Instance = this;
-        EnsureDefaultMissions();
+        ConfigureMissionsForActiveScene();
         RebuildMissionLookup();
         EnsureUi();
         SetMission(startingMissionNumber);
+        RefreshStage2RoboticArmMission();
     }
 
     private void OnDestroy()
@@ -117,7 +193,19 @@ public class MissionManager : MonoBehaviour
 
     private void OnValidate()
     {
-        EnsureDefaultMissions();
+        if (Application.isPlaying)
+        {
+            RebuildMissionLookup();
+            RefreshUiIfStateChanged(true);
+            return;
+        }
+
+        ConfigureMissionsForActiveScene();
+    }
+
+    private Scene GetMissionSceneContext()
+    {
+        return gameObject.scene.IsValid() ? gameObject.scene : SceneManager.GetActiveScene();
     }
 
     private void Update()
@@ -128,6 +216,8 @@ public class MissionManager : MonoBehaviour
         }
 
         RefreshMissionFromNearestRouter();
+        RefreshStage2MissionState();
+        RefreshUiIfStateChanged(false);
 
         if (isExpanded && autoCollapseDelay > 0f && Time.unscaledTime >= collapseAtTime)
         {
@@ -187,6 +277,7 @@ public class MissionManager : MonoBehaviour
         task.IsComplete = complete;
         if (currentMission == mission)
         {
+            ExpandForDelay();
             RefreshUi();
         }
     }
@@ -459,6 +550,62 @@ public class MissionManager : MonoBehaviour
             "sala3_entregar_documento");
     }
 
+    public static void NotifyStage2RoboticArmOperationChanged()
+    {
+        if (Instance == null)
+        {
+            return;
+        }
+
+        Instance.QueueStage2RoboticArmMissionRefresh();
+    }
+
+    public static void NotifyStage2ScrapConsumed()
+    {
+        if (Instance == null || !Instance.usingStage2MissionProfile)
+        {
+            return;
+        }
+
+        Instance.RefreshStage2ScrapMission();
+    }
+
+    public static void NotifyStage2PalletPlacedOnConveyor()
+    {
+        if (Instance == null || !Instance.usingStage2MissionProfile)
+        {
+            return;
+        }
+
+        Instance.RefreshStage2PalletMission();
+    }
+
+    private void ConfigureMissionsForActiveScene()
+    {
+        missions.Clear();
+        if (IsStage2Scene(GetMissionSceneContext()))
+        {
+            usingStage2MissionProfile = true;
+            EnsureStage2Missions();
+            updateMissionFromNearestRouter = false;
+            startingMissionNumber = 1;
+            return;
+        }
+
+        usingStage2MissionProfile = false;
+        EnsureDefaultMissions();
+    }
+
+    private void EnsureStage2Missions()
+    {
+        EnsureMission(1, "Fabrica", new[]
+        {
+            new MissionTask { Id = "fabrica_bracos_roboticos", Description = "Fazer funcionar os tres bracos roboticos" },
+            new MissionTask { Id = "fabrica_limpar_entulhos_garra", Description = "Limpar entulhos com a garra pelo terminal" },
+            new MissionTask { Id = "fabrica_pallets_esteira_empilhadeira", Description = "Colocar os pallets na esteira com a empilhadeira" }
+        });
+    }
+
     private void EnsureDefaultMissions()
     {
         EnsureMission(1, "Sala 1", new[]
@@ -586,9 +733,14 @@ public class MissionManager : MonoBehaviour
         }
     }
 
-    private static bool IsGameplayScene(Scene scene)
+    private static bool IsMissionScene(Scene scene)
     {
-        return scene.IsValid() && scene.name == GameplaySceneName;
+        return scene.IsValid() && (scene.name == GameplaySceneName || IsStage2Scene(scene));
+    }
+
+    private static bool IsStage2Scene(Scene scene)
+    {
+        return scene.IsValid() && scene.name == Stage2SceneName;
     }
 
     private static void DestroySceneMissionUi()
@@ -655,6 +807,163 @@ public class MissionManager : MonoBehaviour
         {
             SetMission(missionNumber);
         }
+    }
+
+    private void RefreshStage2MissionState()
+    {
+        if (!usingStage2MissionProfile || Time.time < nextStage2MissionStateRefreshTime)
+        {
+            return;
+        }
+
+        nextStage2MissionStateRefreshTime = Time.time + Mathf.Max(stage2MissionStateRefreshInterval, 0.1f);
+        RefreshStage2ScrapMission();
+        RefreshStage2PalletMission();
+    }
+
+    private void RefreshStage2RoboticArmMission()
+    {
+        if (!usingStage2MissionProfile)
+        {
+            return;
+        }
+
+        RoboticArmNetworkAdapter[] adapters = FindObjectsOfType<RoboticArmNetworkAdapter>(true);
+        HashSet<string> onlineDeviceIds = new HashSet<string>();
+        int onlineCount = 0;
+        for (int i = 0; i < adapters.Length; i++)
+        {
+            RoboticArmNetworkAdapter adapter = adapters[i];
+            if (IsStage2RoboticArmOnline(adapter))
+            {
+                string key = !string.IsNullOrWhiteSpace(adapter.DeviceId) ? adapter.DeviceId : adapter.GetInstanceID().ToString();
+                if (onlineDeviceIds.Add(key))
+                {
+                    onlineCount++;
+                }
+            }
+        }
+
+        int clampedOnlineCount = Mathf.Clamp(onlineCount, 0, 3);
+        bool countChanged = stage2RoboticArmOperatingCount != clampedOnlineCount;
+        stage2RoboticArmOperatingCount = clampedOnlineCount;
+
+        SetTaskCompletion(1, "fabrica_bracos_roboticos", stage2RoboticArmOperatingCount >= 3);
+        if (countChanged)
+        {
+            RefreshUiIfStateChanged(true);
+        }
+    }
+
+    private void QueueStage2RoboticArmMissionRefresh()
+    {
+        RefreshStage2RoboticArmMission();
+        if (!usingStage2MissionProfile || stage2RoboticArmRefreshQueued || !isActiveAndEnabled)
+        {
+            return;
+        }
+
+        stage2RoboticArmRefreshQueued = true;
+        StartCoroutine(RefreshStage2RoboticArmMissionAtEndOfFrame());
+    }
+
+    private IEnumerator RefreshStage2RoboticArmMissionAtEndOfFrame()
+    {
+        yield return null;
+        stage2RoboticArmRefreshQueued = false;
+        RefreshStage2RoboticArmMission();
+    }
+
+    private bool IsStage2RoboticArmOnline(RoboticArmNetworkAdapter adapter)
+    {
+        return adapter != null
+            && adapter.isActiveAndEnabled
+            && adapter.CurrentNetworkState == RoboticArmNetworkAdapter.NetworkState.Operating;
+    }
+
+    private void RefreshStage2ScrapMission()
+    {
+        if (IsTaskComplete(1, "fabrica_limpar_entulhos_garra"))
+        {
+            return;
+        }
+
+        Transform scrapsRoot = FindTransformByName("entulhos");
+        if (scrapsRoot != null && scrapsRoot.childCount == 0)
+        {
+            SetTaskCompletion(1, "fabrica_limpar_entulhos_garra", true);
+        }
+    }
+
+    private void RefreshStage2PalletMission()
+    {
+        if (IsTaskComplete(1, "fabrica_pallets_esteira_empilhadeira"))
+        {
+            return;
+        }
+
+        Transform palletMachine = FindTransformByName("PalletMachine");
+        Transform palletsRoot = palletMachine != null ? FindChildRecursive(palletMachine, "Pallets") : FindTransformByName("Pallets");
+        if (palletsRoot != null && palletsRoot.childCount == 0)
+        {
+            SetTaskCompletion(1, "fabrica_pallets_esteira_empilhadeira", true);
+        }
+    }
+
+    private bool IsTaskComplete(int missionNumber, string taskId)
+    {
+        RebuildMissionLookup();
+        if (!missionsByNumber.TryGetValue(missionNumber, out Mission mission) || mission.Tasks == null)
+        {
+            return false;
+        }
+
+        MissionTask task = mission.Tasks.Find(candidate => candidate.Id == taskId);
+        return task != null && task.IsComplete;
+    }
+
+    private Transform FindTransformByName(string targetName)
+    {
+        if (string.IsNullOrWhiteSpace(targetName))
+        {
+            return null;
+        }
+
+        Transform[] transforms = FindObjectsOfType<Transform>(true);
+        for (int i = 0; i < transforms.Length; i++)
+        {
+            if (transforms[i] != null && transforms[i].name == targetName)
+            {
+                return transforms[i];
+            }
+        }
+
+        return null;
+    }
+
+    private Transform FindChildRecursive(Transform parent, string childName)
+    {
+        if (parent == null || string.IsNullOrWhiteSpace(childName))
+        {
+            return null;
+        }
+
+        for (int i = 0; i < parent.childCount; i++)
+        {
+            Transform child = parent.GetChild(i);
+            if (child.name == childName)
+            {
+                return child;
+            }
+
+            Transform nested = FindChildRecursive(child, childName);
+            if (nested != null)
+            {
+                return nested;
+            }
+        }
+
+        return null;
     }
 
     private Transform FindPlayerTransform()
@@ -927,6 +1236,7 @@ public class MissionManager : MonoBehaviour
         EnsureEventSystem();
 
         Transform panel = canvas.transform.Find(MissionPanelName);
+        bool panelAlreadyExists = panel != null;
         if (panel == null)
         {
             panel = CreatePanel(canvas.transform).transform;
@@ -954,6 +1264,12 @@ public class MissionManager : MonoBehaviour
             DestroyImmediateSafe(panel.gameObject);
             panel = CreatePanel(canvas.transform).transform;
             panelCanvasGroup = panel.GetComponent<CanvasGroup>();
+            panelAlreadyExists = false;
+        }
+
+        if (panelAlreadyExists)
+        {
+            CaptureScenePanelLayout();
         }
 
         Text toggleLabel = panel.Find("ToggleButton/Text")?.GetComponent<Text>();
@@ -973,8 +1289,8 @@ public class MissionManager : MonoBehaviour
         panelRect = panelObject.AddComponent<RectTransform>();
         panelRect.anchorMin = panelAnchorMin;
         panelRect.anchorMax = panelAnchorMax;
-        panelRect.offsetMin = Vector2.zero;
-        panelRect.offsetMax = Vector2.zero;
+        panelRect.offsetMin = panelOffsetMin;
+        panelRect.offsetMax = panelOffsetMax;
 
         Image panelImage = panelObject.AddComponent<Image>();
         panelImage.color = new Color(0f, 0f, 0f, panelOpacity);
@@ -1062,6 +1378,20 @@ public class MissionManager : MonoBehaviour
         return panelObject;
     }
 
+    private void CaptureScenePanelLayout()
+    {
+        if (capturedScenePanelLayout || panelRect == null)
+        {
+            return;
+        }
+
+        panelAnchorMin = panelRect.anchorMin;
+        panelAnchorMax = panelRect.anchorMax;
+        panelOffsetMin = panelRect.offsetMin;
+        panelOffsetMax = panelRect.offsetMax;
+        capturedScenePanelLayout = true;
+    }
+
     private void RefreshUi()
     {
         EnsureUi();
@@ -1070,6 +1400,7 @@ public class MissionManager : MonoBehaviour
             return;
         }
 
+        lastUiStateSignature = BuildUiStateSignature();
         titleLabel.text = currentMission.Title;
         ExpandForDelay();
 
@@ -1082,6 +1413,60 @@ public class MissionManager : MonoBehaviour
         {
             CreateTaskRow(task);
         }
+    }
+
+    private void RefreshUiIfStateChanged(bool expandPanel)
+    {
+        if (currentMission == null)
+        {
+            return;
+        }
+
+        string nextSignature = BuildUiStateSignature();
+        if (nextSignature == lastUiStateSignature)
+        {
+            return;
+        }
+
+        if (expandPanel)
+        {
+            ExpandForDelay();
+        }
+
+        RefreshUi();
+    }
+
+    private string BuildUiStateSignature()
+    {
+        if (currentMission == null)
+        {
+            return string.Empty;
+        }
+
+        System.Text.StringBuilder builder = new System.Text.StringBuilder(128);
+        builder.Append(currentMission.Number);
+        builder.Append('|');
+        builder.Append(currentMission.Title);
+        if (currentMission.Tasks != null)
+        {
+            for (int i = 0; i < currentMission.Tasks.Count; i++)
+            {
+                MissionTask task = currentMission.Tasks[i];
+                if (task == null)
+                {
+                    continue;
+                }
+
+                builder.Append('|');
+                builder.Append(task.Id);
+                builder.Append(':');
+                builder.Append(task.IsComplete ? '1' : '0');
+                builder.Append(':');
+                builder.Append(GetTaskDisplayDescription(task));
+            }
+        }
+
+        return builder.ToString();
     }
 
     private void CreateTaskRow(MissionTask task)
@@ -1123,7 +1508,22 @@ public class MissionManager : MonoBehaviour
         taskText.horizontalOverflow = HorizontalWrapMode.Wrap;
         taskText.verticalOverflow = VerticalWrapMode.Overflow;
         taskText.color = task.IsComplete ? new Color(0.75f, 1f, 0.8f, 1f) : Color.white;
-        taskText.text = task.Description;
+        taskText.text = GetTaskDisplayDescription(task);
+    }
+
+    private string GetTaskDisplayDescription(MissionTask task)
+    {
+        if (task == null)
+        {
+            return string.Empty;
+        }
+
+        if (usingStage2MissionProfile && task.Id == "fabrica_bracos_roboticos")
+        {
+            return task.Description + "  " + stage2RoboticArmOperatingCount + "/3";
+        }
+
+        return task.Description;
     }
 
     private void ExpandForDelay()
@@ -1158,8 +1558,8 @@ public class MissionManager : MonoBehaviour
         {
             panelRect.anchorMin = isExpanded ? ResolveExpandedPanelAnchorMin() : collapsedPanelAnchorMin;
             panelRect.anchorMax = isExpanded ? panelAnchorMax : collapsedPanelAnchorMax;
-            panelRect.offsetMin = Vector2.zero;
-            panelRect.offsetMax = Vector2.zero;
+            panelRect.offsetMin = isExpanded ? panelOffsetMin : collapsedPanelOffsetMin;
+            panelRect.offsetMax = isExpanded ? panelOffsetMax : collapsedPanelOffsetMax;
         }
 
         if (expandedContent != null)
@@ -1188,10 +1588,7 @@ public class MissionManager : MonoBehaviour
 
     private Vector2 ResolveExpandedPanelAnchorMin()
     {
-        float screenHeight = Mathf.Max(Screen.height, 1f);
-        float requiredAnchorHeight = Mathf.Clamp01(minimumExpandedPanelHeight / screenHeight);
-        float minY = Mathf.Min(panelAnchorMin.y, panelAnchorMax.y - requiredAnchorHeight);
-        return new Vector2(panelAnchorMin.x, Mathf.Clamp01(minY));
+        return panelAnchorMin;
     }
 
     private void UpdateFade()

@@ -1,10 +1,17 @@
 using UnityEngine;
 using UnityEngine.UI;
+#if UNITY_EDITOR
+using UnityEditor;
+#endif
 
 [DisallowMultipleComponent]
 [RequireComponent(typeof(Rigidbody))]
 public class EmpilhadeiraController : MonoBehaviour
 {
+#if UNITY_EDITOR
+    private const string ForkliftIconSpritePath = "Assets/Imagens/empilhadeira/imagem empilhadeira.png";
+#endif
+
     [Header("Debug")]
     [SerializeField] private bool playerNearby;
     [SerializeField] private bool playerDriving;
@@ -52,6 +59,7 @@ public class EmpilhadeiraController : MonoBehaviour
     [SerializeField] private float forkRestTolerance = 0.01f;
 
     [Header("Fisica")]
+    [SerializeField] private bool kinematicWhenParked = true;
     [SerializeField] private Vector3 centerOfMass = new Vector3(0f, 0.25f, 0f);
     [SerializeField] private float linearDrag = 1.5f;
     [SerializeField] private float angularDrag = 8f;
@@ -60,8 +68,14 @@ public class EmpilhadeiraController : MonoBehaviour
     [SerializeField] private Collider interactionTrigger;
     [SerializeField] private Transform driverSeatPoint;
     [SerializeField] private Transform playerExitPoint;
+    [SerializeField] private DeadZoneCameraFollow cameraFollow;
     [SerializeField] private KeyCode interactionKey = KeyCode.E;
     [SerializeField] private string enterPromptText = "Aperte E para entrar na empilhadeira";
+    [SerializeField] private bool allowCameraZoomWhileDriving = true;
+    [SerializeField] private float exitSearchRadius = 1.2f;
+    [SerializeField] private int exitSearchSteps = 12;
+    [SerializeField] private float exitClearancePadding = 0.04f;
+    [SerializeField] private LayerMask exitBlockMask = ~0;
 
     [Header("UI")]
     [SerializeField] private Canvas canvas;
@@ -69,6 +83,7 @@ public class EmpilhadeiraController : MonoBehaviour
     [SerializeField] private Text promptLabel;
     [SerializeField] private GameObject drivingPanelObject;
     [SerializeField] private Text drivingPanelLabel;
+    [SerializeField] private Sprite forkliftIconSprite;
 
     private Rigidbody body;
     private PlayerTopDownController nearbyPlayer;
@@ -107,6 +122,7 @@ public class EmpilhadeiraController : MonoBehaviour
     private Vector3 carriedPalletLocalPosition;
     private Quaternion carriedPalletLocalRotation;
     private EmpilhadeiraPalletDropZone currentDropZone;
+    private readonly Collider[] exitOverlapHits = new Collider[32];
 
     private void Awake()
     {
@@ -410,7 +426,9 @@ public class EmpilhadeiraController : MonoBehaviour
 
         currentPlayer = nearbyPlayer;
         originalPlayerParent = currentPlayer.transform.parent;
+        SetParkedKinematic(false);
         currentPlayer.SetExternalMovementLocked(true);
+        SetDrivingCameraZoomUnlocked();
         currentPlayer.SetForkliftDrivingAnimation(true);
         currentPlayer.transform.SetParent(driverSeatPoint, true);
         currentPlayer.transform.SetPositionAndRotation(driverSeatPoint.position, driverSeatPoint.rotation);
@@ -431,19 +449,107 @@ public class EmpilhadeiraController : MonoBehaviour
             return;
         }
 
-        Transform exitPoint = playerExitPoint != null ? playerExitPoint : transform;
-        SetPlayerCollisionIgnored(false);
+        if (!TryFindSafeExitPose(out Vector3 exitPosition, out Quaternion exitRotation))
+        {
+            return;
+        }
+
         currentPlayer.transform.SetParent(originalPlayerParent, true);
-        currentPlayer.transform.SetPositionAndRotation(exitPoint.position, exitPoint.rotation);
+        currentPlayer.transform.SetPositionAndRotation(exitPosition, exitRotation);
         currentPlayer.SetForkliftDrivingAnimation(false);
+        SetPlayerCollisionIgnored(false);
         currentPlayer.SetExternalMovementLocked(false);
 
         currentPlayer = null;
         originalPlayerParent = null;
         playerDriving = false;
+        SetParkedKinematic(true);
         ClearInputDebug();
         SetPromptVisible(false);
         SetDrivingPanelVisible(false);
+    }
+
+    private bool TryFindSafeExitPose(out Vector3 safePosition, out Quaternion safeRotation)
+    {
+        Transform exitPoint = playerExitPoint != null ? playerExitPoint : transform;
+        safeRotation = exitPoint.rotation;
+
+        if (IsExitPositionClear(exitPoint.position, safeRotation))
+        {
+            safePosition = exitPoint.position;
+            return true;
+        }
+
+        int steps = Mathf.Max(4, exitSearchSteps);
+        float radius = Mathf.Max(0.2f, exitSearchRadius);
+        Vector3 center = exitPoint.position;
+
+        for (int ring = 1; ring <= 2; ring++)
+        {
+            float ringRadius = radius * ring / 2f;
+            for (int i = 0; i < steps; i++)
+            {
+                float angle = (Mathf.PI * 2f * i) / steps;
+                Vector3 offset = new Vector3(Mathf.Cos(angle), 0f, Mathf.Sin(angle)) * ringRadius;
+                Vector3 candidate = center + offset;
+                if (IsExitPositionClear(candidate, safeRotation))
+                {
+                    safePosition = candidate;
+                    return true;
+                }
+            }
+        }
+
+        safePosition = exitPoint.position;
+        return false;
+    }
+
+    private bool IsExitPositionClear(Vector3 position, Quaternion rotation)
+    {
+        if (currentPlayer == null)
+        {
+            return false;
+        }
+
+        CharacterController character = currentPlayer.GetComponent<CharacterController>();
+        float radius = 0.32f;
+        float height = 1.55f;
+        Vector3 centerOffset = Vector3.up * (height * 0.5f);
+
+        if (character != null)
+        {
+            Vector3 scale = character.transform.lossyScale;
+            radius = character.radius * Mathf.Max(Mathf.Abs(scale.x), Mathf.Abs(scale.z)) + exitClearancePadding;
+            height = Mathf.Max(character.height * Mathf.Abs(scale.y), radius * 2f);
+            centerOffset = rotation * character.center;
+        }
+
+        Vector3 center = position + centerOffset;
+        Vector3 up = Vector3.up;
+        float halfSegment = Mathf.Max(0f, height * 0.5f - radius);
+        Vector3 bottom = center - up * halfSegment + up * exitClearancePadding;
+        Vector3 top = center + up * halfSegment;
+
+        int hitCount = Physics.OverlapCapsuleNonAlloc(bottom, top, radius, exitOverlapHits, exitBlockMask, QueryTriggerInteraction.Ignore);
+        for (int i = 0; i < hitCount; i++)
+        {
+            Collider hit = exitOverlapHits[i];
+            exitOverlapHits[i] = null;
+
+            if (hit == null || hit.isTrigger)
+            {
+                continue;
+            }
+
+            if (hit.transform.IsChildOf(currentPlayer.transform) || hit.transform.IsChildOf(transform))
+            {
+                continue;
+            }
+
+            return false;
+        }
+
+        return true;
     }
 
     private PlayerTopDownController ResolvePlayer(Collider candidate)
@@ -464,6 +570,11 @@ public class EmpilhadeiraController : MonoBehaviour
 
     private void ResolveReferences()
     {
+        if (cameraFollow == null && Camera.main != null)
+        {
+            cameraFollow = Camera.main.GetComponent<DeadZoneCameraFollow>();
+        }
+
         if (interactionTrigger == null)
         {
             Transform triggerTransform = transform.Find("InteractionTrigger");
@@ -499,6 +610,21 @@ public class EmpilhadeiraController : MonoBehaviour
             Transform sensorTransform = FindChildByName("ForkPickupSensor");
             forkPickupSensor = sensorTransform != null ? sensorTransform.GetComponent<Collider>() : null;
         }
+    }
+
+    private void SetDrivingCameraZoomUnlocked()
+    {
+        if (!allowCameraZoomWhileDriving)
+        {
+            return;
+        }
+
+        if (cameraFollow == null && Camera.main != null)
+        {
+            cameraFollow = Camera.main.GetComponent<DeadZoneCameraFollow>();
+        }
+
+        cameraFollow?.SetZoomLocked(false);
     }
 
     private void ResolveRearWheelReferences()
@@ -611,14 +737,38 @@ public class EmpilhadeiraController : MonoBehaviour
             return;
         }
 
-        body.isKinematic = false;
         body.useGravity = true;
         body.centerOfMass = centerOfMass;
         body.drag = Mathf.Max(0f, linearDrag);
         body.angularDrag = Mathf.Max(0f, angularDrag);
         body.interpolation = RigidbodyInterpolation.Interpolate;
-        body.collisionDetectionMode = CollisionDetectionMode.ContinuousDynamic;
         body.constraints = RigidbodyConstraints.FreezeRotationX | RigidbodyConstraints.FreezeRotationZ;
+        SetParkedKinematic(!playerDriving);
+    }
+
+    private void SetParkedKinematic(bool parked)
+    {
+        if (body == null)
+        {
+            return;
+        }
+
+        bool shouldBeKinematic = parked && kinematicWhenParked;
+        if (shouldBeKinematic)
+        {
+            if (!body.isKinematic)
+            {
+                body.velocity = Vector3.zero;
+                body.angularVelocity = Vector3.zero;
+            }
+
+            body.isKinematic = true;
+            body.collisionDetectionMode = CollisionDetectionMode.ContinuousSpeculative;
+            return;
+        }
+
+        body.isKinematic = false;
+        body.collisionDetectionMode = CollisionDetectionMode.ContinuousDynamic;
     }
 
     private void ConfigureInteractionTrigger()
@@ -939,6 +1089,11 @@ public class EmpilhadeiraController : MonoBehaviour
                 releasedRigidbody.rotation = releaseRotation;
             }
         }
+
+        if (received)
+        {
+            MissionManager.NotifyStage2PalletPlacedOnConveyor();
+        }
     }
 
     private bool RegisterReleasedPalletAtClosestConveyorPoint(
@@ -1234,7 +1389,7 @@ public class EmpilhadeiraController : MonoBehaviour
 
     private void ApplyYawDamping(float deltaTime)
     {
-        if (body == null)
+        if (body == null || body.isKinematic)
         {
             return;
         }
@@ -1310,6 +1465,7 @@ public class EmpilhadeiraController : MonoBehaviour
 
         RuntimeEventSystemUtility.EnsureSingleEventSystem();
 
+        bool createdPrompt = false;
         if (promptObject == null)
         {
             Transform existingPrompt = canvas.transform.Find("EmpilhadeiraPrompt");
@@ -1343,9 +1499,10 @@ public class EmpilhadeiraController : MonoBehaviour
             labelRect.offsetMin = Vector2.zero;
             labelRect.offsetMax = Vector2.zero;
             promptLabel = labelObject.AddComponent<Text>();
+            createdPrompt = true;
         }
 
-        if (promptLabel != null)
+        if (promptLabel != null && createdPrompt)
         {
             promptLabel.alignment = TextAnchor.MiddleCenter;
             promptLabel.color = Color.white;
@@ -1373,6 +1530,7 @@ public class EmpilhadeiraController : MonoBehaviour
             }
         }
 
+        bool createdPanel = false;
         if (drivingPanelObject == null)
         {
             drivingPanelObject = new GameObject("EmpilhadeiraDrivingPanel");
@@ -1383,7 +1541,7 @@ public class EmpilhadeiraController : MonoBehaviour
             panelRect.anchorMax = new Vector2(0f, 1f);
             panelRect.pivot = new Vector2(0f, 1f);
             panelRect.anchoredPosition = new Vector2(24f, -96f);
-            panelRect.sizeDelta = new Vector2(260f, 170f);
+            panelRect.sizeDelta = new Vector2(260f, 230f);
 
             Image background = drivingPanelObject.AddComponent<Image>();
             background.color = new Color(0f, 0f, 0f, 0.6f);
@@ -1396,9 +1554,12 @@ public class EmpilhadeiraController : MonoBehaviour
             labelRect.offsetMin = new Vector2(12f, 8f);
             labelRect.offsetMax = new Vector2(-12f, -8f);
             drivingPanelLabel = labelObject.AddComponent<Text>();
+            createdPanel = true;
         }
 
-        if (drivingPanelLabel != null)
+        EnsureDrivingPanelChildren(createdPanel);
+
+        if (drivingPanelLabel != null && createdPanel)
         {
             drivingPanelLabel.alignment = TextAnchor.UpperLeft;
             drivingPanelLabel.color = Color.white;
@@ -1407,6 +1568,83 @@ public class EmpilhadeiraController : MonoBehaviour
             drivingPanelLabel.horizontalOverflow = HorizontalWrapMode.Wrap;
             drivingPanelLabel.verticalOverflow = VerticalWrapMode.Truncate;
         }
+    }
+
+    private void EnsureDrivingPanelChildren(bool applyDefaultLayout)
+    {
+        if (drivingPanelObject == null)
+        {
+            return;
+        }
+
+        ResolveForkliftIconSprite();
+        ConfigureForkliftIcon(drivingPanelObject.transform, forkliftIconSprite, applyDefaultLayout);
+
+        if (drivingPanelLabel != null && applyDefaultLayout)
+        {
+            RectTransform labelRect = drivingPanelLabel.GetComponent<RectTransform>();
+            if (labelRect != null)
+            {
+                labelRect.anchorMin = Vector2.zero;
+                labelRect.anchorMax = Vector2.one;
+                labelRect.offsetMin = new Vector2(12f, 8f);
+                labelRect.offsetMax = new Vector2(-12f, -96f);
+            }
+        }
+    }
+
+    private static void ConfigureForkliftIcon(Transform panel, Sprite sprite, bool applyDefaultLayout)
+    {
+        Transform iconTransform = panel.Find("ForkliftIcon");
+        bool createdIcon = false;
+        if (iconTransform == null)
+        {
+            GameObject iconObject = new GameObject("ForkliftIcon", typeof(RectTransform));
+            iconObject.transform.SetParent(panel, false);
+            iconTransform = iconObject.transform;
+            createdIcon = true;
+        }
+
+        RectTransform iconRect = iconTransform.GetComponent<RectTransform>();
+        if (iconRect == null)
+        {
+            iconRect = iconTransform.gameObject.AddComponent<RectTransform>();
+            iconTransform = iconRect.transform;
+            createdIcon = true;
+        }
+
+        if (applyDefaultLayout || createdIcon)
+        {
+            iconRect.anchorMin = new Vector2(0.5f, 1f);
+            iconRect.anchorMax = new Vector2(0.5f, 1f);
+            iconRect.pivot = new Vector2(0.5f, 1f);
+            iconRect.anchoredPosition = new Vector2(0f, -10f);
+            iconRect.sizeDelta = new Vector2(96f, 72f);
+        }
+
+        Image icon = iconTransform.GetComponent<Image>();
+        if (icon == null)
+        {
+            icon = iconTransform.gameObject.AddComponent<Image>();
+        }
+
+        if (sprite != null && icon.sprite == null)
+        {
+            icon.sprite = sprite;
+        }
+
+        icon.preserveAspect = true;
+        icon.raycastTarget = false;
+    }
+
+    private void ResolveForkliftIconSprite()
+    {
+#if UNITY_EDITOR
+        if (forkliftIconSprite == null)
+        {
+            forkliftIconSprite = AssetDatabase.LoadAssetAtPath<Sprite>(ForkliftIconSpritePath);
+        }
+#endif
     }
 
     private void UpdateDrivingPanel()
@@ -1422,13 +1660,16 @@ public class EmpilhadeiraController : MonoBehaviour
             return;
         }
 
-        drivingPanelLabel.text =
-            "EMPILHADEIRA\n\n" +
-            "W / S - Frente e re\n" +
-            "A / D - Direcao\n" +
-            "1 - Baixar garfos\n" +
-            "2 - Levantar garfos\n" +
-            "E - Sair";
+        if (string.IsNullOrWhiteSpace(drivingPanelLabel.text))
+        {
+            drivingPanelLabel.text =
+                "EMPILHADEIRA\n\n" +
+                "W / S - Frente e re\n" +
+                "A / D - Direcao\n" +
+                "1 - Baixar garfos\n" +
+                "2 - Levantar garfos\n" +
+                "E - Sair";
+        }
     }
 
     private Font GetDefaultFont()

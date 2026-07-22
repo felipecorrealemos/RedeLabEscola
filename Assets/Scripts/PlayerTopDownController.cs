@@ -28,7 +28,7 @@ public class PlayerTopDownController : MonoBehaviour
     [SerializeField] private float pushableMassLimit = 25f;
 
     [Header("Interaction")]
-    [SerializeField] private float interactionRadius = 1.2f;
+    [SerializeField] private float interactionRadius = 1.6f;
     [SerializeField] private float documentFallbackInteractionRadius = 1.6f;
     [SerializeField] private Transform carryAnchor;
     [SerializeField] private Vector3 carryAnchorLocalPosition = new Vector3(0f, 1.05f, 0.45f);
@@ -89,6 +89,8 @@ public class PlayerTopDownController : MonoBehaviour
 
     private void Awake()
     {
+        interactionRadius = Mathf.Max(interactionRadius, 1.6f);
+        documentFallbackInteractionRadius = Mathf.Max(documentFallbackInteractionRadius, interactionRadius);
         EnsureCharacterController();
 
         if (animator == null)
@@ -140,6 +142,11 @@ public class PlayerTopDownController : MonoBehaviour
             HandleInteractionInput();
         }
 
+        if (Input.GetKeyDown(KeyCode.Return) || Input.GetKeyDown(KeyCode.KeypadEnter))
+        {
+            HandleComputerUseInput();
+        }
+
     }
 
     private void HandleCarryInput()
@@ -166,8 +173,17 @@ public class PlayerTopDownController : MonoBehaviour
         {
             device = GetMovableDeviceForComputer(target.Computer);
         }
+        else if (device == null && target.Type == PromptTargetType.ComputerTerminal && target.ComputerTerminal != null)
+        {
+            device = GetMovableDeviceForComputer(target.ComputerTerminal.Computer);
+        }
 
-        if (device != null)
+        if (device == null)
+        {
+            device = FindNearestMovableDevice(out _);
+        }
+
+        if (CanHighlightMovableDevice(device))
         {
             PickUp(device);
         }
@@ -191,13 +207,6 @@ public class PlayerTopDownController : MonoBehaviour
         RouterInteractable router = FindNearestRouter(out float routerDistance);
         PressButtonInteractable button = FindNearestButton(out float buttonDistance);
         ComputerInteractable computer = FindNearestComputer(out float computerDistance);
-        KeyboardTerminalInteractable computerTerminal = FindNearestComputerTerminal(out float terminalDistance);
-
-        if (computerTerminal != null && terminalDistance <= routerDistance && terminalDistance <= buttonDistance && terminalDistance <= computerDistance)
-        {
-            OpenComputerTerminal(computerTerminal);
-            return;
-        }
 
         if (router != null && routerDistance <= buttonDistance && routerDistance <= computerDistance)
         {
@@ -215,6 +224,15 @@ public class PlayerTopDownController : MonoBehaviour
         {
             button.Press();
             SetAnimatorTrigger(pushButtonParameter);
+        }
+    }
+
+    private void HandleComputerUseInput()
+    {
+        ComputerInteractable computer = FindNearestComputer(out _);
+        if (computer != null && computer.IsNetworkOperational)
+        {
+            OpenComputerTerminal(computer);
         }
     }
 
@@ -768,6 +786,21 @@ public class PlayerTopDownController : MonoBehaviour
         SetHighlightedComputerTerminal(null);
         openComputer = computer.Computer;
         computer.Open(this);
+    }
+
+    private void OpenComputerTerminal(ComputerInteractable computer)
+    {
+        if (computer == null)
+        {
+            return;
+        }
+
+        SetHighlightedDevice(null);
+        SetHighlightedRouter(null);
+        SetHighlightedComputer(null);
+        SetHighlightedComputerTerminal(null);
+        openComputer = computer;
+        openComputer.OpenTerminal(this);
     }
 
     private void UpdateLockedInteractionInput()
