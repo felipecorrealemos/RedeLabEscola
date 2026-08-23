@@ -89,6 +89,9 @@ public class ComputerInteractable : MonoBehaviour
     private Text wifiToggleLabel;
     private float nextTerminalAutoRefreshTime;
     private string lastFactorySystemRowsSignature;
+    private InteractionPromptPresenter promptPresenter;
+
+    private bool UsesFactoryTerminal => gameObject.scene.name == "Stage2_Factory";
 
     public bool IsOpen => isOpen;
     public string AssignedIp => assignedIp;
@@ -111,6 +114,7 @@ public class ComputerInteractable : MonoBehaviour
     public bool CanInteract => IsConnectedToNetworkJack && (stationaryNetworkDevice || (movableDevice != null && movableDevice.IsPlaced));
     public bool CanConfigureNetwork => CanInteract || HasWiFiInterface;
     public bool IsNetworkOperational => !string.IsNullOrWhiteSpace(assignedIp) && (CanInteract || connectedByWiFi);
+    public bool CanUseTerminal => IsNetworkOperational && !IsRemotelyControlledNetworkDevice();
     public bool CanBePickedUp => movableDevice != null && !stationaryNetworkDevice && (!IsNetworkOperational || HasWiFiInterface);
     public bool CanShowPrompt => stationaryNetworkDevice || (movableDevice != null && !movableDevice.IsCarried);
 
@@ -199,6 +203,7 @@ public class ComputerInteractable : MonoBehaviour
         EnsureRouter();
         UpdateStatusLight();
         RefreshIpRows();
+        ApplyPromptSettings();
     }
 
     public void HandlePickedUp()
@@ -254,9 +259,14 @@ public class ComputerInteractable : MonoBehaviour
     {
         EnsureUi();
         ApplyPromptSettings();
-        if (promptObject != null)
+        bool shouldShow = visible && CanShowPrompt && !isOpen;
+        if (shouldShow)
         {
-            promptObject.SetActive(visible && CanShowPrompt && !isOpen);
+            ShowSharedPrompt();
+        }
+        else
+        {
+            promptPresenter?.Hide(this);
         }
     }
 
@@ -265,9 +275,14 @@ public class ComputerInteractable : MonoBehaviour
         EnsureUi();
         ApplyPromptSettings();
 
-        if (promptObject != null)
+        bool shouldShow = visible && CanUseTerminal && !isOpen;
+        if (shouldShow)
         {
-            promptObject.SetActive(visible && IsNetworkOperational && !isOpen);
+            ShowSharedPrompt();
+        }
+        else
+        {
+            promptPresenter?.Hide(this);
         }
     }
 
@@ -295,7 +310,7 @@ public class ComputerInteractable : MonoBehaviour
 
     public void OpenTerminal(PlayerTopDownController player)
     {
-        if (!IsNetworkOperational)
+        if (!CanUseTerminal)
         {
             return;
         }
@@ -328,6 +343,7 @@ public class ComputerInteractable : MonoBehaviour
             return;
         }
 
+        bool wasOperational = IsNetworkOperational;
         bool assigned = connectedByWiFi || (HasWiFiInterface && notebookWiFiEnabled && selectedWiFiRouter == targetRouter && !IsConnectedToNetworkJack)
             ? targetRouter.TryConnectWiFi(this, wiFiDevice, ipAddress, reservedDeviceName)
             : targetRouter.TryAssignIp(this, ipAddress, reservedDeviceName);
@@ -340,6 +356,10 @@ public class ComputerInteractable : MonoBehaviour
         SetRouter(targetRouter);
         connectedByWiFi = HasWiFiInterface && selectedWiFiRouter == targetRouter && !IsConnectedToNetworkJack;
         assignedIp = ipAddress;
+        if (!wasOperational && IsNetworkOperational)
+        {
+            AudioManager.PlayNetworkConnect(transform);
+        }
         UpdateStatusLight();
         RefreshIpRows();
         MissionManager.NotifyNetworkDeviceConfigured(this);
@@ -953,39 +973,9 @@ public class ComputerInteractable : MonoBehaviour
 
     private void EnsurePrompt()
     {
-        if (promptObject == null && canvas != null)
-        {
-            Transform existingPrompt = canvas.transform.Find("ComputerInteractionPrompt");
-            if (existingPrompt != null)
-            {
-                promptObject = existingPrompt.gameObject;
-                promptLabel = existingPrompt.GetComponentInChildren<Text>(true);
-            }
-        }
-
-        if (promptObject == null)
-        {
-            promptObject = CreateUiObject("ComputerInteractionPrompt", canvas.transform);
-            RectTransform promptRect = promptObject.AddComponent<RectTransform>();
-            promptRect.anchorMin = new Vector2(0.5f, 0f);
-            promptRect.anchorMax = new Vector2(0.5f, 0f);
-            promptRect.pivot = new Vector2(0.5f, 0f);
-            promptRect.anchoredPosition = new Vector2(0f, 112f);
-            promptRect.sizeDelta = new Vector2(460f, 58f);
-
-            Image promptBackground = promptObject.AddComponent<Image>();
-            promptBackground.color = new Color(0f, 0f, 0f, 0.55f);
-
-            GameObject labelObject = CreateUiObject("Text", promptObject.transform);
-            RectTransform labelRect = labelObject.AddComponent<RectTransform>();
-            labelRect.anchorMin = Vector2.zero;
-            labelRect.anchorMax = Vector2.one;
-            labelRect.offsetMin = Vector2.zero;
-            labelRect.offsetMax = Vector2.zero;
-            promptLabel = labelObject.AddComponent<Text>();
-        }
-
-        ApplyPromptSettings();
+        promptPresenter = InteractionPromptPresenter.GetOrCreate(canvas);
+        promptObject = promptPresenter != null ? promptPresenter.gameObject : null;
+        promptLabel = null;
     }
 
     private void EnsurePanel()
@@ -1166,12 +1156,15 @@ public class ComputerInteractable : MonoBehaviour
         EnsureNetworkDoorDevices();
         EnsureNetworkPrinterDevices();
         ApplyContentPadding();
+        bool usesFactoryTerminal = UsesFactoryTerminal;
         if (titleLabel != null)
         {
-            titleLabel.text = showingTerminalPanel ? "Sistema da Fábrica" : deviceTitle;
+            titleLabel.text = showingTerminalPanel
+                ? (usesFactoryTerminal ? "Sistema da Fábrica" : "Dispositivos de Rede")
+                : deviceTitle;
         }
 
-        if (showingTerminalPanel)
+        if (showingTerminalPanel && usesFactoryTerminal)
         {
             string factoryRowsSignature = BuildFactorySystemRowsSignature();
             if (factoryRowsSignature == lastFactorySystemRowsSignature && ipScrollRect.content.childCount > 0)
@@ -1193,7 +1186,15 @@ public class ComputerInteractable : MonoBehaviour
 
         if (showingTerminalPanel)
         {
-            CreateNetworkDeviceRows();
+            if (usesFactoryTerminal)
+            {
+                CreateFactoryNetworkDeviceRows();
+            }
+            else
+            {
+                CreateStandardNetworkDeviceRows();
+            }
+
             ApplySelectedIpLabel();
             ApplyRemoveIpButton();
             return;
@@ -1284,7 +1285,7 @@ public class ComputerInteractable : MonoBehaviour
         text.fontSize = 14;
     }
 
-    private void CreateNetworkDeviceRows()
+    private void CreateFactoryNetworkDeviceRows()
     {
         Transform areaRoot = FindAreaRoot(transform);
         if (!IsNetworkOperational || ActiveNetworkScope == null)
@@ -1303,6 +1304,191 @@ public class ComputerInteractable : MonoBehaviour
         {
             CreateMessageRow("Nenhum dispositivo industrial encontrado nesta rede.");
         }
+    }
+
+    private void CreateStandardNetworkDeviceRows()
+    {
+        Transform areaRoot = FindAreaRoot(transform);
+        NetworkScope terminalScope = ActiveNetworkScope;
+        if (!IsNetworkOperational || terminalScope == null)
+        {
+            CreateMessageRow("Nenhum dispositivo conectado à rede");
+            return;
+        }
+
+        DualNetworkDoorController[] dualDoors = FindObjectsOfType<DualNetworkDoorController>(true);
+        HashSet<NetworkDoorDevice> devicesControlledByDualDoors = new HashSet<NetworkDoorDevice>();
+        NetworkDoorDevice[] doorDevices = FindObjectsOfType<NetworkDoorDevice>(true);
+        NetworkPrinterDevice[] printerDevices = FindObjectsOfType<NetworkPrinterDevice>(true);
+        List<NetworkDoorDevice> visibleDoorDevices = new List<NetworkDoorDevice>();
+        Dictionary<Transform, NetworkPrinterDevice> visiblePrinterDevices = new Dictionary<Transform, NetworkPrinterDevice>();
+        bool createdAny = false;
+        bool createdDualDoor = false;
+
+        // O estado de agrupamento pode mudar quando cabos/dispositivos entram ou
+        // saem da rede. Limpa marcas antigas antes de reconstruir as linhas para
+        // que uma porta individual não permaneça bloqueada por um grupo anterior.
+        foreach (NetworkDoorDevice doorDevice in doorDevices)
+        {
+            if (doorDevice != null)
+            {
+                doorDevice.SetControlledByAccessGroup(false);
+            }
+        }
+
+        foreach (DualNetworkDoorController dualDoor in dualDoors)
+        {
+            if (dualDoor == null
+                || !dualDoor.isActiveAndEnabled
+                || !IsInSameArea(dualDoor.transform, areaRoot)
+                || !IsDeviceConnectedToTerminalNetwork(dualDoor.FirstDevice, terminalScope)
+                || !IsDeviceConnectedToTerminalNetwork(dualDoor.SecondDevice, terminalScope))
+            {
+                continue;
+            }
+
+            CreateDualNetworkDoorRow(dualDoor);
+            createdAny = true;
+            createdDualDoor = true;
+
+            if (dualDoor.FirstDevice != null)
+            {
+                devicesControlledByDualDoors.Add(dualDoor.FirstDevice);
+            }
+
+            if (dualDoor.SecondDevice != null)
+            {
+                devicesControlledByDualDoors.Add(dualDoor.SecondDevice);
+            }
+        }
+
+        foreach (NetworkDoorDevice device in doorDevices)
+        {
+            if (device == null
+                || !device.isActiveAndEnabled
+                || devicesControlledByDualDoors.Contains(device)
+                || !IsInSameArea(device.transform, areaRoot)
+                || !IsDeviceConnectedToTerminalNetwork(device, terminalScope))
+            {
+                continue;
+            }
+
+            visibleDoorDevices.Add(device);
+        }
+
+        // A Sala 2 possui uma porta dupla cuja segurança depende dos dois
+        // dispositivos. Ela deve continuar aparecendo como 0/2 ou 1/2 mesmo
+        // quando apenas um deles já pertence à rede; nunca deve cair na linha
+        // individual usada pela porta da Sala 1.
+        List<NetworkDoorDevice> sala2DoorDevices = new List<NetworkDoorDevice>();
+        if (!createdDualDoor
+            && MissionManager.Instance != null
+            && MissionManager.Instance.CurrentMissionNumber == 2)
+        {
+            foreach (NetworkDoorDevice device in doorDevices)
+            {
+                if (device != null
+                    && device.isActiveAndEnabled
+                    && !devicesControlledByDualDoors.Contains(device)
+                    && IsInSameArea(device.transform, areaRoot))
+                {
+                    sala2DoorDevices.Add(device);
+                }
+            }
+        }
+
+        if (!createdDualDoor && sala2DoorDevices.Count == 2)
+        {
+            CreateImplicitDualNetworkDoorRow(sala2DoorDevices[0], sala2DoorDevices[1]);
+            createdAny = true;
+            visibleDoorDevices.Clear();
+        }
+        else if (!createdDualDoor && visibleDoorDevices.Count == 2)
+        {
+            CreateImplicitDualNetworkDoorRow(visibleDoorDevices[0], visibleDoorDevices[1]);
+            createdAny = true;
+            visibleDoorDevices.Clear();
+        }
+
+        foreach (NetworkDoorDevice device in visibleDoorDevices)
+        {
+            CreateNetworkDeviceRow(device);
+            createdAny = true;
+        }
+
+        foreach (NetworkPrinterDevice printer in printerDevices)
+        {
+            if (printer == null || !printer.isActiveAndEnabled)
+            {
+                continue;
+            }
+
+            NetworkPrinterDevice canonicalPrinter = ResolveCanonicalPrinterDevice(printer);
+            if (canonicalPrinter == null
+                || !canonicalPrinter.isActiveAndEnabled
+                || !IsInSameArea(canonicalPrinter.transform, areaRoot)
+                || !IsDeviceConnectedToTerminalNetwork(canonicalPrinter, terminalScope))
+            {
+                continue;
+            }
+
+            Transform printerRoot = ResolvePrinterRootTransform(canonicalPrinter.transform);
+            if (printerRoot == null)
+            {
+                printerRoot = canonicalPrinter.transform;
+            }
+
+            if (!visiblePrinterDevices.TryGetValue(printerRoot, out NetworkPrinterDevice existingPrinter)
+                || (!existingPrinter.CanPrint && canonicalPrinter.CanPrint))
+            {
+                visiblePrinterDevices[printerRoot] = canonicalPrinter;
+            }
+        }
+
+        foreach (NetworkPrinterDevice printer in visiblePrinterDevices.Values)
+        {
+            CreatePrinterDeviceRow(printer);
+            createdAny = true;
+        }
+
+        if (!createdAny)
+        {
+            CreateMessageRow("Nenhum dispositivo conectado à rede");
+        }
+    }
+
+    private bool IsDeviceConnectedToTerminalNetwork(Component device, NetworkScope terminalScope)
+    {
+        if (device == null || terminalScope == null)
+        {
+            return false;
+        }
+
+        ComputerInteractable networkDevice = device.GetComponent<ComputerInteractable>();
+        if (networkDevice == null || !networkDevice.IsNetworkOperational)
+        {
+            return false;
+        }
+
+        if (networkDevice.ActiveNetworkScope == terminalScope)
+        {
+            return true;
+        }
+
+        // O lease registrado pelo roteador é a confirmação definitiva de que o
+        // dispositivo pertence à rede do terminal. Isso também cobre cenas antigas
+        // com referências duplicadas de NetworkScope para a mesma rede física.
+        foreach (NetworkScope.IpLease lease in terminalScope.Leases)
+        {
+            if (lease != null
+                && lease.AssignedComputer == networkDevice
+                && lease.Address == networkDevice.AssignedIp)
+            {
+                return true;
+            }
+        }
+
+        return false;
     }
 
     private string BuildFactorySystemRowsSignature()
@@ -1607,7 +1793,10 @@ public class ComputerInteractable : MonoBehaviour
         textRect.offsetMax = new Vector2(-92f, 0f);
 
         Text deviceText = textObject.AddComponent<Text>();
-        deviceText.text = "Porta dupla - " + connectedCount + "/2" + (canOperate ? " - " + (isOpen ? "Aberta" : "Fechada") : " - Aguardando IP");
+        string dualDoorStatus = connectedCount < 2
+            ? "Aguardando IP"
+            : canOperate ? (isOpen ? "Aberta" : "Fechada") : "Bloqueada";
+        deviceText.text = "Porta dupla - " + connectedCount + "/2 - " + dualDoorStatus;
         deviceText.alignment = TextAnchor.MiddleLeft;
         deviceText.color = GetDoorProgressColor(connectedCount, 2);
         deviceText.font = GetDefaultFont();
@@ -1631,9 +1820,21 @@ public class ComputerInteractable : MonoBehaviour
         button.targetGraphic = buttonImage;
         button.onClick.AddListener(() =>
         {
+            bool firstWasOpen = firstDevice.IsOpen;
+            bool secondWasOpen = secondDevice.IsOpen;
             bool targetOpen = !(firstDevice.IsOpen && secondDevice.IsOpen);
             firstDevice.SetOpenFromAccessGroup(targetOpen);
             secondDevice.SetOpenFromAccessGroup(targetOpen);
+            bool didBeginOpening = targetOpen
+                && ((!firstWasOpen && firstDevice.IsOpen)
+                    || (!secondWasOpen && secondDevice.IsOpen));
+            if (didBeginOpening)
+            {
+                Transform emitter = firstDevice.DoorPivot != null
+                    ? firstDevice.DoorPivot
+                    : secondDevice.DoorPivot;
+                AudioManager.PlayDoorOpen(emitter);
+            }
             MissionManager.NotifyDualDoorsStateChanged(targetOpen);
             RefreshIpRows();
         });
@@ -1646,7 +1847,7 @@ public class ComputerInteractable : MonoBehaviour
         labelRect.offsetMax = Vector2.zero;
 
         Text buttonText = labelObject.AddComponent<Text>();
-        buttonText.text = canOperate ? (isOpen ? "Fechar" : "Abrir") : "Sem IP";
+        buttonText.text = canOperate ? (isOpen ? "Fechar" : "Abrir") : connectedCount < 2 ? "Sem IP" : "Bloqueado";
         buttonText.alignment = TextAnchor.MiddleCenter;
         buttonText.color = Color.white;
         buttonText.font = GetDefaultFont();
@@ -1748,7 +1949,10 @@ public class ComputerInteractable : MonoBehaviour
         textRect.offsetMax = new Vector2(-92f, 0f);
 
         Text deviceText = textObject.AddComponent<Text>();
-        deviceText.text = dualDoor.DoorLabel + " - " + connectedCount + "/2" + (canOperate ? " - " + dualDoor.StateLabel : " - Aguardando IP");
+        string dualDoorStatus = connectedCount < 2
+            ? "Aguardando IP"
+            : canOperate ? dualDoor.StateLabel : "Bloqueada";
+        deviceText.text = dualDoor.DoorLabel + " - " + connectedCount + "/2 - " + dualDoorStatus;
         deviceText.alignment = TextAnchor.MiddleLeft;
         deviceText.color = GetDoorProgressColor(connectedCount, 2);
         deviceText.font = GetDefaultFont();
@@ -1785,7 +1989,7 @@ public class ComputerInteractable : MonoBehaviour
         labelRect.offsetMax = Vector2.zero;
 
         Text buttonText = labelObject.AddComponent<Text>();
-        buttonText.text = canOperate ? dualDoor.ActionLabel : "Sem IP";
+        buttonText.text = canOperate ? dualDoor.ActionLabel : connectedCount < 2 ? "Sem IP" : "Bloqueado";
         buttonText.alignment = TextAnchor.MiddleCenter;
         buttonText.color = Color.white;
         buttonText.font = GetDefaultFont();
@@ -1796,12 +2000,13 @@ public class ComputerInteractable : MonoBehaviour
     private int GetConnectedDoorDeviceCount(NetworkDoorDevice firstDevice, NetworkDoorDevice secondDevice)
     {
         int connectedCount = 0;
-        if (firstDevice != null && firstDevice.CanOperate)
+        NetworkScope terminalScope = ActiveNetworkScope;
+        if (IsDeviceConnectedToTerminalNetwork(firstDevice, terminalScope))
         {
             connectedCount++;
         }
 
-        if (secondDevice != null && secondDevice.CanOperate)
+        if (IsDeviceConnectedToTerminalNetwork(secondDevice, terminalScope))
         {
             connectedCount++;
         }
@@ -1928,7 +2133,10 @@ public class ComputerInteractable : MonoBehaviour
         rowLayout.preferredHeight = rowHeight;
 
         Image rowImage = rowObject.AddComponent<Image>();
-        bool canOperate = device.CanOperate && MissionManager.CanOperateDoorCommand(device);
+        bool isConnectedToTerminalNetwork = IsDeviceConnectedToTerminalNetwork(device, ActiveNetworkScope);
+        bool canOperate = isConnectedToTerminalNetwork
+            && device.CanOperate
+            && MissionManager.CanOperateDoorCommand(device);
         rowImage.color = canOperate ? new Color(1f, 1f, 1f, 0.94f) : new Color(0.82f, 0.82f, 0.82f, 0.92f);
 
         GameObject textObject = CreateUiObject("Text", rowObject.transform);
@@ -1939,7 +2147,10 @@ public class ComputerInteractable : MonoBehaviour
         textRect.offsetMax = new Vector2(-92f, 0f);
 
         Text deviceText = textObject.AddComponent<Text>();
-        deviceText.text = device.DeviceLabel + " - " + (device.CanOperate ? (canOperate ? device.StateLabel : "Aguardando missao") : "Sem IP");
+        string deviceStatus = !isConnectedToTerminalNetwork
+            ? "Sem IP"
+            : canOperate ? device.StateLabel : "Bloqueado";
+        deviceText.text = device.DeviceLabel + " - " + deviceStatus;
         deviceText.alignment = TextAnchor.MiddleLeft;
         deviceText.color = new Color(0.1f, 0.1f, 0.1f, 1f);
         deviceText.font = GetDefaultFont();
@@ -1964,7 +2175,7 @@ public class ComputerInteractable : MonoBehaviour
         button.onClick.AddListener(() =>
         {
             device.Toggle();
-            MissionManager.NotifySingleDoorStateChanged(device.IsOpen);
+            MissionManager.NotifySingleDoorStateChanged(device, device.IsOpen);
             RefreshIpRows();
         });
 
@@ -1976,7 +2187,7 @@ public class ComputerInteractable : MonoBehaviour
         labelRect.offsetMax = Vector2.zero;
 
         Text buttonText = labelObject.AddComponent<Text>();
-        buttonText.text = device.CanOperate ? (canOperate ? device.ActionLabel : "Bloqueado") : "Sem IP";
+        buttonText.text = canOperate ? device.ActionLabel : isConnectedToTerminalNetwork ? "Bloqueado" : "Sem IP";
         buttonText.alignment = TextAnchor.MiddleCenter;
         buttonText.color = Color.white;
         buttonText.font = GetDefaultFont();
@@ -2037,42 +2248,77 @@ public class ComputerInteractable : MonoBehaviour
 
     private void ApplyPromptSettings()
     {
-        if (promptLabel == null && promptObject != null)
-        {
-            promptLabel = promptObject.GetComponentInChildren<Text>(true);
-        }
-
-        if (promptLabel == null)
+        if (promptObject == null)
         {
             return;
         }
 
         if (string.IsNullOrWhiteSpace(useComputerPromptText) || useComputerPromptText.StartsWith("F usar"))
         {
+            useComputerPromptText = HasWiFiInterface ? "Enter usar notebook" : "Enter usar computador";
+        }
+        else if (!HasWiFiInterface && useComputerPromptText == "Enter usar notebook")
+        {
+            useComputerPromptText = "Enter usar computador";
+        }
+        else if (HasWiFiInterface && useComputerPromptText == "Enter usar computador")
+        {
             useComputerPromptText = "Enter usar notebook";
         }
 
-        string promptText = CanBePickedUp ? FormatPromptAction(carryPromptText) : string.Empty;
-        if (CanInteract || HasWiFiInterface)
+        promptPresenter?.Refresh(this, GetInteractionPromptTitle(), GetInteractionPromptActions());
+    }
+
+    private void ShowSharedPrompt()
+    {
+        promptPresenter?.Show(this, GetInteractionPromptTitle(), GetInteractionPromptActions());
+    }
+
+    private InteractionPromptAction[] GetInteractionPromptActions()
+    {
+        InteractionPromptAction takeAction = new InteractionPromptAction(
+            "E",
+            "Pegar",
+            movableDevice != null && !stationaryNetworkDevice,
+            CanBePickedUp);
+        InteractionPromptAction configureAction = new InteractionPromptAction(
+            "F",
+            "Configurar",
+            CanInteract || HasWiFiInterface);
+
+        if (IsRemotelyControlledNetworkDevice())
         {
-            promptText = AppendPromptAction(promptText, FormatPromptAction(networkPromptText));
+            return new[] { takeAction, configureAction };
         }
 
-        if (IsNetworkOperational && HasWiFiInterface)
+        return new[]
         {
-            promptText = AppendPromptAction(promptText, FormatPromptAction(useComputerPromptText));
+            takeAction,
+            configureAction,
+            new InteractionPromptAction("ENTER", "Usar", CanUseTerminal)
+        };
+    }
+
+    private bool IsRemotelyControlledNetworkDevice()
+    {
+        return stationaryNetworkDevice
+            || IsPrinterDevice()
+            || GetComponent<NetworkDoorDevice>() != null;
+    }
+
+    private string GetInteractionPromptTitle()
+    {
+        if (IsPrinterDevice())
+        {
+            return "IMPRESSORA";
         }
 
-        if (string.IsNullOrWhiteSpace(promptText))
+        if (HasWiFiInterface)
         {
-            promptText = FormatPromptAction(carryPromptText);
+            return "NOTEBOOK";
         }
 
-        promptLabel.text = promptText;
-        promptLabel.alignment = TextAnchor.MiddleCenter;
-        promptLabel.color = Color.white;
-        promptLabel.font = GetDefaultFont();
-        promptLabel.fontSize = 16;
+        return string.IsNullOrWhiteSpace(deviceTitle) ? "DISPOSITIVO" : deviceTitle.ToUpperInvariant();
     }
 
     private string AppendPromptAction(string current, string action)
@@ -2114,7 +2360,7 @@ public class ComputerInteractable : MonoBehaviour
 
         if (showingTerminalPanel)
         {
-            selectedIpLabel.text = "Dispositivos da fábrica";
+            selectedIpLabel.text = UsesFactoryTerminal ? "Dispositivos da fábrica" : "Dispositivos conectados";
         }
         else if (HasWiFiInterface && !IsConnectedToNetworkJack && selectedWiFiRouter == null)
         {

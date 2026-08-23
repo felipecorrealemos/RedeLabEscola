@@ -38,6 +38,10 @@ public class RoboticArmNetworkAdapter : MonoBehaviour
     [SerializeField] private string deviceName = "Braco Robotico";
     [SerializeField] private string deviceId = "robotic-arm";
 
+    [Header("Audio")]
+    [SerializeField] private AudioSource startWorkAudioSource;
+    [SerializeField] private AudioClip startWorkClip;
+
     [Header("Wi-Fi")]
     [SerializeField] private WiFiDevice wiFiDevice;
     [SerializeField] private float discoveryInterval = 1f;
@@ -90,6 +94,7 @@ public class RoboticArmNetworkAdapter : MonoBehaviour
     {
         ResolveReferences();
         ConfigureWiFiDevice();
+        PrepareAudioSource();
         ApplyState(NetworkState.SemRede, false);
     }
 
@@ -196,9 +201,14 @@ public class RoboticArmNetworkAdapter : MonoBehaviour
             return false;
         }
 
+        bool wasAlreadyOperating = operationalAuthorization && currentNetworkState == NetworkState.Operating;
         operationalAuthorization = true;
         Debug.Log("[" + DeviceName + "] Autorizacao operacional ativada.", this);
         ApplyState(NetworkState.Operating, true);
+        if (!wasAlreadyOperating)
+        {
+            PlayStartWorkSound();
+        }
         MissionManager.NotifyStage2RoboticArmOperationChanged();
         return true;
     }
@@ -404,6 +414,47 @@ public class RoboticArmNetworkAdapter : MonoBehaviour
         assignedIp = string.Empty;
         connectedNetworkId = string.Empty;
         hasValidNetwork = false;
+    }
+
+    public void ApplyAudioVolumeSettings(float volume, bool muted)
+    {
+        if (startWorkAudioSource == null)
+        {
+            return;
+        }
+
+        startWorkAudioSource.volume = Mathf.Clamp01(volume);
+        startWorkAudioSource.mute = muted;
+    }
+
+    private void PrepareAudioSource()
+    {
+        if (startWorkAudioSource == null)
+        {
+            return;
+        }
+
+        startWorkAudioSource.playOnAwake = false;
+        startWorkAudioSource.loop = false;
+        startWorkAudioSource.spatialBlend = 0f;
+
+        AudioManager manager = AudioManager.Instance;
+        float volume = manager != null ? manager.MasterVolume * manager.SfxVolume : 1f;
+        bool muted = manager != null && (manager.IsSfxMuted || manager.IsAllAudioDisabledForTesting);
+        ApplyAudioVolumeSettings(volume, muted);
+    }
+
+    private void PlayStartWorkSound()
+    {
+        if (startWorkAudioSource == null || startWorkClip == null)
+        {
+            return;
+        }
+
+        PrepareAudioSource();
+        startWorkAudioSource.Stop();
+        startWorkAudioSource.clip = startWorkClip;
+        startWorkAudioSource.Play();
     }
 
     private void InvalidateOperationalAuthorization()

@@ -18,6 +18,7 @@ public class NetworkPrinterDevice : MonoBehaviour
 
     private PrintedDocumentInteractable printedDocument;
     private Coroutine printRoutine;
+    private AudioSource activePrintAudioSource;
 
     public string DeviceLabel => string.IsNullOrWhiteSpace(deviceLabel) ? "Impressora" : deviceLabel;
     public string StateLabel => HasPrintedDocument ? printedStateLabel : CanPrint ? readyStateLabel : waitingStateLabel;
@@ -59,6 +60,7 @@ public class NetworkPrinterDevice : MonoBehaviour
         document.gameObject.SetActive(true);
         document.PrepareForPrint();
         document.SetPromptVisible(false);
+        activePrintAudioSource = AudioManager.StartPrinter(outputSlot);
         Transform documentTransform = document.transform;
         documentTransform.SetParent(outputSlot, false);
         documentTransform.localRotation = Quaternion.Euler(documentLocalEulerAngles);
@@ -75,6 +77,15 @@ public class NetworkPrinterDevice : MonoBehaviour
         }
 
         documentTransform.localPosition = documentEndLocalPosition;
+        AudioManager.StopPrinter(activePrintAudioSource);
+        activePrintAudioSource = null;
+        printRoutine = null;
+    }
+
+    private void OnDisable()
+    {
+        AudioManager.StopPrinter(activePrintAudioSource);
+        activePrintAudioSource = null;
         printRoutine = null;
     }
 

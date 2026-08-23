@@ -16,6 +16,14 @@ public class ScrapCrusherController : MonoBehaviour
     [SerializeField] private Collider intakeTrigger;
     [SerializeField] private Transform scrapContainer;
 
+    [Header("Audio")]
+    [SerializeField] private AudioSource scrapImpactAudioSource;
+    [SerializeField] private AudioSource scrapGrindingAudioSource;
+    [SerializeField] private AudioClip scrapImpactClip;
+    [SerializeField] private AudioClip scrapGrindingClip;
+    [SerializeField, Min(0.1f)] private float scrapGrindingDuration = 5f;
+    [SerializeField, Range(0f, 1f)] private float scrapGrindingFadeOutDuration = 0.2f;
+
     [Header("Blades")]
     [SerializeField] private Vector3 bladeRotationAxis = Vector3.right;
     [SerializeField] private float bladeASpeed = 360f;
@@ -37,7 +45,11 @@ public class ScrapCrusherController : MonoBehaviour
     [SerializeField] private bool showGizmos = true;
 
     private Coroutine consumeRoutine;
+    private Coroutine grindingAudioStopRoutine;
     private float spinTimer;
+    private float currentSfxVolume = 1f;
+    private bool currentSfxMuted;
+    private float grindingFadeMultiplier = 1f;
 
     private void Reset()
     {
@@ -49,6 +61,7 @@ public class ScrapCrusherController : MonoBehaviour
     {
         ResolveReferences();
         EnsureIntakeTrigger();
+        PrepareAudioSources();
     }
 
     private void Update()
@@ -90,8 +103,7 @@ public class ScrapCrusherController : MonoBehaviour
             return false;
         }
 
-        consumeRoutine = StartCoroutine(ConsumeScrap(item));
-        return true;
+        return BeginConsume(item);
     }
 
     public bool CanAcceptReleasedScrap(ScrapItem item)
@@ -125,6 +137,17 @@ public class ScrapCrusherController : MonoBehaviour
         EnsureIntakeTrigger();
     }
 
+    public void ApplyAudioVolumeSettings(float volume, bool muted)
+    {
+        currentSfxVolume = Mathf.Clamp01(volume);
+        currentSfxMuted = muted;
+        ApplyAudioVolume(scrapImpactAudioSource, currentSfxVolume, currentSfxMuted);
+        ApplyAudioVolume(
+            scrapGrindingAudioSource,
+            currentSfxVolume * grindingFadeMultiplier,
+            currentSfxMuted);
+    }
+
     private void TryConsumeFromCollider(Collider other)
     {
         if (other == null || consumeRoutine != null || !IsInsideLayerMask(other.gameObject.layer))
@@ -138,7 +161,116 @@ public class ScrapCrusherController : MonoBehaviour
             return;
         }
 
+        BeginConsume(item);
+    }
+
+    private bool BeginConsume(ScrapItem item)
+    {
+        if (item == null || item.GrabRoot == null || consumeRoutine != null)
+        {
+            return false;
+        }
+
+        PlayScrapCollisionAudio();
         consumeRoutine = StartCoroutine(ConsumeScrap(item));
+        return true;
+    }
+
+    private void PlayScrapCollisionAudio()
+    {
+        PrepareAudioSources();
+        PlayClip(scrapImpactAudioSource, scrapImpactClip);
+        PlayClip(scrapGrindingAudioSource, scrapGrindingClip);
+
+        if (grindingAudioStopRoutine != null)
+        {
+            StopCoroutine(grindingAudioStopRoutine);
+        }
+
+        grindingFadeMultiplier = 1f;
+        ApplyAudioVolumeSettings(currentSfxVolume, currentSfxMuted);
+        if (scrapGrindingAudioSource != null && scrapGrindingClip != null)
+        {
+            grindingAudioStopRoutine = StartCoroutine(StopGrindingAudioAfterDuration());
+        }
+    }
+
+    private IEnumerator StopGrindingAudioAfterDuration()
+    {
+        float totalDuration = Mathf.Min(scrapGrindingDuration, scrapGrindingClip.length);
+        float fadeDuration = Mathf.Min(scrapGrindingFadeOutDuration, totalDuration);
+        float fullVolumeDuration = Mathf.Max(0f, totalDuration - fadeDuration);
+        float elapsed = 0f;
+
+        while (elapsed < fullVolumeDuration && scrapGrindingAudioSource != null)
+        {
+            elapsed += Time.deltaTime;
+            yield return null;
+        }
+
+        elapsed = 0f;
+        while (elapsed < fadeDuration && scrapGrindingAudioSource != null)
+        {
+            elapsed += Time.deltaTime;
+            grindingFadeMultiplier = 1f - Mathf.Clamp01(elapsed / fadeDuration);
+            ApplyAudioVolumeSettings(currentSfxVolume, currentSfxMuted);
+            yield return null;
+        }
+
+        if (scrapGrindingAudioSource != null)
+        {
+            scrapGrindingAudioSource.Stop();
+        }
+
+        grindingFadeMultiplier = 1f;
+        ApplyAudioVolumeSettings(currentSfxVolume, currentSfxMuted);
+        grindingAudioStopRoutine = null;
+    }
+
+    private void PrepareAudioSources()
+    {
+        ConfigureAudioSource(scrapImpactAudioSource);
+        ConfigureAudioSource(scrapGrindingAudioSource);
+
+        AudioManager manager = AudioManager.Instance;
+        float volume = manager != null ? manager.MasterVolume * manager.SfxVolume : 1f;
+        bool muted = manager != null && (manager.IsSfxMuted || manager.IsAllAudioDisabledForTesting);
+        ApplyAudioVolumeSettings(volume, muted);
+    }
+
+    private static void ConfigureAudioSource(AudioSource source)
+    {
+        if (source == null)
+        {
+            return;
+        }
+
+        source.playOnAwake = false;
+        source.loop = false;
+        source.spatialBlend = 0f;
+    }
+
+    private static void ApplyAudioVolume(AudioSource source, float volume, bool muted)
+    {
+        if (source == null)
+        {
+            return;
+        }
+
+        source.volume = Mathf.Clamp01(volume);
+        source.mute = muted;
+    }
+
+    private static void PlayClip(AudioSource source, AudioClip clip)
+    {
+        if (source == null || clip == null)
+        {
+            return;
+        }
+
+        source.Stop();
+        source.clip = clip;
+        source.Play();
     }
 
     private IEnumerator ConsumeScrap(ScrapItem item)
@@ -233,7 +365,7 @@ public class ScrapCrusherController : MonoBehaviour
 
         consumeRoutine = null;
         spinTimer = spinAfterConsumeDuration;
-        MissionManager.NotifyStage2ScrapConsumed();
+        MissionManager.NotifyStage2ScrapConsumed(root.gameObject);
     }
 
     private bool IsInsideIntake(Transform root)

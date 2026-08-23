@@ -20,7 +20,7 @@ public class KeyboardTerminalInteractable : MonoBehaviour
     private Material indicatorMaterial;
     private Vector3 indicatorBaseScale;
 
-    public bool CanUse => computer != null && computer.IsNetworkOperational;
+    public bool CanUse => computer != null && computer.CanUseTerminal;
     public ComputerInteractable Computer
     {
         get

@@ -1,3 +1,4 @@
+using System.Collections;
 using UnityEngine;
 using UnityEngine.UI;
 #if UNITY_EDITOR
@@ -51,6 +52,17 @@ public class EmpilhadeiraController : MonoBehaviour
     [SerializeField] private float forkLowerSpeed = 0.55f;
     [SerializeField] private KeyCode forkLowerKey = KeyCode.Alpha1;
     [SerializeField] private KeyCode forkLiftKey = KeyCode.Alpha2;
+
+    [Header("Audio")]
+    [SerializeField] private AudioSource engineAudioSource;
+    [SerializeField] private AudioSource forkAudioSource;
+    [SerializeField] private AudioClip engineStartupClip;
+    [SerializeField] private AudioClip engineContinuousClip;
+    [SerializeField] private AudioClip forkMovementClip;
+    [SerializeField] private AudioClip forkStopClip;
+    [SerializeField, Range(0.1f, 3f)] private float engineIdlePitch = 1f;
+    [SerializeField, Range(0.1f, 3f)] private float engineAcceleratedPitch = 1.3f;
+    [SerializeField, Range(0.05f, 1f)] private float enginePitchTransitionDuration = 0.4f;
 
     [Header("Sensor do Pallet")]
     [SerializeField] private Collider forkPickupSensor;
@@ -123,6 +135,11 @@ public class EmpilhadeiraController : MonoBehaviour
     private Quaternion carriedPalletLocalRotation;
     private EmpilhadeiraPalletDropZone currentDropZone;
     private readonly Collider[] exitOverlapHits = new Collider[32];
+    private InteractionPromptPresenter promptPresenter;
+    private Coroutine engineStartupRoutine;
+    private bool forkAudioMoving;
+    private float currentSfxVolume = 1f;
+    private bool currentSfxMuted;
 
     private void Awake()
     {
@@ -138,6 +155,7 @@ public class EmpilhadeiraController : MonoBehaviour
         ConfigureRigidbody();
         ConfigureInteractionTrigger();
         ConfigureForkPickupSensor();
+        PrepareAudioSources();
         EnsurePrompt();
         SetPromptVisible(false);
         SetDrivingPanelVisible(false);
@@ -167,6 +185,9 @@ public class EmpilhadeiraController : MonoBehaviour
         forkLiftSpeed = Mathf.Max(0.01f, forkLiftSpeed);
         forkLowerSpeed = Mathf.Max(0.01f, forkLowerSpeed);
         forkRestTolerance = Mathf.Max(0.001f, forkRestTolerance);
+        engineIdlePitch = Mathf.Clamp(engineIdlePitch, 0.1f, 3f);
+        engineAcceleratedPitch = Mathf.Clamp(engineAcceleratedPitch, engineIdlePitch, 3f);
+        enginePitchTransitionDuration = Mathf.Clamp(enginePitchTransitionDuration, 0.05f, 1f);
         linearDrag = Mathf.Max(0f, linearDrag);
         angularDrag = Mathf.Max(0f, angularDrag);
     }
@@ -175,6 +196,7 @@ public class EmpilhadeiraController : MonoBehaviour
     {
         ValidateNearbyPlayer();
         UpdateInputDebug();
+        UpdateEnginePitch(Time.deltaTime);
         RefreshForkAndPalletDebug();
         TryAttachPalletOnLiftInput();
         UpdateFork(Time.deltaTime);
@@ -438,6 +460,7 @@ public class EmpilhadeiraController : MonoBehaviour
         playerNearby = false;
         SetPromptVisible(false);
         SetDrivingPanelVisible(true);
+        PlayEngineStartup();
     }
 
     private void ExitForklift()
@@ -445,6 +468,7 @@ public class EmpilhadeiraController : MonoBehaviour
         if (currentPlayer == null)
         {
             playerDriving = false;
+            StopVehicleAudio(true);
             SetPromptVisible(false);
             return;
         }
@@ -465,6 +489,7 @@ public class EmpilhadeiraController : MonoBehaviour
         playerDriving = false;
         SetParkedKinematic(true);
         ClearInputDebug();
+        StopVehicleAudio(true);
         SetPromptVisible(false);
         SetDrivingPanelVisible(false);
     }
@@ -1092,7 +1117,7 @@ public class EmpilhadeiraController : MonoBehaviour
 
         if (received)
         {
-            MissionManager.NotifyStage2PalletPlacedOnConveyor();
+            MissionManager.NotifyStage2PalletPlacedOnConveyor(releasedPallet.gameObject);
         }
     }
 
@@ -1344,9 +1369,11 @@ public class EmpilhadeiraController : MonoBehaviour
 
         if (!playerDriving || forkLiftTransform == null)
         {
+            SetForkAudioMoving(false);
             return;
         }
 
+        float startY = forkLiftTransform.localPosition.y;
         float targetY = forkLiftTransform.localPosition.y;
         if (inputForkLift)
         {
@@ -1358,6 +1385,7 @@ public class EmpilhadeiraController : MonoBehaviour
         }
         else
         {
+            SetForkAudioMoving(false);
             return;
         }
 
@@ -1365,6 +1393,190 @@ public class EmpilhadeiraController : MonoBehaviour
         localPosition.y = Mathf.Clamp(targetY, forkMinLocalY, forkMaxLocalY);
         forkLiftTransform.localPosition = localPosition;
         forkCurrentLocalY = localPosition.y;
+        SetForkAudioMoving(Mathf.Abs(localPosition.y - startY) > 0.00001f);
+    }
+
+    public void ApplyAudioVolumeSettings(float volume, bool muted)
+    {
+        currentSfxVolume = Mathf.Clamp01(volume);
+        currentSfxMuted = muted;
+        ApplyAudioVolume(engineAudioSource, currentSfxVolume, currentSfxMuted);
+        ApplyAudioVolume(forkAudioSource, currentSfxVolume, currentSfxMuted);
+    }
+
+    private void PrepareAudioSources()
+    {
+        ConfigureAudioSource(engineAudioSource);
+        ConfigureAudioSource(forkAudioSource);
+
+        AudioManager manager = AudioManager.Instance;
+        float volume = manager != null ? manager.MasterVolume * manager.SfxVolume : 1f;
+        bool muted = manager != null && (manager.IsSfxMuted || manager.IsAllAudioDisabledForTesting);
+        ApplyAudioVolumeSettings(volume, muted);
+    }
+
+    private void PlayEngineStartup()
+    {
+        PrepareAudioSources();
+        if (engineStartupRoutine != null)
+        {
+            StopCoroutine(engineStartupRoutine);
+        }
+
+        if (engineAudioSource == null)
+        {
+            return;
+        }
+
+        engineAudioSource.Stop();
+        engineAudioSource.pitch = engineIdlePitch;
+        engineAudioSource.loop = false;
+        if (engineStartupClip == null)
+        {
+            StartContinuousEngine();
+            return;
+        }
+
+        engineAudioSource.clip = engineStartupClip;
+        engineAudioSource.Play();
+        engineStartupRoutine = StartCoroutine(WaitForEngineStartup());
+    }
+
+    private IEnumerator WaitForEngineStartup()
+    {
+        while (playerDriving && engineAudioSource != null && engineAudioSource.isPlaying)
+        {
+            yield return null;
+        }
+
+        engineStartupRoutine = null;
+        if (playerDriving)
+        {
+            StartContinuousEngine();
+        }
+    }
+
+    private void StartContinuousEngine()
+    {
+        if (engineAudioSource == null || engineContinuousClip == null)
+        {
+            return;
+        }
+
+        engineAudioSource.Stop();
+        engineAudioSource.clip = engineContinuousClip;
+        engineAudioSource.loop = true;
+        engineAudioSource.pitch = engineIdlePitch;
+        engineAudioSource.Play();
+    }
+
+    private void UpdateEnginePitch(float deltaTime)
+    {
+        if (engineAudioSource == null || !engineAudioSource.isPlaying ||
+            engineAudioSource.clip != engineContinuousClip)
+        {
+            return;
+        }
+
+        float targetPitch = Mathf.Abs(throttleInput) > 0.01f
+            ? engineAcceleratedPitch
+            : engineIdlePitch;
+        float pitchRange = Mathf.Max(0.01f, engineAcceleratedPitch - engineIdlePitch);
+        float maxDelta = pitchRange / Mathf.Max(0.05f, enginePitchTransitionDuration) * deltaTime;
+        engineAudioSource.pitch = Mathf.MoveTowards(engineAudioSource.pitch, targetPitch, maxDelta);
+    }
+
+    private void SetForkAudioMoving(bool moving)
+    {
+        if (moving == forkAudioMoving)
+        {
+            return;
+        }
+
+        forkAudioMoving = moving;
+        if (forkAudioSource == null)
+        {
+            return;
+        }
+
+        forkAudioSource.Stop();
+        forkAudioSource.pitch = 1f;
+        if (moving)
+        {
+            if (forkMovementClip == null)
+            {
+                return;
+            }
+
+            forkAudioSource.clip = forkMovementClip;
+            forkAudioSource.loop = true;
+            forkAudioSource.Play();
+            return;
+        }
+
+        if (forkStopClip != null)
+        {
+            forkAudioSource.clip = forkStopClip;
+            forkAudioSource.loop = false;
+            forkAudioSource.Play();
+        }
+    }
+
+    private void StopVehicleAudio(bool playForkStop)
+    {
+        if (engineStartupRoutine != null)
+        {
+            StopCoroutine(engineStartupRoutine);
+            engineStartupRoutine = null;
+        }
+
+        if (engineAudioSource != null)
+        {
+            engineAudioSource.Stop();
+            engineAudioSource.loop = false;
+            engineAudioSource.pitch = engineIdlePitch;
+        }
+
+        if (forkAudioMoving && playForkStop)
+        {
+            SetForkAudioMoving(false);
+        }
+        else
+        {
+            forkAudioMoving = false;
+            if (forkAudioSource != null)
+            {
+                forkAudioSource.Stop();
+                forkAudioSource.loop = false;
+            }
+        }
+    }
+
+    private void OnDisable()
+    {
+        StopVehicleAudio(false);
+    }
+
+    private static void ConfigureAudioSource(AudioSource source)
+    {
+        if (source == null)
+        {
+            return;
+        }
+
+        source.playOnAwake = false;
+        source.spatialBlend = 0f;
+    }
+
+    private static void ApplyAudioVolume(AudioSource source, float volume, bool muted)
+    {
+        if (source == null)
+        {
+            return;
+        }
+
+        source.volume = Mathf.Clamp01(volume);
+        source.mute = muted;
     }
 
     private Vector3 GetMovementDirection()
@@ -1465,49 +1677,21 @@ public class EmpilhadeiraController : MonoBehaviour
 
         RuntimeEventSystemUtility.EnsureSingleEventSystem();
 
-        bool createdPrompt = false;
-        if (promptObject == null)
+        GameObject legacyPrompt = promptObject;
+        promptPresenter = InteractionPromptPresenter.GetOrCreate(canvas);
+        promptObject = promptPresenter != null ? promptPresenter.gameObject : null;
+        promptLabel = null;
+        if (legacyPrompt != null && legacyPrompt != promptObject && legacyPrompt.name == "EmpilhadeiraPrompt")
         {
-            Transform existingPrompt = canvas.transform.Find("EmpilhadeiraPrompt");
-            if (existingPrompt != null)
-            {
-                promptObject = existingPrompt.gameObject;
-                promptLabel = existingPrompt.GetComponentInChildren<Text>(true);
-            }
+            legacyPrompt.SetActive(false);
+            Destroy(legacyPrompt);
         }
 
-        if (promptObject == null)
+        Transform legacyCanvasPrompt = canvas.transform.Find("EmpilhadeiraPrompt");
+        if (legacyCanvasPrompt != null && legacyCanvasPrompt.gameObject != promptObject)
         {
-            promptObject = new GameObject("EmpilhadeiraPrompt");
-            promptObject.transform.SetParent(canvas.transform, false);
-
-            RectTransform promptRect = promptObject.AddComponent<RectTransform>();
-            promptRect.anchorMin = new Vector2(0.5f, 0f);
-            promptRect.anchorMax = new Vector2(0.5f, 0f);
-            promptRect.pivot = new Vector2(0.5f, 0f);
-            promptRect.anchoredPosition = new Vector2(0f, 176f);
-            promptRect.sizeDelta = new Vector2(420f, 42f);
-
-            Image background = promptObject.AddComponent<Image>();
-            background.color = new Color(0f, 0f, 0f, 0.65f);
-
-            GameObject labelObject = new GameObject("Text");
-            labelObject.transform.SetParent(promptObject.transform, false);
-            RectTransform labelRect = labelObject.AddComponent<RectTransform>();
-            labelRect.anchorMin = Vector2.zero;
-            labelRect.anchorMax = Vector2.one;
-            labelRect.offsetMin = Vector2.zero;
-            labelRect.offsetMax = Vector2.zero;
-            promptLabel = labelObject.AddComponent<Text>();
-            createdPrompt = true;
-        }
-
-        if (promptLabel != null && createdPrompt)
-        {
-            promptLabel.alignment = TextAnchor.MiddleCenter;
-            promptLabel.color = Color.white;
-            promptLabel.font = GetDefaultFont();
-            promptLabel.fontSize = 18;
+            legacyCanvasPrompt.gameObject.SetActive(false);
+            Destroy(legacyCanvasPrompt.gameObject);
         }
 
         EnsureDrivingPanel();
@@ -1558,6 +1742,15 @@ public class EmpilhadeiraController : MonoBehaviour
         }
 
         EnsureDrivingPanelChildren(createdPanel);
+
+        RectTransform drivingRect = drivingPanelObject.GetComponent<RectTransform>();
+        if (drivingRect != null)
+        {
+            drivingRect.anchorMin = new Vector2(1f, 1f);
+            drivingRect.anchorMax = new Vector2(1f, 1f);
+            drivingRect.pivot = new Vector2(1f, 1f);
+            drivingRect.anchoredPosition = new Vector2(-24f, -96f);
+        }
 
         if (drivingPanelLabel != null && createdPanel)
         {
@@ -1693,20 +1886,29 @@ public class EmpilhadeiraController : MonoBehaviour
 
     private void SetPromptText(string text)
     {
-        EnsurePrompt();
-        if (promptLabel != null)
+        if (!string.IsNullOrWhiteSpace(text))
         {
-            promptLabel.text = text;
+            enterPromptText = text;
         }
     }
 
     private void SetPromptVisible(bool visible)
     {
         EnsurePrompt();
-        if (promptObject != null)
+        if (visible)
         {
-            promptObject.SetActive(visible);
+            promptPresenter?.ShowAmbient(this, "EMPILHADEIRA", new InteractionPromptAction(GetInteractionKeyLabel(), "Entrar"));
         }
+        else
+        {
+            promptPresenter?.Hide(this);
+        }
+    }
+
+    private string GetInteractionKeyLabel()
+    {
+        string value = interactionKey.ToString();
+        return value.StartsWith("Alpha") ? value.Substring("Alpha".Length) : value.ToUpperInvariant();
     }
 
     private void SetDrivingPanelVisible(bool visible)

@@ -25,6 +25,7 @@ public class DeviceDropZone : MonoBehaviour
     [SerializeField] private Canvas canvas;
     [SerializeField] private GameObject promptObject;
     [SerializeField] private Text promptLabel;
+    private InteractionPromptPresenter promptPresenter;
 
     public Vector3 PlacePosition => GetSurfacePosition() + Vector3.up * placementVerticalOffset;
     public Vector3 IndicatorPosition => PlacePosition + Vector3.up * (indicatorHeight + indicatorVerticalOffset);
@@ -462,14 +463,14 @@ public class DeviceDropZone : MonoBehaviour
     private void SetPromptVisible(bool visible, MovableDevice device)
     {
         EnsurePrompt();
-        if (promptLabel != null && device != null)
+        if (visible && device != null)
         {
-            promptLabel.text = string.Format(placePromptFormat, GetDisplayDeviceName(device));
+            string deviceName = GetDisplayDeviceName(device);
+            promptPresenter?.Show(this, "ÁREA DE ENTREGA", new InteractionPromptAction("E", "Colocar " + deviceName));
         }
-
-        if (promptObject != null)
+        else
         {
-            promptObject.SetActive(visible);
+            promptPresenter?.Hide(this);
         }
     }
 
@@ -522,46 +523,22 @@ public class DeviceDropZone : MonoBehaviour
 
         EnsureEventSystem();
 
-        if (promptObject == null)
+        GameObject legacyPrompt = promptObject;
+        promptPresenter = InteractionPromptPresenter.GetOrCreate(canvas);
+        promptObject = promptPresenter != null ? promptPresenter.gameObject : null;
+        promptLabel = null;
+
+        if (legacyPrompt != null && legacyPrompt != promptObject && legacyPrompt.name == "DropZonePrompt")
         {
-            promptObject = new GameObject("DropZonePrompt");
-            promptObject.transform.SetParent(canvas.transform, false);
-            RectTransform promptRect = promptObject.AddComponent<RectTransform>();
-            promptRect.anchorMin = new Vector2(0.5f, 0f);
-            promptRect.anchorMax = new Vector2(0.5f, 0f);
-            promptRect.pivot = new Vector2(0.5f, 0f);
-            promptRect.anchoredPosition = new Vector2(0f, 132f);
-            promptRect.sizeDelta = new Vector2(420f, 42f);
-
-            Image background = promptObject.AddComponent<Image>();
-            background.color = new Color(0f, 0f, 0f, 0.55f);
-
-            GameObject labelObject = new GameObject("Text");
-            labelObject.transform.SetParent(promptObject.transform, false);
-            RectTransform labelRect = labelObject.AddComponent<RectTransform>();
-            labelRect.anchorMin = Vector2.zero;
-            labelRect.anchorMax = Vector2.one;
-            labelRect.offsetMin = Vector2.zero;
-            labelRect.offsetMax = Vector2.zero;
-            promptLabel = labelObject.AddComponent<Text>();
+            legacyPrompt.SetActive(false);
+            Destroy(legacyPrompt);
         }
 
-        RectTransform existingPromptRect = promptObject.GetComponent<RectTransform>();
-        if (existingPromptRect != null)
+        Transform legacyCanvasPrompt = canvas.transform.Find("DropZonePrompt");
+        if (legacyCanvasPrompt != null && legacyCanvasPrompt.gameObject != promptObject)
         {
-            existingPromptRect.anchorMin = new Vector2(0.5f, 0f);
-            existingPromptRect.anchorMax = new Vector2(0.5f, 0f);
-            existingPromptRect.pivot = new Vector2(0.5f, 0f);
-            existingPromptRect.anchoredPosition = new Vector2(0f, 132f);
-            existingPromptRect.sizeDelta = new Vector2(420f, 42f);
-        }
-
-        if (promptLabel != null)
-        {
-            promptLabel.alignment = TextAnchor.MiddleCenter;
-            promptLabel.color = Color.white;
-            promptLabel.font = GetDefaultFont();
-            promptLabel.fontSize = 18;
+            legacyCanvasPrompt.gameObject.SetActive(false);
+            Destroy(legacyCanvasPrompt.gameObject);
         }
     }
 

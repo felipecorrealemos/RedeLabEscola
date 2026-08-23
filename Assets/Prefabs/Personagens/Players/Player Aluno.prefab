@@ -98,7 +98,7 @@ CharacterController:
   m_IsTrigger: 0
   m_ProvidesContacts: 0
   m_Enabled: 1
-  serializedVersion: 2
+  serializedVersion: 3
   m_Height: 1.45
   m_Radius: 0.28
   m_SlopeLimit: 50

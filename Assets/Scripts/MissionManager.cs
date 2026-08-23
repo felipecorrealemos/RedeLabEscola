@@ -40,25 +40,29 @@ public class MissionManager : MonoBehaviour
     [SerializeField] private Button toggleButton;
     [SerializeField] private GameObject expandedContent;
     [SerializeField] private Vector2 panelAnchorMin = new Vector2(0.02f, 0.34f);
-    [SerializeField] private Vector2 panelAnchorMax = new Vector2(0.42f, 0.96f);
+    [SerializeField] private Vector2 panelAnchorMax = new Vector2(0.34f, 0.96f);
     [SerializeField] private Vector2 panelOffsetMin = Vector2.zero;
     [SerializeField] private Vector2 panelOffsetMax = Vector2.zero;
-    [SerializeField] private Vector2 collapsedPanelAnchorMin = new Vector2(0.02f, 0.90f);
-    [SerializeField] private Vector2 collapsedPanelAnchorMax = new Vector2(0.22f, 0.96f);
+    [SerializeField] private Vector2 collapsedPanelAnchorMin = new Vector2(0.02f, 0.912f);
+    [SerializeField] private Vector2 collapsedPanelAnchorMax = new Vector2(0.18f, 0.96f);
     [SerializeField] private Vector2 collapsedPanelOffsetMin = Vector2.zero;
     [SerializeField] private Vector2 collapsedPanelOffsetMax = Vector2.zero;
-    [SerializeField] private float panelOpacity = 0.78f;
-    [SerializeField] private float taskRowHeight = 34f;
-    [SerializeField] private int taskFontSize = 13;
-    [SerializeField] private float taskTextPaddingLeft = 42f;
-    [SerializeField] private float taskTextPaddingRight = 18f;
-    [SerializeField] private float minimumExpandedPanelHeight = 430f;
+    [SerializeField] [Range(0.25f, 1f)] private float panelOpacity = 0.86f;
+    [SerializeField] private float taskRowHeight = 36.8f;
+    [SerializeField] private int taskFontSize = 16;
+    [SerializeField] private float taskTextPaddingLeft = 33.6f;
+    [SerializeField] private float taskTextPaddingRight = 14.4f;
+    [SerializeField] private float minimumExpandedPanelHeight = 344f;
     [SerializeField] private float autoCollapseDelay = 5f;
     [SerializeField] private bool updateMissionFromNearestRouter = true;
     [SerializeField] private float routerMissionDetectionRadius = 8f;
     [SerializeField] private float missionAreaRefreshInterval = 1f;
     [SerializeField] private float fadeDuration = 0.18f;
     [SerializeField] private float stage2MissionStateRefreshInterval = 0.5f;
+
+    [Header("Teste do Estágio 2")]
+    [Tooltip("Conclui todas as tarefas da fábrica e exibe imediatamente a apresentação final durante o Play Mode.")]
+    [SerializeField] private bool autoCompleteStage2ForTesting;
 
     private readonly Dictionary<int, Mission> missionsByNumber = new Dictionary<int, Mission>();
     private Mission currentMission;
@@ -67,14 +71,48 @@ public class MissionManager : MonoBehaviour
     private bool stage2RoboticArmRefreshQueued;
     private bool capturedScenePanelLayout;
     [SerializeField] private int stage2RoboticArmOperatingCount;
+    [SerializeField] private int stage2ScrapConsumedCount;
+    [SerializeField] private int stage2ScrapTotalCount;
+    [SerializeField] private int stage2PalletsPlacedCount;
+    [SerializeField] private int stage2MachinePalletsSentCount;
+    [SerializeField] private int sala2ConfiguredDoorDeviceCount;
+    private readonly HashSet<int> stage2PlacedPalletIds = new HashSet<int>();
+    private readonly HashSet<int> stage2MachinePalletIds = new HashSet<int>();
+    private readonly HashSet<int> stage2ConsumedScrapIds = new HashSet<int>();
+    private bool stage2CompletionPresentationStarted;
+    private bool stage2TestCompletionApplied;
     private string lastUiStateSignature;
     private float collapseAtTime;
     private float nextMissionAreaRefreshTime;
     private float nextStage2MissionStateRefreshTime;
     private float fadeTarget = 1f;
+    private bool stagePresentationHasPriority;
+    private Coroutine delayedStageMissionOpen;
+    private Transform sala2EntranceDoorPivot;
+    private Transform sala3EntranceDoorPivot;
+    private Quaternion sala2EntranceClosedRotation;
+    private Quaternion sala3EntranceClosedRotation;
+    private Transform lastOpenedDoorPivot;
+    private Quaternion lastOpenedDoorClosedRotation;
+    private RectTransform titleLeftAccent;
+    private RectTransform titleRightAccent;
+    private static Sprite roundedPanelSprite;
+    [SerializeField, HideInInspector] private int missionUiTypographyVersion;
 
     public static MissionManager Instance { get; private set; }
     public int CurrentMissionNumber => currentMission != null ? currentMission.Number : 0;
+    public bool AreAllCurrentTasksComplete
+    {
+        get
+        {
+            if (currentMission == null || currentMission.Tasks == null || currentMission.Tasks.Count == 0)
+            {
+                return false;
+            }
+
+            return currentMission.Tasks.TrueForAll(task => task != null && task.IsComplete);
+        }
+    }
 
     [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.BeforeSceneLoad)]
     private static void RegisterSceneCallbacks()
@@ -141,10 +179,12 @@ public class MissionManager : MonoBehaviour
             return;
         }
 
+        ApplyMissionUiTypographyMigration();
         ConfigureMissionsForActiveScene();
         RebuildMissionLookup();
         EnsureUi();
         SetMission(startingMissionNumber);
+        if (canvas != null) canvas.enabled = true;
 
         UnityEditor.EditorUtility.SetDirty(this);
         if (canvas != null)
@@ -176,9 +216,12 @@ public class MissionManager : MonoBehaviour
         }
 
         Instance = this;
+        ApplyMissionUiTypographyMigration();
         ConfigureMissionsForActiveScene();
         RebuildMissionLookup();
         EnsureUi();
+        CacheProgressionEntranceDoors();
+        if (canvas != null) canvas.enabled = true;
         SetMission(startingMissionNumber);
         RefreshStage2RoboticArmMission();
     }
@@ -193,6 +236,7 @@ public class MissionManager : MonoBehaviour
 
     private void OnValidate()
     {
+        ApplyMissionUiTypographyMigration();
         if (Application.isPlaying)
         {
             RebuildMissionLookup();
@@ -201,6 +245,7 @@ public class MissionManager : MonoBehaviour
         }
 
         ConfigureMissionsForActiveScene();
+        if (!Application.isPlaying && canvas != null) canvas.enabled = false;
     }
 
     private Scene GetMissionSceneContext()
@@ -210,13 +255,14 @@ public class MissionManager : MonoBehaviour
 
     private void Update()
     {
-        if (Input.GetKeyDown(KeyCode.Q))
+        if (!stagePresentationHasPriority && Input.GetKeyDown(KeyCode.Q))
         {
             ToggleExpanded();
         }
 
         RefreshMissionFromNearestRouter();
         RefreshStage2MissionState();
+        ApplyStage2TestCompletionIfRequested();
         RefreshUiIfStateChanged(false);
 
         if (isExpanded && autoCollapseDelay > 0f && Time.unscaledTime >= collapseAtTime)
@@ -236,8 +282,167 @@ public class MissionManager : MonoBehaviour
             return;
         }
 
+        int previousMissionNumber = CurrentMissionNumber;
+        bool shouldLockPreviousRoom = previousMissionNumber > 0
+            && missionNumber == previousMissionNumber + 1
+            && AreAllCurrentTasksComplete;
+
         currentMission = mission;
+        if (missionNumber == 2)
+        {
+            RefreshSala2DoorDeviceMission();
+        }
+        else if (missionNumber == 3)
+        {
+            RefreshSala3DoorDeviceMission();
+        }
+
         RefreshUi();
+
+        if (shouldLockPreviousRoom && (missionNumber == 2 || missionNumber == 3))
+        {
+            StartCoroutine(LockEntranceDoorAfterPlayerPasses(missionNumber));
+        }
+    }
+
+    private void CacheProgressionEntranceDoors()
+    {
+        sala2EntranceDoorPivot = FindProgressionEntranceDoorPivot(2);
+        sala3EntranceDoorPivot = FindProgressionEntranceDoorPivot(3);
+        if (sala2EntranceDoorPivot != null)
+        {
+            sala2EntranceClosedRotation = sala2EntranceDoorPivot.localRotation;
+        }
+
+        if (sala3EntranceDoorPivot != null)
+        {
+            sala3EntranceClosedRotation = sala3EntranceDoorPivot.localRotation;
+        }
+    }
+
+    private IEnumerator LockEntranceDoorAfterPlayerPasses(int enteredMissionNumber)
+    {
+        yield return new WaitForSeconds(0.35f);
+
+        Transform pivot = lastOpenedDoorPivot != null
+            ? lastOpenedDoorPivot
+            : enteredMissionNumber == 2 ? sala2EntranceDoorPivot : sala3EntranceDoorPivot;
+        Quaternion closedRotation = enteredMissionNumber == 2 ? sala2EntranceClosedRotation : sala3EntranceClosedRotation;
+        if (lastOpenedDoorPivot != null)
+        {
+            closedRotation = lastOpenedDoorClosedRotation;
+        }
+        if (pivot == null)
+        {
+            CacheProgressionEntranceDoors();
+            pivot = enteredMissionNumber == 2 ? sala2EntranceDoorPivot : sala3EntranceDoorPivot;
+            closedRotation = enteredMissionNumber == 2 ? sala2EntranceClosedRotation : sala3EntranceClosedRotation;
+        }
+
+        if (pivot == null)
+        {
+            yield break;
+        }
+
+        NetworkDoorDevice[] doorDevices = FindObjectsOfType<NetworkDoorDevice>(true);
+        foreach (NetworkDoorDevice doorDevice in doorDevices)
+        {
+            if (doorDevice != null && doorDevice.DoorPivot == pivot)
+            {
+                doorDevice.CloseFromRoomTransition();
+            }
+        }
+
+        RoomProgressionDoorLock doorLock = pivot.GetComponent<RoomProgressionDoorLock>();
+        if (doorLock == null)
+        {
+            doorLock = pivot.gameObject.AddComponent<RoomProgressionDoorLock>();
+        }
+
+        doorLock.Lock(closedRotation);
+    }
+
+    private Transform FindProgressionEntranceDoorPivot(int missionNumber)
+    {
+        Transform[] transforms = FindObjectsOfType<Transform>(true);
+        Transform roomRoot = null;
+        foreach (Transform candidate in transforms)
+        {
+            if (candidate != null && GetMissionNumberFromAreaName(candidate.name) == missionNumber)
+            {
+                roomRoot = candidate;
+                break;
+            }
+        }
+
+        if (roomRoot == null)
+        {
+            return null;
+        }
+
+        string expectedDoorName = missionNumber == 2 ? "Door (1)" : "Door";
+        Transform[] roomChildren = roomRoot.GetComponentsInChildren<Transform>(true);
+        foreach (Transform candidate in roomChildren)
+        {
+            if (candidate == null || candidate.name != expectedDoorName || candidate.parent == null || candidate.parent.name != "Office")
+            {
+                continue;
+            }
+
+            return candidate.childCount > 0 ? candidate.GetChild(0) : candidate;
+        }
+
+        return null;
+    }
+
+    public void SetStagePresentationPriority(bool hasPriority, bool openMissionAfterRelease = false, float openDelay = 1.25f)
+    {
+        stagePresentationHasPriority = hasPriority;
+
+        if (delayedStageMissionOpen != null)
+        {
+            StopCoroutine(delayedStageMissionOpen);
+            delayedStageMissionOpen = null;
+        }
+
+        if (hasPriority)
+        {
+            isExpanded = false;
+            fadeTarget = 0f;
+            if (expandedContentCanvasGroup != null)
+            {
+                expandedContentCanvasGroup.alpha = 0f;
+                expandedContentCanvasGroup.blocksRaycasts = false;
+                expandedContentCanvasGroup.interactable = false;
+            }
+            if (expandedContent != null) expandedContent.SetActive(false);
+            if (panelCanvasGroup != null)
+            {
+                panelCanvasGroup.alpha = 0f;
+                panelCanvasGroup.blocksRaycasts = false;
+                panelCanvasGroup.interactable = false;
+            }
+            return;
+        }
+
+        if (panelCanvasGroup != null)
+        {
+            panelCanvasGroup.alpha = 1f;
+            panelCanvasGroup.blocksRaycasts = true;
+            panelCanvasGroup.interactable = true;
+        }
+
+        if (openMissionAfterRelease)
+        {
+            delayedStageMissionOpen = StartCoroutine(OpenMissionAfterStagePresentation(openDelay));
+        }
+    }
+
+    private IEnumerator OpenMissionAfterStagePresentation(float delay)
+    {
+        if (delay > 0f) yield return new WaitForSecondsRealtime(delay);
+        delayedStageMissionOpen = null;
+        if (!stagePresentationHasPriority) ExpandForDelay();
     }
 
     public void CompleteTask(string taskId)
@@ -279,6 +484,7 @@ public class MissionManager : MonoBehaviour
         {
             ExpandForDelay();
             RefreshUi();
+            TryPresentStage2Completion();
         }
     }
 
@@ -416,8 +622,6 @@ public class MissionManager : MonoBehaviour
         bool isComputer = lowerTitle.Contains("computador") || lowerTitle.Contains("computer") || lowerName.Contains("computer") || lowerName.Contains("gabinete");
         bool isDoorDevice = lowerTitle.Contains("porta") || lowerTitle.Contains("door") || lowerTitle.Contains("dispositivo") || lowerName.Contains("porta") || lowerName.Contains("door");
         bool isPrinter = lowerTitle.Contains("impressora") || lowerTitle.Contains("printer") || lowerName.Contains("impressora") || lowerName.Contains("printer");
-        bool isLeftDoor = lowerTitle.Contains("esquerda") || lowerTitle.Contains("left") || lowerName.Contains("esquerda") || lowerName.Contains("left");
-        bool isRightDoor = lowerTitle.Contains("direita") || lowerTitle.Contains("right") || lowerName.Contains("direita") || lowerName.Contains("right");
 
         if (Instance.CurrentMissionNumber == 1 && isComputer)
         {
@@ -431,24 +635,9 @@ public class MissionManager : MonoBehaviour
             {
                 Instance.SetTaskCompletion("sala2_configurar_ip_pc", device.IsNetworkOperational);
             }
-            else if (isLeftDoor)
-            {
-                Instance.SetTaskCompletion("sala2_configurar_ip_porta_esquerda", device.IsNetworkOperational);
-            }
-            else if (isRightDoor)
-            {
-                Instance.SetTaskCompletion("sala2_configurar_ip_porta_direita", device.IsNetworkOperational);
-            }
             else if (isDoorDevice)
             {
-                if (device.IsNetworkOperational)
-                {
-                    Instance.CompleteFirstIncompleteTask("sala2_configurar_ip_porta_esquerda", "sala2_configurar_ip_porta_direita");
-                }
-                else
-                {
-                    Instance.SetLastCompleteTask(false, "sala2_configurar_ip_porta_direita", "sala2_configurar_ip_porta_esquerda");
-                }
+                Instance.RefreshSala2DoorDeviceMission();
             }
 
             return;
@@ -468,6 +657,10 @@ public class MissionManager : MonoBehaviour
         {
             Instance.SetTaskCompletion("sala3_colocar_impressora", device.IsConnectedToNetworkJack);
             Instance.SetTaskCompletion("sala3_configurar_ip_impressora", device.IsNetworkOperational);
+        }
+        else if (isDoorDevice)
+        {
+            Instance.RefreshSala3DoorDeviceMission();
         }
     }
 
@@ -492,6 +685,17 @@ public class MissionManager : MonoBehaviour
         {
             Instance.SetTaskCompletion("sala3_abrir_porta", open);
         }
+    }
+
+    public static void NotifySingleDoorStateChanged(NetworkDoorDevice doorDevice, bool open)
+    {
+        if (Instance != null && open && doorDevice != null && doorDevice.DoorPivot != null)
+        {
+            Instance.lastOpenedDoorPivot = doorDevice.DoorPivot;
+            Instance.lastOpenedDoorClosedRotation = doorDevice.ClosedLocalRotation;
+        }
+
+        NotifySingleDoorStateChanged(open);
     }
 
     public static void NotifyDualDoorsOpened()
@@ -547,7 +751,8 @@ public class MissionManager : MonoBehaviour
             "sala3_configurar_ip_impressora",
             "sala3_imprimir_documento",
             "sala3_pegar_documento",
-            "sala3_entregar_documento");
+            "sala3_entregar_documento",
+            "sala3_configurar_ip_porta");
     }
 
     public static void NotifyStage2RoboticArmOperationChanged()
@@ -560,24 +765,34 @@ public class MissionManager : MonoBehaviour
         Instance.QueueStage2RoboticArmMissionRefresh();
     }
 
-    public static void NotifyStage2ScrapConsumed()
+    public static void NotifyStage2ScrapConsumed(GameObject scrap)
     {
-        if (Instance == null || !Instance.usingStage2MissionProfile)
+        if (Instance == null || !Instance.usingStage2MissionProfile || scrap == null)
         {
             return;
         }
 
-        Instance.RefreshStage2ScrapMission();
+        Instance.RegisterStage2ConsumedScrap(scrap);
     }
 
-    public static void NotifyStage2PalletPlacedOnConveyor()
+    public static void NotifyStage2PalletPlacedOnConveyor(GameObject pallet)
     {
-        if (Instance == null || !Instance.usingStage2MissionProfile)
+        if (Instance == null || !Instance.usingStage2MissionProfile || pallet == null)
         {
             return;
         }
 
-        Instance.RefreshStage2PalletMission();
+        Instance.RegisterStage2PlacedPallet(pallet);
+    }
+
+    public static void NotifyStage2MachinePalletSent(GameObject pallet)
+    {
+        if (Instance == null || !Instance.usingStage2MissionProfile || pallet == null)
+        {
+            return;
+        }
+
+        Instance.RegisterStage2MachinePallet(pallet);
     }
 
     private void ConfigureMissionsForActiveScene()
@@ -598,12 +813,25 @@ public class MissionManager : MonoBehaviour
 
     private void EnsureStage2Missions()
     {
-        EnsureMission(1, "Fabrica", new[]
+        EnsureMission(1, "A fábrica", new[]
         {
-            new MissionTask { Id = "fabrica_bracos_roboticos", Description = "Fazer funcionar os tres bracos roboticos" },
+            new MissionTask { Id = "fabrica_bracos_roboticos", Description = "Fazer funcionar os três braços robóticos" },
             new MissionTask { Id = "fabrica_limpar_entulhos_garra", Description = "Limpar entulhos com a garra pelo terminal" },
-            new MissionTask { Id = "fabrica_pallets_esteira_empilhadeira", Description = "Colocar os pallets na esteira com a empilhadeira" }
+            new MissionTask { Id = "fabrica_pallets_esteira_empilhadeira", Description = "Colocar os paletes na esteira final com a empilhadeira" },
+            new MissionTask { Id = "fabrica_pallets_gerados_enviados", Description = "Enviar paletes gerados pela máquina" }
         });
+    }
+
+    private void ApplyMissionUiTypographyMigration()
+    {
+        if (missionUiTypographyVersion >= 6) return;
+        taskFontSize = 16;
+        taskRowHeight = 36.8f;
+        taskTextPaddingLeft = 33.6f;
+        taskTextPaddingRight = 14.4f;
+        minimumExpandedPanelHeight = 344f;
+        panelOpacity = 0.86f;
+        missionUiTypographyVersion = 6;
     }
 
     private void EnsureDefaultMissions()
@@ -619,8 +847,7 @@ public class MissionManager : MonoBehaviour
         {
             new MissionTask { Id = "sala2_colocar_gabinete", Description = "Colocar o computador na mesa" },
             new MissionTask { Id = "sala2_configurar_ip_pc", Description = "Configurar o computador com IP" },
-            new MissionTask { Id = "sala2_configurar_ip_porta_esquerda", Description = "Configurar o IP do dispositivo da porta esquerda" },
-            new MissionTask { Id = "sala2_configurar_ip_porta_direita", Description = "Configurar o IP do dispositivo da porta direita" },
+            new MissionTask { Id = "sala2_configurar_ip_portas", Description = "Configurar o dispositivo da porta com IP" },
             new MissionTask { Id = "sala2_abrir_portas", Description = "Enviar comando pelo computador para abrir a porta" }
         });
 
@@ -633,6 +860,7 @@ public class MissionManager : MonoBehaviour
             new MissionTask { Id = "sala3_imprimir_documento", Description = "Imprimir documento pelo computador" },
             new MissionTask { Id = "sala3_pegar_documento", Description = "Pegar o documento na impressora" },
             new MissionTask { Id = "sala3_entregar_documento", Description = "Entregar o documento para o professor" },
+            new MissionTask { Id = "sala3_configurar_ip_porta", Description = "Configurar o dispositivo da porta com IP" },
             new MissionTask { Id = "sala3_abrir_porta", Description = "Enviar comando pelo computador para abrir a porta" }
         });
     }
@@ -685,40 +913,64 @@ public class MissionManager : MonoBehaviour
         }
     }
 
-    private void CompleteFirstIncompleteTask(params string[] taskIds)
+    private void RefreshSala2DoorDeviceMission()
     {
-        if (currentMission == null)
+        HashSet<ComputerInteractable> configuredDevices = new HashSet<ComputerInteractable>();
+        NetworkDoorDevice[] doorDevices = FindObjectsOfType<NetworkDoorDevice>(true);
+        foreach (NetworkDoorDevice doorDevice in doorDevices)
         {
-            return;
-        }
-
-        foreach (string taskId in taskIds)
-        {
-            MissionTask task = currentMission.Tasks.Find(candidate => candidate.Id == taskId);
-            if (task != null && !task.IsComplete)
+            if (doorDevice == null || GetMissionNumberForTransform(doorDevice.transform) != 2)
             {
-                CompleteTask(taskId);
-                return;
+                continue;
+            }
+
+            ComputerInteractable networkDevice = doorDevice.GetComponent<ComputerInteractable>();
+            if (networkDevice != null && networkDevice.IsNetworkOperational)
+            {
+                configuredDevices.Add(networkDevice);
             }
         }
+
+        sala2ConfiguredDoorDeviceCount = Mathf.Clamp(configuredDevices.Count, 0, 2);
+        SetTaskCompletion(2, "sala2_configurar_ip_portas", sala2ConfiguredDoorDeviceCount >= 2);
     }
 
-    private void SetLastCompleteTask(bool complete, params string[] taskIds)
+    private void RefreshSala3DoorDeviceMission()
     {
-        if (currentMission == null)
+        bool hasConfiguredDoorDevice = false;
+        NetworkDoorDevice[] doorDevices = FindObjectsOfType<NetworkDoorDevice>(true);
+        foreach (NetworkDoorDevice doorDevice in doorDevices)
         {
-            return;
-        }
-
-        foreach (string taskId in taskIds)
-        {
-            MissionTask task = currentMission.Tasks.Find(candidate => candidate.Id == taskId);
-            if (task != null && task.IsComplete != complete)
+            if (doorDevice == null || GetMissionNumberForTransform(doorDevice.transform) != 3)
             {
-                SetTaskCompletion(taskId, complete);
-                return;
+                continue;
+            }
+
+            ComputerInteractable networkDevice = doorDevice.GetComponent<ComputerInteractable>();
+            if (networkDevice != null && networkDevice.IsNetworkOperational)
+            {
+                hasConfiguredDoorDevice = true;
+                break;
             }
         }
+
+        SetTaskCompletion(3, "sala3_configurar_ip_porta", hasConfiguredDoorDevice);
+    }
+
+    private int GetMissionNumberForTransform(Transform target)
+    {
+        while (target != null)
+        {
+            int missionNumber = GetMissionNumberFromAreaName(target.name);
+            if (missionNumber > 0)
+            {
+                return missionNumber;
+            }
+
+            target = target.parent;
+        }
+
+        return 0;
     }
 
     private void RebuildMissionLookup()
@@ -818,7 +1070,6 @@ public class MissionManager : MonoBehaviour
 
         nextStage2MissionStateRefreshTime = Time.time + Mathf.Max(stage2MissionStateRefreshInterval, 0.1f);
         RefreshStage2ScrapMission();
-        RefreshStage2PalletMission();
     }
 
     private void RefreshStage2RoboticArmMission()
@@ -883,31 +1134,80 @@ public class MissionManager : MonoBehaviour
 
     private void RefreshStage2ScrapMission()
     {
-        if (IsTaskComplete(1, "fabrica_limpar_entulhos_garra"))
+        ScrapItem[] scraps = FindObjectsOfType<ScrapItem>(true);
+        int remainingScraps = 0;
+        for (int i = 0; i < scraps.Length; i++)
         {
-            return;
+            if (scraps[i] != null && !stage2ConsumedScrapIds.Contains(scraps[i].gameObject.GetInstanceID()))
+            {
+                remainingScraps++;
+            }
         }
 
-        Transform scrapsRoot = FindTransformByName("entulhos");
-        if (scrapsRoot != null && scrapsRoot.childCount == 0)
-        {
-            SetTaskCompletion(1, "fabrica_limpar_entulhos_garra", true);
-        }
+        stage2ScrapTotalCount = Mathf.Max(stage2ScrapTotalCount, remainingScraps + stage2ScrapConsumedCount);
+        SetTaskCompletion(1, "fabrica_limpar_entulhos_garra",
+            stage2ScrapTotalCount > 0 && stage2ScrapConsumedCount >= stage2ScrapTotalCount);
+    }
+
+    private void RegisterStage2ConsumedScrap(GameObject scrap)
+    {
+        if (!stage2ConsumedScrapIds.Add(scrap.GetInstanceID())) return;
+        stage2ScrapConsumedCount = stage2ConsumedScrapIds.Count;
+        RefreshStage2ScrapMission();
+        RefreshUiIfStateChanged(true);
     }
 
     private void RefreshStage2PalletMission()
     {
-        if (IsTaskComplete(1, "fabrica_pallets_esteira_empilhadeira"))
+        SetTaskCompletion(1, "fabrica_pallets_esteira_empilhadeira", stage2PalletsPlacedCount >= 4);
+    }
+
+    private void RegisterStage2PlacedPallet(GameObject pallet)
+    {
+        if (!stage2PlacedPalletIds.Add(pallet.GetInstanceID())) return;
+        stage2PalletsPlacedCount = Mathf.Clamp(stage2PlacedPalletIds.Count, 0, 4);
+        RefreshStage2PalletMission();
+        RefreshUiIfStateChanged(true);
+    }
+
+    private void RegisterStage2MachinePallet(GameObject pallet)
+    {
+        if (!stage2MachinePalletIds.Add(pallet.GetInstanceID())) return;
+        stage2MachinePalletsSentCount = Mathf.Clamp(stage2MachinePalletIds.Count, 0, 3);
+        SetTaskCompletion(1, "fabrica_pallets_gerados_enviados", stage2MachinePalletsSentCount >= 3);
+        RefreshUiIfStateChanged(true);
+    }
+
+    private void TryPresentStage2Completion()
+    {
+        if (!usingStage2MissionProfile || stage2CompletionPresentationStarted || !AreAllCurrentTasksComplete) return;
+        StageTransitionUI transition = FindObjectOfType<StageTransitionUI>(true);
+        if (transition != null && transition.TryCompleteStage())
         {
-            return;
+            stage2CompletionPresentationStarted = true;
+        }
+    }
+
+    private void ApplyStage2TestCompletionIfRequested()
+    {
+        if (!usingStage2MissionProfile || !autoCompleteStage2ForTesting || stage2TestCompletionApplied) return;
+        stage2TestCompletionApplied = true;
+        stage2RoboticArmOperatingCount = 3;
+        stage2ScrapTotalCount = Mathf.Max(1, stage2ScrapTotalCount);
+        stage2ScrapConsumedCount = stage2ScrapTotalCount;
+        stage2PalletsPlacedCount = 4;
+        stage2MachinePalletsSentCount = 3;
+
+        if (currentMission != null && currentMission.Tasks != null)
+        {
+            foreach (MissionTask task in currentMission.Tasks)
+            {
+                if (task != null) task.IsComplete = true;
+            }
         }
 
-        Transform palletMachine = FindTransformByName("PalletMachine");
-        Transform palletsRoot = palletMachine != null ? FindChildRecursive(palletMachine, "Pallets") : FindTransformByName("Pallets");
-        if (palletsRoot != null && palletsRoot.childCount == 0)
-        {
-            SetTaskCompletion(1, "fabrica_pallets_esteira_empilhadeira", true);
-        }
+        RefreshUi();
+        TryPresentStage2Completion();
     }
 
     private bool IsTaskComplete(int missionNumber, string taskId)
@@ -1267,6 +1567,10 @@ public class MissionManager : MonoBehaviour
             panelAlreadyExists = false;
         }
 
+        // Keep the same mission-card language in both stages, including panels
+        // authored directly in their scenes.
+        EnsurePanelVisualStyle(panel);
+
         if (panelAlreadyExists)
         {
             CaptureScenePanelLayout();
@@ -1275,8 +1579,11 @@ public class MissionManager : MonoBehaviour
         Text toggleLabel = panel.Find("ToggleButton/Text")?.GetComponent<Text>();
         if (toggleLabel != null)
         {
-            toggleLabel.text = "Missao  Q";
+            toggleLabel.text = "Missão  Q";
+            toggleLabel.fontSize = 16;
         }
+
+        titleLabel.fontSize = 19;
 
         ApplyExpandedState();
     }
@@ -1294,6 +1601,11 @@ public class MissionManager : MonoBehaviour
 
         Image panelImage = panelObject.AddComponent<Image>();
         panelImage.color = new Color(0f, 0f, 0f, panelOpacity);
+        panelImage.sprite = GetRoundedPanelSprite();
+        panelImage.type = Image.Type.Sliced;
+        Outline panelOutline = panelObject.AddComponent<Outline>();
+        panelOutline.effectColor = new Color(0.88f, 0.95f, 1f, 0.8f);
+        panelOutline.effectDistance = new Vector2(1.5f, -1.5f);
         panelCanvasGroup = panelObject.AddComponent<CanvasGroup>();
         panelCanvasGroup.alpha = 1f;
         panelCanvasGroup.blocksRaycasts = true;
@@ -1306,10 +1618,12 @@ public class MissionManager : MonoBehaviour
         toggleRect.anchorMax = new Vector2(1f, 1f);
         toggleRect.pivot = new Vector2(0.5f, 1f);
         toggleRect.anchoredPosition = Vector2.zero;
-        toggleRect.sizeDelta = new Vector2(0f, 42f);
+        toggleRect.sizeDelta = new Vector2(0f, 33.6f);
 
         Image toggleImage = toggleObject.AddComponent<Image>();
         toggleImage.color = new Color(0.08f, 0.08f, 0.08f, 0.94f);
+        toggleImage.sprite = GetRoundedPanelSprite();
+        toggleImage.type = Image.Type.Sliced;
         toggleButton = toggleObject.AddComponent<Button>();
         toggleButton.targetGraphic = toggleImage;
         toggleButton.onClick.AddListener(ToggleExpanded);
@@ -1319,14 +1633,14 @@ public class MissionManager : MonoBehaviour
         RectTransform toggleLabelRect = toggleLabelObject.AddComponent<RectTransform>();
         toggleLabelRect.anchorMin = Vector2.zero;
         toggleLabelRect.anchorMax = Vector2.one;
-        toggleLabelRect.offsetMin = new Vector2(16f, 0f);
-        toggleLabelRect.offsetMax = new Vector2(-16f, 0f);
+        toggleLabelRect.offsetMin = new Vector2(12.8f, 0f);
+        toggleLabelRect.offsetMax = new Vector2(-12.8f, 0f);
 
         Text toggleLabel = toggleLabelObject.AddComponent<Text>();
-        toggleLabel.text = "Missao  Q";
+        toggleLabel.text = "Missão  Q";
         toggleLabel.font = GetDefaultFont();
         toggleLabel.fontStyle = FontStyle.Bold;
-        toggleLabel.fontSize = 20;
+        toggleLabel.fontSize = 16;
         toggleLabel.alignment = TextAnchor.MiddleLeft;
         toggleLabel.color = Color.white;
 
@@ -1341,7 +1655,7 @@ public class MissionManager : MonoBehaviour
         expandedRect.anchorMin = Vector2.zero;
         expandedRect.anchorMax = Vector2.one;
         expandedRect.offsetMin = Vector2.zero;
-        expandedRect.offsetMax = new Vector2(0f, -42f);
+        expandedRect.offsetMax = new Vector2(0f, -33.6f);
 
         GameObject titleObject = new GameObject("Title");
         titleObject.transform.SetParent(expandedContent.transform, false);
@@ -1349,33 +1663,109 @@ public class MissionManager : MonoBehaviour
         titleRect.anchorMin = new Vector2(0f, 1f);
         titleRect.anchorMax = new Vector2(1f, 1f);
         titleRect.pivot = new Vector2(0.5f, 1f);
-        titleRect.anchoredPosition = new Vector2(0f, -12f);
-        titleRect.sizeDelta = new Vector2(-24f, 34f);
+        titleRect.anchoredPosition = new Vector2(0f, -9.6f);
+        titleRect.sizeDelta = new Vector2(-19.2f, 27.2f);
 
         titleLabel = titleObject.AddComponent<Text>();
         titleLabel.font = GetDefaultFont();
         titleLabel.fontStyle = FontStyle.Bold;
-        titleLabel.fontSize = 24;
-        titleLabel.alignment = TextAnchor.MiddleLeft;
+        titleLabel.fontSize = 19;
+        titleLabel.alignment = TextAnchor.MiddleCenter;
         titleLabel.color = Color.white;
+
+        titleLeftAccent = CreateTitleAccent(expandedContent.transform, "TitleAccentLeft");
+        titleRightAccent = CreateTitleAccent(expandedContent.transform, "TitleAccentRight");
 
         GameObject tasksObject = new GameObject("Tasks");
         tasksObject.transform.SetParent(expandedContent.transform, false);
         taskListRoot = tasksObject.AddComponent<RectTransform>();
         taskListRoot.anchorMin = Vector2.zero;
         taskListRoot.anchorMax = Vector2.one;
-        taskListRoot.offsetMin = new Vector2(0f, 12f);
-        taskListRoot.offsetMax = new Vector2(0f, -56f);
+        taskListRoot.offsetMin = new Vector2(0f, 9.6f);
+        taskListRoot.offsetMax = new Vector2(0f, -44.8f);
 
         VerticalLayoutGroup layout = tasksObject.AddComponent<VerticalLayoutGroup>();
         layout.padding = new RectOffset(0, 0, 0, 0);
-        layout.spacing = 4f;
+        layout.spacing = 3.2f;
         layout.childControlHeight = false;
         layout.childControlWidth = true;
         layout.childForceExpandHeight = false;
         layout.childForceExpandWidth = true;
 
         return panelObject;
+    }
+
+    private void EnsurePanelVisualStyle(Transform panel)
+    {
+        if (panel == null) return;
+
+        Image panelImage = panel.GetComponent<Image>();
+        if (panelImage != null)
+        {
+            panelImage.color = new Color(0f, 0f, 0f, panelOpacity);
+            panelImage.sprite = GetRoundedPanelSprite();
+            panelImage.type = Image.Type.Sliced;
+        }
+
+        Outline outline = panel.GetComponent<Outline>();
+        if (outline == null) outline = panel.gameObject.AddComponent<Outline>();
+        outline.effectColor = new Color(0.88f, 0.95f, 1f, 0.8f);
+        outline.effectDistance = new Vector2(1.5f, -1.5f);
+
+        Image toggleImage = panel.Find("ToggleButton")?.GetComponent<Image>();
+        if (toggleImage != null)
+        {
+            toggleImage.color = new Color(0.025f, 0.025f, 0.025f, 0.96f);
+            toggleImage.sprite = GetRoundedPanelSprite();
+            toggleImage.type = Image.Type.Sliced;
+        }
+
+        if (titleLabel != null) titleLabel.alignment = TextAnchor.MiddleCenter;
+        Transform left = panel.Find("ExpandedContent/TitleAccentLeft");
+        Transform right = panel.Find("ExpandedContent/TitleAccentRight");
+        titleLeftAccent = left as RectTransform ?? CreateTitleAccent(expandedContent.transform, "TitleAccentLeft");
+        titleRightAccent = right as RectTransform ?? CreateTitleAccent(expandedContent.transform, "TitleAccentRight");
+    }
+
+    private RectTransform CreateTitleAccent(Transform parent, string accentName)
+    {
+        GameObject accent = new GameObject(accentName);
+        accent.transform.SetParent(parent, false);
+        RectTransform rect = accent.AddComponent<RectTransform>();
+        rect.anchorMin = new Vector2(0f, 1f);
+        rect.anchorMax = new Vector2(0.5f, 1f);
+        rect.pivot = new Vector2(0.5f, 0.5f);
+        rect.sizeDelta = new Vector2(0f, 2f);
+        Image image = accent.AddComponent<Image>();
+        image.color = new Color(0.1f, 0.68f, 0.95f, 0.95f);
+        return rect;
+    }
+
+    private static Sprite GetRoundedPanelSprite()
+    {
+        if (roundedPanelSprite != null) return roundedPanelSprite;
+
+        const int size = 32;
+        const float radius = 8f;
+        Texture2D texture = new Texture2D(size, size, TextureFormat.RGBA32, false);
+        texture.name = "MissionPanelRoundedTexture";
+        texture.wrapMode = TextureWrapMode.Clamp;
+        texture.filterMode = FilterMode.Bilinear;
+        Color clear = new Color(1f, 1f, 1f, 0f);
+        for (int y = 0; y < size; y++)
+        {
+            for (int x = 0; x < size; x++)
+            {
+                float dx = Mathf.Max(radius - x, 0f, x - (size - 1 - radius));
+                float dy = Mathf.Max(radius - y, 0f, y - (size - 1 - radius));
+                float alpha = Mathf.Clamp01(radius + 0.5f - Mathf.Sqrt(dx * dx + dy * dy));
+                texture.SetPixel(x, y, alpha > 0f ? new Color(1f, 1f, 1f, alpha) : clear);
+            }
+        }
+        texture.Apply();
+        roundedPanelSprite = Sprite.Create(texture, new Rect(0f, 0f, size, size), new Vector2(0.5f, 0.5f), 100f, 0u, SpriteMeshType.FullRect, new Vector4(8f, 8f, 8f, 8f));
+        roundedPanelSprite.name = "MissionPanelRoundedSprite";
+        return roundedPanelSprite;
     }
 
     private void CaptureScenePanelLayout()
@@ -1387,6 +1777,10 @@ public class MissionManager : MonoBehaviour
 
         panelAnchorMin = panelRect.anchorMin;
         panelAnchorMax = panelRect.anchorMax;
+        if (usingStage2MissionProfile)
+        {
+            panelAnchorMax.x = 0.48f;
+        }
         panelOffsetMin = panelRect.offsetMin;
         panelOffsetMax = panelRect.offsetMax;
         capturedScenePanelLayout = true;
@@ -1402,6 +1796,7 @@ public class MissionManager : MonoBehaviour
 
         lastUiStateSignature = BuildUiStateSignature();
         titleLabel.text = currentMission.Title;
+        UpdateDynamicPanelLayout();
         ExpandForDelay();
 
         for (int i = taskListRoot.childCount - 1; i >= 0; i--)
@@ -1413,6 +1808,48 @@ public class MissionManager : MonoBehaviour
         {
             CreateTaskRow(task);
         }
+        UpdateDynamicPanelLayout();
+    }
+
+    private void UpdateDynamicPanelLayout()
+    {
+        if (panelRect == null || currentMission == null || canvas == null) return;
+
+        float spacing = 3.2f;
+        float desiredHeight = 33.6f + 46.4f + 19.2f + currentMission.Tasks.Count * taskRowHeight
+            + Mathf.Max(0, currentMission.Tasks.Count - 1) * spacing;
+        RectTransform canvasRect = canvas.transform as RectTransform;
+        float canvasHeight = canvasRect != null ? canvasRect.rect.height : Screen.height;
+        float availableHeight = Mathf.Max(1f, canvasHeight * panelAnchorMax.y - 9.6f);
+        desiredHeight = Mathf.Clamp(desiredHeight, 120f, availableHeight);
+
+        Vector2 dynamicMin = panelAnchorMin;
+        dynamicMin.y = panelAnchorMax.y - desiredHeight / Mathf.Max(canvasHeight, 1f);
+        panelAnchorMin = dynamicMin;
+
+        float titleWidth = titleLabel != null ? titleLabel.preferredWidth : 80f;
+        float halfTitleWidth = titleWidth * 0.5f;
+        float gap = 9.6f;
+        float sideMargin = 14.4f;
+        float centerY = -23.2f;
+        if (titleLeftAccent != null)
+        {
+            titleLeftAccent.anchorMin = new Vector2(0f, 1f);
+            titleLeftAccent.anchorMax = new Vector2(0.5f, 1f);
+            titleLeftAccent.pivot = new Vector2(0.5f, 0.5f);
+            titleLeftAccent.offsetMin = new Vector2(sideMargin, centerY - 1f);
+            titleLeftAccent.offsetMax = new Vector2(-(halfTitleWidth + gap), centerY + 1f);
+        }
+        if (titleRightAccent != null)
+        {
+            titleRightAccent.anchorMin = new Vector2(0.5f, 1f);
+            titleRightAccent.anchorMax = new Vector2(1f, 1f);
+            titleRightAccent.pivot = new Vector2(0.5f, 0.5f);
+            titleRightAccent.offsetMin = new Vector2(halfTitleWidth + gap, centerY - 1f);
+            titleRightAccent.offsetMax = new Vector2(-sideMargin, centerY + 1f);
+        }
+
+        if (isExpanded) ApplyExpandedState();
     }
 
     private void RefreshUiIfStateChanged(bool expandPanel)
@@ -1523,17 +1960,47 @@ public class MissionManager : MonoBehaviour
             return task.Description + "  " + stage2RoboticArmOperatingCount + "/3";
         }
 
+        if (usingStage2MissionProfile && task.Id == "fabrica_limpar_entulhos_garra")
+        {
+            return task.Description + "  " + stage2ScrapConsumedCount + "/" + stage2ScrapTotalCount;
+        }
+
+        if (usingStage2MissionProfile && task.Id == "fabrica_pallets_esteira_empilhadeira")
+        {
+            return task.Description + "  " + stage2PalletsPlacedCount + "/4";
+        }
+
+        if (usingStage2MissionProfile && task.Id == "fabrica_pallets_gerados_enviados")
+        {
+            return task.Description + "  " + stage2MachinePalletsSentCount + "/3";
+        }
+
+        if (!usingStage2MissionProfile && task.Id == "sala2_configurar_ip_portas")
+        {
+            return task.Description + "  " + sala2ConfiguredDoorDeviceCount + "/2";
+        }
+
         return task.Description;
     }
 
     private void ExpandForDelay()
     {
+        if (stagePresentationHasPriority)
+        {
+            return;
+        }
+
         SetExpanded(true);
         collapseAtTime = Time.unscaledTime + autoCollapseDelay;
     }
 
     private void ToggleExpanded()
     {
+        if (stagePresentationHasPriority)
+        {
+            return;
+        }
+
         SetExpanded(!isExpanded);
         if (isExpanded)
         {
@@ -1543,6 +2010,11 @@ public class MissionManager : MonoBehaviour
 
     private void SetExpanded(bool expanded)
     {
+        if (stagePresentationHasPriority && expanded)
+        {
+            return;
+        }
+
         if (isExpanded == expanded)
         {
             return;
@@ -1633,5 +2105,44 @@ public class MissionManager : MonoBehaviour
         {
             DestroyImmediate(target);
         }
+    }
+}
+
+[DisallowMultipleComponent]
+public sealed class RoomProgressionDoorLock : MonoBehaviour
+{
+    [SerializeField] private float closeSpeed = 240f;
+
+    private Quaternion closedLocalRotation;
+    private bool isLocked;
+
+    public bool IsLocked => isLocked;
+
+    public void Lock(Quaternion targetClosedLocalRotation)
+    {
+        closedLocalRotation = targetClosedLocalRotation;
+        isLocked = true;
+
+        Collider[] colliders = GetComponentsInChildren<Collider>(true);
+        foreach (Collider doorCollider in colliders)
+        {
+            if (doorCollider != null && !doorCollider.isTrigger)
+            {
+                doorCollider.enabled = true;
+            }
+        }
+    }
+
+    private void LateUpdate()
+    {
+        if (!isLocked)
+        {
+            return;
+        }
+
+        transform.localRotation = Quaternion.RotateTowards(
+            transform.localRotation,
+            closedLocalRotation,
+            closeSpeed * Time.deltaTime);
     }
 }

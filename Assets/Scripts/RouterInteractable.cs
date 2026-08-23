@@ -3,11 +3,24 @@ using System.Collections;
 using System.Collections.Generic;
 using UnityEngine;
 using UnityEngine.EventSystems;
+using UnityEngine.Serialization;
 using UnityEngine.UI;
 
 [DisallowMultipleComponent]
 public class RouterInteractable : MonoBehaviour
 {
+    [SerializeField] private bool allowConfigurationAccess = true;
+    [SerializeField] private bool allowMovement;
+    [SerializeField] private bool initialWiFiEnabled;
+    [FormerlySerializedAs("industrialDhcpEnabled")]
+    [InspectorName("DHCP Enabled")]
+    [SerializeField] private bool dhcpEnabled = true;
+
+    [Header("Wi-Fi")]
+    [SerializeField] private int wifiRange = 5;
+    [SerializeField] private float wifiDetectionInterval = 1f;
+    [SerializeField] private LayerMask wifiDeviceLayerMask = ~0;
+
     [Header("Network")]
     [SerializeField] private string promptText = "F configurar roteador";
     [SerializeField] private NetworkScope networkScope;
@@ -16,19 +29,11 @@ public class RouterInteractable : MonoBehaviour
     [SerializeField] private int firstDeviceAddress = 2;
     [SerializeField] private int availableAddressCount = 4;
 
-    [Header("Movement")]
-    [SerializeField] private bool allowMovement;
-
-    [Header("Wi-Fi")]
-    [SerializeField] private bool initialWiFiEnabled;
-    [SerializeField] private int wifiRange = 5;
-    [SerializeField] private float wifiDetectionInterval = 1f;
-    [SerializeField] private LayerMask wifiDeviceLayerMask = ~0;
-
-    [Header("Industrial DHCP")]
-    [SerializeField] private bool industrialDhcpEnabled = true;
-    [SerializeField] private float industrialDhcpDiscoveryInterval = 1f;
-    [SerializeField] private bool logIndustrialDhcpEvents;
+    [Header("DHCP")]
+    [FormerlySerializedAs("industrialDhcpDiscoveryInterval")]
+    [SerializeField] private float dhcpDiscoveryInterval = 1f;
+    [FormerlySerializedAs("logIndustrialDhcpEvents")]
+    [SerializeField] private bool logDhcpEvents;
 
     [Header("Panel")]
     [SerializeField] private Vector2 panelAnchorMin = new Vector2(0.52f, 0.14f);
@@ -68,6 +73,7 @@ public class RouterInteractable : MonoBehaviour
     private Text wifiToggleLabel;
     private GameObject dhcpIndicatorObject;
     private Text dhcpIndicatorLabel;
+    private InteractionPromptPresenter promptPresenter;
     private readonly HashSet<WiFiDevice> detectedWiFiDevices = new HashSet<WiFiDevice>();
     private readonly List<IndustrialDhcpLease> industrialDhcpLeases = new List<IndustrialDhcpLease>();
 
@@ -80,11 +86,12 @@ public class RouterInteractable : MonoBehaviour
     public bool InitialWiFiEnabled => initialWiFiEnabled;
     public int WiFiRange => Mathf.Max(wifiRange, 0);
     public string WiFiNetworkName => (ActiveNetworkScope != null ? ActiveNetworkScope.NetworkPrefix : networkPrefix).TrimEnd('.');
+    public bool AllowConfigurationAccess => allowConfigurationAccess;
     public bool AllowMovement => allowMovement;
-    public bool IndustrialDhcpEnabled => industrialDhcpEnabled;
-    public float IndustrialDhcpDiscoveryInterval => Mathf.Max(industrialDhcpDiscoveryInterval, 0.1f);
+    public bool IndustrialDhcpEnabled => dhcpEnabled;
+    public float IndustrialDhcpDiscoveryInterval => Mathf.Max(dhcpDiscoveryInterval, 0.1f);
     public bool IsRouterOperational => isActiveAndEnabled;
-    public bool CanProvideIndustrialDhcp => IsRouterOperational && isWiFiEnabled && industrialDhcpEnabled;
+    public bool CanProvideIndustrialDhcp => IsRouterOperational && isWiFiEnabled && dhcpEnabled;
     public IReadOnlyList<IndustrialDhcpLease> ConnectedIndustrialDevices => industrialDhcpLeases;
 
     [Serializable]
@@ -153,7 +160,7 @@ public class RouterInteractable : MonoBehaviour
         ResolveNetworkScope(false);
         wifiRange = Mathf.Max(wifiRange, 0);
         wifiDetectionInterval = Mathf.Max(wifiDetectionInterval, 0.1f);
-        industrialDhcpDiscoveryInterval = Mathf.Max(industrialDhcpDiscoveryInterval, 0.1f);
+        dhcpDiscoveryInterval = Mathf.Max(dhcpDiscoveryInterval, 0.1f);
         ApplyUiSettings();
         RefreshIpRows();
         if (Application.isPlaying && !CanProvideIndustrialDhcp)
@@ -192,14 +199,33 @@ public class RouterInteractable : MonoBehaviour
     public void SetPromptVisible(bool visible)
     {
         EnsureUi();
-        if (promptObject != null)
+        bool shouldShow = allowConfigurationAccess && visible && !isOpen && (!allowMovement || movableDevice == null || !movableDevice.IsCarried);
+        if (shouldShow)
         {
-            promptObject.SetActive(visible && !isOpen && (!allowMovement || movableDevice == null || !movableDevice.IsCarried));
+            if (allowMovement)
+            {
+                promptPresenter?.Show(this, "ROTEADOR",
+                    new InteractionPromptAction("E", "Mover"),
+                    new InteractionPromptAction("F", "Configurar"));
+            }
+            else
+            {
+                promptPresenter?.Show(this, "ROTEADOR", new InteractionPromptAction("F", "Configurar"));
+            }
+        }
+        else
+        {
+            promptPresenter?.Hide(this);
         }
     }
 
     public void Toggle(PlayerTopDownController player)
     {
+        if (!allowConfigurationAccess)
+        {
+            return;
+        }
+
         if (isOpen)
         {
             Close(player);
@@ -212,6 +238,11 @@ public class RouterInteractable : MonoBehaviour
 
     public void Open(PlayerTopDownController player)
     {
+        if (!allowConfigurationAccess)
+        {
+            return;
+        }
+
         EnsureUi();
         RefreshIpRows();
         isOpen = true;
@@ -322,12 +353,12 @@ public class RouterInteractable : MonoBehaviour
 
     public void SetIndustrialDhcpEnabled(bool enabled)
     {
-        if (industrialDhcpEnabled == enabled)
+        if (dhcpEnabled == enabled)
         {
             return;
         }
 
-        industrialDhcpEnabled = enabled;
+        dhcpEnabled = enabled;
         if (!CanProvideIndustrialDhcp)
         {
             ReleaseAllIndustrialDhcpDevices();
@@ -500,7 +531,7 @@ public class RouterInteractable : MonoBehaviour
 
     private void LogIndustrialDhcp(string message)
     {
-        if (logIndustrialDhcpEvents)
+        if (logDhcpEvents)
         {
             Debug.Log("[" + name + "] " + message, this);
         }
@@ -768,40 +799,21 @@ public class RouterInteractable : MonoBehaviour
 
     private void EnsurePrompt()
     {
-        if (promptObject == null && canvas != null)
+        GameObject legacyPrompt = promptObject;
+        promptPresenter = InteractionPromptPresenter.GetOrCreate(canvas);
+        promptObject = promptPresenter != null ? promptPresenter.gameObject : null;
+        promptLabel = null;
+
+        if (legacyPrompt != null && legacyPrompt != promptObject && legacyPrompt.name == "RouterInteractionPrompt")
         {
-            Transform existingPrompt = canvas.transform.Find("RouterInteractionPrompt");
-            if (existingPrompt != null)
-            {
-                promptObject = existingPrompt.gameObject;
-                promptLabel = existingPrompt.GetComponentInChildren<Text>(true);
-            }
+            DestroyImmediateSafe(legacyPrompt);
         }
 
-        if (promptObject == null)
+        Transform legacyCanvasPrompt = canvas != null ? canvas.transform.Find("RouterInteractionPrompt") : null;
+        if (legacyCanvasPrompt != null && legacyCanvasPrompt.gameObject != promptObject)
         {
-            promptObject = CreateUiObject("RouterInteractionPrompt", canvas.transform);
-            promptObject.SetActive(false);
-            RectTransform promptRect = promptObject.AddComponent<RectTransform>();
-            promptRect.anchorMin = new Vector2(0.5f, 0f);
-            promptRect.anchorMax = new Vector2(0.5f, 0f);
-            promptRect.pivot = new Vector2(0.5f, 0f);
-            promptRect.anchoredPosition = new Vector2(0f, 72f);
-            promptRect.sizeDelta = new Vector2(360f, 48f);
-
-            Image promptBackground = promptObject.AddComponent<Image>();
-            promptBackground.color = new Color(0f, 0f, 0f, 0.55f);
-
-            GameObject labelObject = CreateUiObject("Text", promptObject.transform);
-            RectTransform labelRect = labelObject.AddComponent<RectTransform>();
-            labelRect.anchorMin = Vector2.zero;
-            labelRect.anchorMax = Vector2.one;
-            labelRect.offsetMin = Vector2.zero;
-            labelRect.offsetMax = Vector2.zero;
-            promptLabel = labelObject.AddComponent<Text>();
+            DestroyImmediateSafe(legacyCanvasPrompt.gameObject);
         }
-
-        ApplyPromptSettings();
     }
 
     private void EnsurePanel()

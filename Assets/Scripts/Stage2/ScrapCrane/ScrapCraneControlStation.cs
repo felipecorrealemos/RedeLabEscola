@@ -47,6 +47,7 @@ public class ScrapCraneControlStation : MonoBehaviour
     private PlayerTopDownController nearbyPlayer;
     private Transform previousCameraTarget;
     private Coroutine transitionRoutine;
+    private InteractionPromptPresenter promptPresenter;
 
     public ControlState CurrentState => currentState;
 
@@ -74,6 +75,7 @@ public class ScrapCraneControlStation : MonoBehaviour
         {
             if ((allowExitByInteractionKey && Input.GetKeyDown(interactionKey)) || (allowExitByEscape && Input.GetKeyDown(KeyCode.Escape)))
             {
+                if (Input.GetKeyDown(KeyCode.Escape)) EscapeInputGuard.Consume();
                 ExitControl();
             }
 
@@ -329,49 +331,21 @@ public class ScrapCraneControlStation : MonoBehaviour
 
     private void EnsurePrompt()
     {
-        bool createdPrompt = false;
-        if (promptObject == null && canvas != null)
+        GameObject legacyPrompt = promptObject;
+        promptPresenter = InteractionPromptPresenter.GetOrCreate(canvas);
+        promptObject = promptPresenter != null ? promptPresenter.gameObject : null;
+        promptLabel = null;
+        if (legacyPrompt != null && legacyPrompt != promptObject && legacyPrompt.name == "ScrapCranePrompt")
         {
-            Transform existing = canvas.transform.Find("ScrapCranePrompt");
-            if (existing != null)
-            {
-                promptObject = existing.gameObject;
-                promptLabel = existing.GetComponentInChildren<Text>(true);
-            }
+            legacyPrompt.SetActive(false);
+            Destroy(legacyPrompt);
         }
 
-        if (promptObject == null && canvas != null)
+        Transform legacyCanvasPrompt = canvas != null ? canvas.transform.Find("ScrapCranePrompt") : null;
+        if (legacyCanvasPrompt != null && legacyCanvasPrompt.gameObject != promptObject)
         {
-            promptObject = new GameObject("ScrapCranePrompt");
-            promptObject.transform.SetParent(canvas.transform, false);
-            RectTransform rect = promptObject.AddComponent<RectTransform>();
-            rect.anchorMin = new Vector2(0.5f, 0f);
-            rect.anchorMax = new Vector2(0.5f, 0f);
-            rect.pivot = new Vector2(0.5f, 0f);
-            rect.anchoredPosition = new Vector2(0f, 176f);
-            rect.sizeDelta = new Vector2(440f, 42f);
-
-            Image background = promptObject.AddComponent<Image>();
-            background.color = new Color(0f, 0f, 0f, 0.65f);
-
-            GameObject labelObject = new GameObject("Text");
-            labelObject.transform.SetParent(promptObject.transform, false);
-            RectTransform labelRect = labelObject.AddComponent<RectTransform>();
-            labelRect.anchorMin = Vector2.zero;
-            labelRect.anchorMax = Vector2.one;
-            labelRect.offsetMin = Vector2.zero;
-            labelRect.offsetMax = Vector2.zero;
-            promptLabel = labelObject.AddComponent<Text>();
-            createdPrompt = true;
-        }
-
-        if (promptLabel != null && createdPrompt)
-        {
-            promptLabel.alignment = TextAnchor.MiddleCenter;
-            promptLabel.color = Color.white;
-            promptLabel.font = GetDefaultFont();
-            promptLabel.fontSize = 18;
-            promptLabel.text = enterPromptText;
+            legacyCanvasPrompt.gameObject.SetActive(false);
+            Destroy(legacyCanvasPrompt.gameObject);
         }
     }
 
@@ -414,6 +388,15 @@ public class ScrapCraneControlStation : MonoBehaviour
         }
 
         EnsureCommandsPanelChildren(createdPanel);
+
+        RectTransform commandsRect = commandsPanelObject != null ? commandsPanelObject.GetComponent<RectTransform>() : null;
+        if (commandsRect != null)
+        {
+            commandsRect.anchorMin = new Vector2(1f, 1f);
+            commandsRect.anchorMax = new Vector2(1f, 1f);
+            commandsRect.pivot = new Vector2(1f, 1f);
+            commandsRect.anchoredPosition = new Vector2(-24f, -96f);
+        }
 
         if (commandsPanelLabel != null && createdPanel)
         {
@@ -539,10 +522,20 @@ public class ScrapCraneControlStation : MonoBehaviour
 
     private void SetPromptVisible(bool visible)
     {
-        if (promptObject != null)
+        if (visible)
         {
-            promptObject.SetActive(visible);
+            promptPresenter?.ShowAmbient(this, "GARRA INDUSTRIAL", new InteractionPromptAction(GetInteractionKeyLabel(), "Controlar"));
         }
+        else
+        {
+            promptPresenter?.Hide(this);
+        }
+    }
+
+    private string GetInteractionKeyLabel()
+    {
+        string value = interactionKey.ToString();
+        return value.StartsWith("Alpha") ? value.Substring("Alpha".Length) : value.ToUpperInvariant();
     }
 
     private void SetCommandsPanelVisible(bool visible)

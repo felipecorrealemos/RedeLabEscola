@@ -6,6 +6,7 @@ using UnityEditor.SceneManagement;
 using UnityEngine;
 using UnityEngine.EventSystems;
 using UnityEngine.SceneManagement;
+using UnityEngine.Rendering.PostProcessing;
 using UnityEngine.UI;
 
 public static class CharacterSelectionSceneBuilder
@@ -16,6 +17,7 @@ public static class CharacterSelectionSceneBuilder
     private const string AlunoPrefabPath = "Assets/Prefabs/Personagens/Players/Player Aluno.prefab";
     private const string AlunaPrefabPath = "Assets/Prefabs/Personagens/Players/Player Aluna.prefab";
     private const string MaterialsFolder = "Assets/Materials/CharacterSelection";
+    private const string PostProcessProfilePath = "Assets/Materials/RedeLabEscola_PostProcessProfile.asset";
 
     [MenuItem("Tools/RedeLabEscola/Create Character Selection Scene")]
     public static void CreateCharacterSelectionScene()
@@ -39,6 +41,7 @@ public static class CharacterSelectionSceneBuilder
         AddScenesToBuildSettings();
         ConfigureGameplayPlayerPrefab();
         UpdateMainMenuController();
+        EditorSceneManager.OpenScene(ScenePath, OpenSceneMode.Single);
 
         AssetDatabase.SaveAssets();
         AssetDatabase.Refresh();
@@ -69,11 +72,28 @@ public static class CharacterSelectionSceneBuilder
         camera.fieldOfView = 44f;
         camera.clearFlags = CameraClearFlags.SolidColor;
         camera.backgroundColor = new Color(0.68f, 0.76f, 0.78f);
+        camera.allowHDR = true;
+        PostProcessLayer postLayer = cameraObject.AddComponent<PostProcessLayer>();
+        postLayer.volumeLayer = 1 << 8;
+        postLayer.antialiasingMode = PostProcessLayer.Antialiasing.FastApproximateAntialiasing;
+
+        PostProcessProfile profile = AssetDatabase.LoadAssetAtPath<PostProcessProfile>(PostProcessProfilePath);
+        if (profile != null)
+        {
+            GameObject volumeObject = new GameObject("Global Post Processing");
+            volumeObject.layer = 8;
+            PostProcessVolume volume = volumeObject.AddComponent<PostProcessVolume>();
+            volume.isGlobal = true;
+            volume.priority = 5f;
+            volume.sharedProfile = profile;
+        }
 
         GameObject keyLightObject = new GameObject("Key Light");
         Light keyLight = keyLightObject.AddComponent<Light>();
         keyLight.type = LightType.Directional;
         keyLight.intensity = 1.2f;
+        keyLight.shadows = LightShadows.Soft;
+        keyLight.shadowStrength = 0.36f;
         keyLight.transform.rotation = Quaternion.Euler(45f, -20f, 0f);
 
         CreatePointLight("Aluno Highlight Light", new Vector3(-1.18f, 2.2f, -1.2f), new Color(0.95f, 1f, 0.92f), 0.8f, false);
@@ -203,7 +223,14 @@ public static class CharacterSelectionSceneBuilder
         titleRect.anchoredPosition = new Vector2(0f, -42f);
         titleRect.sizeDelta = new Vector2(760f, 70f);
 
-        Button confirmButton = CreateButton(canvasObject.transform, "Confirmar Button", "Comecar", new Vector2(0f, 92f));
+        Button confirmButton = CreateButton(canvasObject.transform, "Confirmar Button", "Começar", new Vector2(0f, 92f));
+        Button backButton = CreateButton(canvasObject.transform, "Voltar Button", "← Voltar", new Vector2(40f, 52f));
+        RectTransform backRect = backButton.GetComponent<RectTransform>();
+        backRect.anchorMin = Vector2.zero;
+        backRect.anchorMax = Vector2.zero;
+        backRect.pivot = Vector2.zero;
+        backRect.anchoredPosition = new Vector2(40f, 52f);
+        backRect.sizeDelta = new Vector2(250f, 64f);
 
         Text confirmationLabel = CreateText(canvasObject.transform, "Confirmation Label", "Escolha um personagem", 32, FontStyle.Bold, TextAnchor.MiddleCenter);
         RectTransform labelRect = confirmationLabel.GetComponent<RectTransform>();
@@ -213,7 +240,10 @@ public static class CharacterSelectionSceneBuilder
         labelRect.anchoredPosition = new Vector2(0f, 155f);
         labelRect.sizeDelta = new Vector2(760f, 60f);
 
+        CanvasGroup loadingGroup = CreateLoadingOverlay(canvasObject.transform, out Text loadingLabel);
+
         UnityEventTools.AddPersistentListener(confirmButton.onClick, controller.ConfirmAndStart);
+        UnityEventTools.AddPersistentListener(backButton.onClick, controller.BackToMainMenu);
 
         SerializedObject serializedAlunoOption = new SerializedObject(alunoOption);
         serializedAlunoOption.FindProperty("selectionFrame").objectReferenceValue = alunoFrame;
@@ -228,15 +258,43 @@ public static class CharacterSelectionSceneBuilder
         serializedController.FindProperty("alunaOption").objectReferenceValue = alunaOption;
         serializedController.FindProperty("confirmButton").objectReferenceValue = confirmButton;
         serializedController.FindProperty("confirmationLabel").objectReferenceValue = confirmationLabel;
+        serializedController.FindProperty("loadingGroup").objectReferenceValue = loadingGroup;
+        serializedController.FindProperty("loadingLabel").objectReferenceValue = loadingLabel;
         serializedController.ApplyModifiedPropertiesWithoutUndo();
 
         GameObject eventSystem = new GameObject("EventSystem", typeof(EventSystem), typeof(StandaloneInputModule));
         eventSystem.transform.SetParent(root);
     }
 
+    private static CanvasGroup CreateLoadingOverlay(Transform parent, out Text loadingLabel)
+    {
+        GameObject overlay = new GameObject("CharacterSelectionLoading_EDITAR", typeof(Image), typeof(CanvasGroup));
+        overlay.transform.SetParent(parent, false);
+        RectTransform rect = overlay.GetComponent<RectTransform>();
+        rect.anchorMin = Vector2.zero;
+        rect.anchorMax = Vector2.one;
+        rect.offsetMin = Vector2.zero;
+        rect.offsetMax = Vector2.zero;
+        overlay.GetComponent<Image>().color = Color.black;
+
+        loadingLabel = CreateText(overlay.transform, "LoadingLabel_EDITAR", "Carregando...", 28, FontStyle.Bold, TextAnchor.MiddleCenter);
+        RectTransform labelRect = loadingLabel.GetComponent<RectTransform>();
+        labelRect.anchorMin = new Vector2(0.5f, 0.5f);
+        labelRect.anchorMax = new Vector2(0.5f, 0.5f);
+        labelRect.pivot = new Vector2(0.5f, 0.5f);
+        labelRect.anchoredPosition = Vector2.zero;
+        labelRect.sizeDelta = new Vector2(500f, 70f);
+        loadingLabel.color = Color.white;
+
+        CanvasGroup group = overlay.GetComponent<CanvasGroup>();
+        group.alpha = 0f;
+        overlay.SetActive(false);
+        return group;
+    }
+
     private static Button CreateButton(Transform parent, string name, string label, Vector2 anchoredPosition)
     {
-        GameObject buttonObject = new GameObject(name, typeof(Image), typeof(Button));
+        GameObject buttonObject = new GameObject(name, typeof(Image), typeof(Outline), typeof(Shadow), typeof(Button));
         buttonObject.transform.SetParent(parent, false);
 
         RectTransform rect = buttonObject.GetComponent<RectTransform>();
@@ -247,14 +305,24 @@ public static class CharacterSelectionSceneBuilder
         rect.sizeDelta = new Vector2(310f, 68f);
 
         Image image = buttonObject.GetComponent<Image>();
-        image.color = new Color(0.93f, 0.96f, 0.94f, 0.96f);
+        image.color = new Color(0.12f, 0.28f, 0.34f, 0.98f);
+
+        Outline outline = buttonObject.GetComponent<Outline>();
+        outline.effectColor = new Color(0.56f, 0.82f, 0.76f, 0.9f);
+        outline.effectDistance = new Vector2(2f, -2f);
+        Shadow[] shadows = buttonObject.GetComponents<Shadow>();
+        Shadow shadow = shadows[shadows.Length - 1];
+        shadow.effectColor = new Color(0f, 0f, 0f, 0.35f);
+        shadow.effectDistance = new Vector2(0f, -5f);
 
         Button button = buttonObject.GetComponent<Button>();
         ColorBlock colors = button.colors;
-        colors.normalColor = image.color;
-        colors.highlightedColor = Color.white;
-        colors.pressedColor = new Color(0.74f, 0.82f, 0.78f, 1f);
-        colors.disabledColor = new Color(0.45f, 0.50f, 0.49f, 0.7f);
+        colors.normalColor = Color.white;
+        colors.highlightedColor = new Color(1.18f, 1.18f, 1.18f, 1f);
+        colors.pressedColor = new Color(0.72f, 0.78f, 0.80f, 1f);
+        colors.selectedColor = colors.highlightedColor;
+        colors.disabledColor = new Color(0.45f, 0.50f, 0.50f, 0.72f);
+        colors.fadeDuration = 0.12f;
         button.colors = colors;
 
         Text text = CreateText(buttonObject.transform, "Text", label, 28, FontStyle.Bold, TextAnchor.MiddleCenter);
@@ -263,7 +331,7 @@ public static class CharacterSelectionSceneBuilder
         textRect.anchorMax = Vector2.one;
         textRect.offsetMin = Vector2.zero;
         textRect.offsetMax = Vector2.zero;
-        text.color = new Color(0.07f, 0.09f, 0.10f);
+        text.color = new Color(0.96f, 0.98f, 0.94f);
 
         return button;
     }

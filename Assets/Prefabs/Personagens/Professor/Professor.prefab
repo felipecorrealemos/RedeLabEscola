@@ -78,10 +78,11 @@ MonoBehaviour:
   triggerSize: {x: 2, y: 2, z: 2}
   triggerCenter: {x: 0, y: 1, z: 0}
   animator: {fileID: 0}
+  animatorController: {fileID: 9100000, guid: d4e3063488108774f8d62c3e45b4e472, type: 2}
   carryingParameter: IsCarrying
   carryingStateName: Carrying
   carryingTransitionDuration: 0.04
-  useHandIk: 1
+  useHandIk: 0
   documentHandIkGoal: 1
   handIkLocalPosition: {x: 0.32, y: 1.05, z: 0.28}
   handIkLocalEulerAngles: {x: 75, y: 0, z: 0}

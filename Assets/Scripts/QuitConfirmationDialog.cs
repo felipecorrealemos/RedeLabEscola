@@ -1,5 +1,6 @@
 using UnityEngine;
 using UnityEngine.EventSystems;
+using UnityEngine.SceneManagement;
 using UnityEngine.UI;
 
 [DisallowMultipleComponent]
@@ -11,8 +12,10 @@ public class QuitConfirmationDialog : MonoBehaviour
     [SerializeField] private Vector2 panelSize = new Vector2(420f, 210f);
 
     private Canvas canvas;
-    private GameObject panelObject;
-    private bool isOpen;
+    private GameObject menuPanel;
+    private GameObject confirmationPanel;
+    private bool menuOpen;
+    private bool confirmationOpen;
 
     [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.BeforeSceneLoad)]
     private static void EnsureInstance()
@@ -37,44 +40,70 @@ public class QuitConfirmationDialog : MonoBehaviour
 
         DontDestroyOnLoad(gameObject);
         EnsureUi();
-        SetOpen(false);
+        CloseAll();
+        SceneManager.sceneLoaded += HandleSceneLoaded;
     }
 
-    private void Update()
+    private void OnDestroy()
     {
-        if (Input.GetKeyDown(KeyCode.Escape))
-        {
-            if (isOpen)
-            {
-                SetOpen(false);
-                return;
-            }
+        SceneManager.sceneLoaded -= HandleSceneLoaded;
+    }
 
-            if (!IsGameplayPanelOpen())
-            {
-                SetOpen(true);
-            }
-        }
+    private void HandleSceneLoaded(Scene scene, LoadSceneMode mode)
+    {
+        if (canvas != null) canvas.enabled = true;
+        CloseAll();
+    }
 
-        if (!isOpen)
+    private void LateUpdate()
+    {
+        if (!Input.GetKeyDown(KeyCode.Escape)) return;
+        if (EscapeInputGuard.WasConsumedThisFrame) return;
+        if (StageTransitionUI.HasPresentationPriority) return;
+
+        if (confirmationOpen)
         {
+            ShowMenu();
             return;
         }
 
-        if (Input.GetKeyDown(KeyCode.Return) || Input.GetKeyDown(KeyCode.KeypadEnter))
+        if (menuOpen)
         {
-            QuitGame();
+            CloseAll();
+            return;
+        }
+
+        if (!IsGameplayPanelOpen())
+        {
+            ShowMenu();
         }
     }
 
-    private void SetOpen(bool open)
+    private void ShowMenu()
     {
-        isOpen = open;
         EnsureUi();
-        if (panelObject != null)
-        {
-            panelObject.SetActive(isOpen);
-        }
+        menuOpen = true;
+        confirmationOpen = false;
+        menuPanel.SetActive(true);
+        confirmationPanel.SetActive(false);
+        SetPlayerInputLocked(true);
+    }
+
+    private void ShowConfirmation()
+    {
+        menuOpen = false;
+        confirmationOpen = true;
+        menuPanel.SetActive(false);
+        confirmationPanel.SetActive(true);
+    }
+
+    private void CloseAll()
+    {
+        menuOpen = false;
+        confirmationOpen = false;
+        if (menuPanel != null) menuPanel.SetActive(false);
+        if (confirmationPanel != null) confirmationPanel.SetActive(false);
+        SetPlayerInputLocked(false);
     }
 
     private bool IsGameplayPanelOpen()
@@ -124,29 +153,37 @@ public class QuitConfirmationDialog : MonoBehaviour
 
         EnsureEventSystem();
 
-        if (panelObject != null)
+        if (menuPanel != null && confirmationPanel != null)
         {
             return;
         }
 
-        panelObject = new GameObject("QuitConfirmationPanel");
-        panelObject.transform.SetParent(canvas.transform, false);
+        menuPanel = CreatePanel("PauseMenuPanel", new Vector2(420f, 190f));
+        CreateText(menuPanel.transform, "Title", "MENU", new Vector2(0f, 48f), new Vector2(360f, 44f), 24, FontStyle.Bold);
+        CreateButton(menuPanel.transform, "QuitButton", "Sair do jogo", new Vector2(0f, -35f), ShowConfirmation, new Vector2(220f, 46f));
 
-        RectTransform panelRect = panelObject.AddComponent<RectTransform>();
+        confirmationPanel = CreatePanel("QuitConfirmationPanel", panelSize);
+        float textWidth = Mathf.Max(160f, panelSize.x - 48f);
+        CreateText(confirmationPanel.transform, "Title", "Deseja sair do jogo?", new Vector2(0f, 48f), new Vector2(textWidth, 44f), 24, FontStyle.Bold);
+        CreateText(confirmationPanel.transform, "Hint", "Esc para voltar", new Vector2(0f, 8f), new Vector2(textWidth, 30f), 15, FontStyle.Normal);
+        CreateButton(confirmationPanel.transform, "SimButton", "Sim", new Vector2(-82f, -58f), QuitGame, new Vector2(120f, 42f));
+        CreateButton(confirmationPanel.transform, "NoButton", "Não", new Vector2(82f, -58f), ShowMenu, new Vector2(120f, 42f));
+    }
+
+    private GameObject CreatePanel(string objectName, Vector2 size)
+    {
+        GameObject panel = new GameObject(objectName);
+        panel.transform.SetParent(canvas.transform, false);
+        RectTransform panelRect = panel.AddComponent<RectTransform>();
         panelRect.anchorMin = new Vector2(0.5f, 0.5f);
         panelRect.anchorMax = new Vector2(0.5f, 0.5f);
         panelRect.pivot = new Vector2(0.5f, 0.5f);
         panelRect.anchoredPosition = Vector2.zero;
-        panelRect.sizeDelta = panelSize;
+        panelRect.sizeDelta = size;
 
-        Image panelImage = panelObject.AddComponent<Image>();
+        Image panelImage = panel.AddComponent<Image>();
         panelImage.color = new Color(0f, 0f, 0f, panelOpacity);
-
-        float textWidth = Mathf.Max(160f, panelSize.x - 48f);
-        CreateText(panelObject.transform, "Title", "Deseja sair do jogo?", new Vector2(0f, 48f), new Vector2(textWidth, 44f), 24, FontStyle.Bold);
-        CreateText(panelObject.transform, "Hint", "Esc para cancelar", new Vector2(0f, 8f), new Vector2(textWidth, 30f), 15, FontStyle.Normal);
-        CreateButton(panelObject.transform, "SimButton", "Sim", new Vector2(-82f, -58f), QuitGame);
-        CreateButton(panelObject.transform, "NoButton", "Nao", new Vector2(82f, -58f), () => SetOpen(false));
+        return panel;
     }
 
     private void CreateText(Transform parent, string objectName, string text, Vector2 anchoredPosition, Vector2 size, int fontSize, FontStyle style)
@@ -170,7 +207,7 @@ public class QuitConfirmationDialog : MonoBehaviour
         label.color = Color.white;
     }
 
-    private void CreateButton(Transform parent, string objectName, string text, Vector2 anchoredPosition, UnityEngine.Events.UnityAction action)
+    private void CreateButton(Transform parent, string objectName, string text, Vector2 anchoredPosition, UnityEngine.Events.UnityAction action, Vector2 size)
     {
         GameObject buttonObject = new GameObject(objectName);
         buttonObject.transform.SetParent(parent, false);
@@ -180,7 +217,7 @@ public class QuitConfirmationDialog : MonoBehaviour
         rect.anchorMax = new Vector2(0.5f, 0.5f);
         rect.pivot = new Vector2(0.5f, 0.5f);
         rect.anchoredPosition = anchoredPosition;
-        rect.sizeDelta = new Vector2(120f, 42f);
+        rect.sizeDelta = size;
 
         Image image = buttonObject.AddComponent<Image>();
         image.color = new Color(1f, 1f, 1f, 0.92f);
@@ -204,6 +241,14 @@ public class QuitConfirmationDialog : MonoBehaviour
         label.fontStyle = FontStyle.Bold;
         label.alignment = TextAnchor.MiddleCenter;
         label.color = new Color(0.08f, 0.08f, 0.08f, 1f);
+    }
+
+    private void SetPlayerInputLocked(bool locked)
+    {
+        foreach (PlayerTopDownController player in FindObjectsOfType<PlayerTopDownController>(true))
+        {
+            if (player != null) player.SetExternalMovementLocked(locked);
+        }
     }
 
     private void EnsureEventSystem()

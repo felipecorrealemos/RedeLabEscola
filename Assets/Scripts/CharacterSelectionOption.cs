@@ -21,6 +21,13 @@ public class CharacterSelectionOption : MonoBehaviour
 
     public CharacterSelectionChoice Choice => choice;
 
+    public void SetInteractionEnabled(bool enabled)
+    {
+        Collider targetCollider = GetComponent<Collider>();
+        if (targetCollider != null) targetCollider.enabled = enabled;
+        this.enabled = enabled;
+    }
+
     public void Configure(CharacterSelectionChoice newChoice, CharacterSelectionController newController, Transform newVisualRoot, Light newHighlightLight, Image newSelectionFrame = null)
     {
         choice = newChoice;

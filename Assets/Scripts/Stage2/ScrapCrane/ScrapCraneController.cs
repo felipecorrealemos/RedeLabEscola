@@ -48,6 +48,14 @@ public class ScrapCraneController : MonoBehaviour
     [SerializeField] private Transform claw;
     [SerializeField] private ScrapCraneBounds bounds;
 
+    [Header("Audio")]
+    [SerializeField] private LocalSfxEmitter movementAudioEmitter;
+    [SerializeField] private AudioClip movementStartClip;
+    [SerializeField] private AudioClip movementLoopClip;
+    [SerializeField] private AudioClip movementStopClip;
+    [SerializeField] private AudioClip bladeOpenClip;
+    [SerializeField] private AudioClip bladeCloseClip;
+
     [Header("Horizontal Movement")]
     [SerializeField, Min(0.01f)] private float horizontalSpeed = 5f;
     [SerializeField] private bool useAcceleration = true;
@@ -105,6 +113,10 @@ public class ScrapCraneController : MonoBehaviour
     private Coroutine actionRoutine;
     private CarriedScrapState carriedScrap;
     private bool isControlActive;
+    private bool manualMovementAudioRequested;
+    private bool automaticMovementAudioRequested;
+    private bool movementAudioPlaying;
+    private Coroutine movementAudioRoutine;
 
     public bool IsControlActive => isControlActive;
     public bool IsActionRunning => actionRoutine != null;
@@ -141,17 +153,31 @@ public class ScrapCraneController : MonoBehaviour
         ApplyMinimumRuntimeTimings();
     }
 
+    private void OnDisable()
+    {
+        manualMovementAudioRequested = false;
+        automaticMovementAudioRequested = false;
+        StopMovementAudio(false);
+    }
+
     public void SetControlActive(bool active)
     {
         isControlActive = active;
         if (!active)
         {
             horizontalVelocity = Vector3.zero;
+            manualMovementAudioRequested = false;
+            automaticMovementAudioRequested = false;
+            RefreshMovementAudio(true);
         }
     }
 
     public void MoveHorizontal(Vector2 input, float deltaTime)
     {
+        bool hasMovementInput = input.sqrMagnitude > 0.001f;
+        manualMovementAudioRequested = isControlActive && actionRoutine == null && hasMovementInput;
+        RefreshMovementAudio(true);
+
         if (!isControlActive || actionRoutine != null || movingAxis == null)
         {
             return;
@@ -225,6 +251,8 @@ public class ScrapCraneController : MonoBehaviour
             return;
         }
 
+        manualMovementAudioRequested = false;
+        RefreshMovementAudio(true);
         actionRoutine = StartCoroutine(RunPrimaryAction());
     }
 
@@ -333,6 +361,7 @@ public class ScrapCraneController : MonoBehaviour
     private IEnumerator AnimateBlades(bool opening)
     {
         currentBladeState = opening ? BladeState.Opening : BladeState.Closing;
+        AudioManager.PlayGlobalSfx(opening ? bladeOpenClip : bladeCloseClip);
 
         Quaternion[] startRotations =
         {
@@ -391,7 +420,7 @@ public class ScrapCraneController : MonoBehaviour
                 yield return AnimateBladesAndWait(true);
             }
 
-            yield return MoveClawToLocalY(lowerLocalY);
+            yield return MoveClawToLocalY(lowerLocalY, false);
             yield return AnimateBladesAndWait(false);
             if (carriedScrap == null)
             {
@@ -402,7 +431,7 @@ public class ScrapCraneController : MonoBehaviour
                 yield return new WaitForSeconds(delayAfterClosingBeforeRaise);
             }
 
-            yield return MoveClawToLocalY(upperLocalY);
+            yield return MoveClawToLocalY(upperLocalY, true);
         }
         else
         {
@@ -418,13 +447,13 @@ public class ScrapCraneController : MonoBehaviour
                 yield return new WaitForSeconds(delayAfterOpeningBeforeRaise);
             }
 
-            yield return MoveClawToLocalY(upperLocalY);
+            yield return MoveClawToLocalY(upperLocalY, true);
         }
 
         actionRoutine = null;
     }
 
-    private IEnumerator MoveClawToLocalY(float targetLocalY)
+    private IEnumerator MoveClawToLocalY(float targetLocalY, bool playStopSound)
     {
         if (claw == null)
         {
@@ -434,6 +463,14 @@ public class ScrapCraneController : MonoBehaviour
         float minY = Mathf.Min(upperLocalY, lowerLocalY, releaseLowerLocalY);
         float maxY = Mathf.Max(upperLocalY, lowerLocalY, releaseLowerLocalY);
         targetLocalY = Mathf.Clamp(targetLocalY, minY, maxY);
+
+        if (Mathf.Abs(claw.localPosition.y - targetLocalY) <= 0.005f)
+        {
+            yield break;
+        }
+
+        automaticMovementAudioRequested = true;
+        RefreshMovementAudio(false);
 
         while (Mathf.Abs(claw.localPosition.y - targetLocalY) > 0.005f)
         {
@@ -446,6 +483,124 @@ public class ScrapCraneController : MonoBehaviour
         Vector3 finalPosition = claw.localPosition;
         finalPosition.y = targetLocalY;
         claw.localPosition = finalPosition;
+
+        automaticMovementAudioRequested = false;
+        RefreshMovementAudio(playStopSound);
+    }
+
+    private void RefreshMovementAudio(bool playStopSound)
+    {
+        bool shouldPlay = manualMovementAudioRequested || automaticMovementAudioRequested;
+        if (shouldPlay == movementAudioPlaying)
+        {
+            return;
+        }
+
+        if (shouldPlay)
+        {
+            StartMovementAudio();
+        }
+        else
+        {
+            StopMovementAudio(playStopSound);
+        }
+    }
+
+    private void StartMovementAudio()
+    {
+        AudioSource source = PrepareMovementAudioSource();
+        if (source == null || (movementStartClip == null && movementLoopClip == null))
+        {
+            return;
+        }
+
+        movementAudioPlaying = true;
+        if (movementAudioRoutine != null)
+        {
+            StopCoroutine(movementAudioRoutine);
+        }
+
+        movementAudioRoutine = StartCoroutine(PlayMovementSequence(source));
+    }
+
+    private IEnumerator PlayMovementSequence(AudioSource source)
+    {
+        source.Stop();
+        source.loop = false;
+
+        if (movementStartClip != null)
+        {
+            source.clip = movementStartClip;
+            source.Play();
+            while (movementAudioPlaying && source != null && source.isPlaying && source.clip == movementStartClip)
+            {
+                yield return null;
+            }
+        }
+
+        if (movementAudioPlaying && source != null && movementLoopClip != null)
+        {
+            source.clip = movementLoopClip;
+            source.loop = true;
+            source.Play();
+        }
+
+        movementAudioRoutine = null;
+    }
+
+    private void StopMovementAudio(bool playStopSound)
+    {
+        if (!movementAudioPlaying)
+        {
+            return;
+        }
+
+        movementAudioPlaying = false;
+        if (movementAudioRoutine != null)
+        {
+            StopCoroutine(movementAudioRoutine);
+            movementAudioRoutine = null;
+        }
+
+        AudioSource source = PrepareMovementAudioSource();
+        if (source == null)
+        {
+            return;
+        }
+
+        source.Stop();
+        source.loop = false;
+        if (playStopSound && movementStopClip != null)
+        {
+            source.clip = movementStopClip;
+            source.Play();
+        }
+    }
+
+    private AudioSource PrepareMovementAudioSource()
+    {
+        if (movementAudioEmitter == null)
+        {
+            movementAudioEmitter = GetComponent<LocalSfxEmitter>();
+        }
+
+        if (movementAudioEmitter == null)
+        {
+            return null;
+        }
+
+        AudioSource source = movementAudioEmitter.Source;
+        source.playOnAwake = false;
+        source.spatialBlend = 0f;
+
+        AudioManager manager = AudioManager.Instance;
+        float volume = manager != null
+            ? Mathf.Clamp01(manager.MasterVolume * manager.SfxVolume)
+            : 1f;
+        bool muted = manager != null
+            && (manager.IsSfxMuted || manager.IsAllAudioDisabledForTesting);
+        movementAudioEmitter.ApplyVolume(volume, muted);
+        return source;
     }
 
     private IEnumerator AnimateBladesAndWait(bool opening)

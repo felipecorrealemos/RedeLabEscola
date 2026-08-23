@@ -6,6 +6,7 @@ using UnityEditor.SceneManagement;
 using UnityEngine;
 using UnityEngine.EventSystems;
 using UnityEngine.SceneManagement;
+using UnityEngine.Rendering.PostProcessing;
 using UnityEngine.UI;
 
 public static class MainMenuSceneBuilder
@@ -15,6 +16,7 @@ public static class MainMenuSceneBuilder
     private const string ProfessorPath = "Assets/Modelos 3D/Personagem/Professor/animacoes/professor@Standing W_Briefcase Idle.fbx";
     private const string ProfessorControllerPath = "Assets/Modelos 3D/Personagem/Professor/animacoes/Animator Controller professor.controller";
     private const string MaterialsFolder = "Assets/Materials/Menu";
+    private const string PostProcessProfilePath = "Assets/Materials/RedeLabEscola_PostProcessProfile.asset";
 
     [MenuItem("Tools/RedeLabEscola/Create Main Menu Scene")]
     public static void CreateMainMenuScene()
@@ -91,7 +93,7 @@ public static class MainMenuSceneBuilder
         GameObject professor = (GameObject)PrefabUtility.InstantiatePrefab(professorAsset);
         professor.name = "Professor";
         professor.transform.SetParent(parent);
-        professor.transform.position = new Vector3(-1.25f, 0f, 1.45f);
+        professor.transform.position = new Vector3(-2.15f, 0f, 0.65f);
         professor.transform.rotation = Quaternion.Euler(0f, 165f, 0f);
         professor.transform.localScale = Vector3.one;
 
@@ -113,11 +115,28 @@ public static class MainMenuSceneBuilder
         camera.fieldOfView = 42f;
         camera.clearFlags = CameraClearFlags.SolidColor;
         camera.backgroundColor = new Color(0.72f, 0.78f, 0.82f);
+        camera.allowHDR = true;
+        PostProcessLayer postLayer = cameraObject.AddComponent<PostProcessLayer>();
+        postLayer.volumeLayer = 1 << 8;
+        postLayer.antialiasingMode = PostProcessLayer.Antialiasing.FastApproximateAntialiasing;
+
+        PostProcessProfile profile = AssetDatabase.LoadAssetAtPath<PostProcessProfile>(PostProcessProfilePath);
+        if (profile != null)
+        {
+            GameObject volumeObject = new GameObject("Global Post Processing");
+            volumeObject.layer = 8;
+            PostProcessVolume volume = volumeObject.AddComponent<PostProcessVolume>();
+            volume.isGlobal = true;
+            volume.priority = 5f;
+            volume.sharedProfile = profile;
+        }
 
         GameObject lightObject = new GameObject("Directional Light");
         Light light = lightObject.AddComponent<Light>();
         light.type = LightType.Directional;
-        light.intensity = 1.15f;
+        light.intensity = 1.25f;
+        light.shadows = LightShadows.Soft;
+        light.shadowStrength = 0.38f;
         light.transform.rotation = Quaternion.Euler(45f, -35f, 0f);
 
         GameObject fillLightObject = new GameObject("Soft Fill Light");
@@ -147,26 +166,29 @@ public static class MainMenuSceneBuilder
         GameObject panel = new GameObject("Bottom Menu Panel", typeof(Image));
         panel.transform.SetParent(canvasObject.transform, false);
         RectTransform panelRect = panel.GetComponent<RectTransform>();
-        panelRect.anchorMin = new Vector2(0f, 0f);
-        panelRect.anchorMax = new Vector2(1f, 0f);
-        panelRect.pivot = new Vector2(0.5f, 0f);
-        panelRect.sizeDelta = new Vector2(0f, 230f);
-        panelRect.anchoredPosition = Vector2.zero;
+        panelRect.anchorMin = new Vector2(0f, 0.5f);
+        panelRect.anchorMax = new Vector2(0f, 0.5f);
+        panelRect.pivot = new Vector2(0f, 0.5f);
+        panelRect.sizeDelta = new Vector2(360f, 390f);
+        panelRect.anchoredPosition = new Vector2(52f, -145f);
 
         Image panelImage = panel.GetComponent<Image>();
-        panelImage.color = new Color(0.04f, 0.06f, 0.07f, 0.82f);
+        panelImage.color = new Color(0.025f, 0.055f, 0.065f, 0.88f);
+        panelImage.sprite = MainMenuVerticalLayoutRefinement.GetOrCreateRoundedSprite();
+        panelImage.type = Image.Type.Sliced;
 
-        GameObject row = new GameObject("Button Row", typeof(HorizontalLayoutGroup));
+        GameObject row = new GameObject("Button Row", typeof(VerticalLayoutGroup));
         row.transform.SetParent(panel.transform, false);
         RectTransform rowRect = row.GetComponent<RectTransform>();
         rowRect.anchorMin = new Vector2(0.5f, 0.5f);
         rowRect.anchorMax = new Vector2(0.5f, 0.5f);
         rowRect.pivot = new Vector2(0.5f, 0.5f);
-        rowRect.sizeDelta = new Vector2(1180f, 92f);
+        rowRect.sizeDelta = new Vector2(310f, 330f);
         rowRect.anchoredPosition = Vector2.zero;
 
-        HorizontalLayoutGroup layout = row.GetComponent<HorizontalLayoutGroup>();
-        layout.spacing = 34f;
+        VerticalLayoutGroup layout = row.GetComponent<VerticalLayoutGroup>();
+        layout.padding = new RectOffset(8, 8, 8, 8);
+        layout.spacing = 16f;
         layout.childAlignment = TextAnchor.MiddleCenter;
         layout.childControlWidth = true;
         layout.childControlHeight = true;
@@ -176,6 +198,7 @@ public static class MainMenuSceneBuilder
         CreateButton(row.transform, "Start Game", controller.StartGame);
         CreateButton(row.transform, "Load Game", controller.LoadGame);
         CreateButton(row.transform, "Entrar em Sala", controller.EnterRoom);
+        CreateButton(row.transform, "Sair", controller.QuitGame);
 
         GameObject eventSystem = new GameObject("EventSystem", typeof(EventSystem), typeof(StandaloneInputModule));
         eventSystem.transform.SetParent(root);
@@ -183,22 +206,34 @@ public static class MainMenuSceneBuilder
 
     private static void CreateButton(Transform parent, string label, UnityEngine.Events.UnityAction action)
     {
-        GameObject buttonObject = new GameObject(label + " Button", typeof(Image), typeof(Button), typeof(LayoutElement));
+        GameObject buttonObject = new GameObject(label + " Button", typeof(Image), typeof(Outline), typeof(Shadow), typeof(Button), typeof(LayoutElement));
         buttonObject.transform.SetParent(parent, false);
 
         LayoutElement layout = buttonObject.GetComponent<LayoutElement>();
-        layout.preferredWidth = 360f;
-        layout.preferredHeight = 82f;
+        layout.preferredWidth = 285f;
+        layout.preferredHeight = 58f;
 
         Image image = buttonObject.GetComponent<Image>();
-        image.color = new Color(0.92f, 0.95f, 0.94f, 0.96f);
+        image.color = new Color(0.12f, 0.30f, 0.38f, 0.98f);
+        image.sprite = MainMenuVerticalLayoutRefinement.GetOrCreateRoundedSprite();
+        image.type = Image.Type.Sliced;
+
+        Outline outline = buttonObject.GetComponent<Outline>();
+        outline.effectColor = new Color(0.56f, 0.82f, 0.76f, 0.9f);
+        outline.effectDistance = new Vector2(2f, -2f);
+        Shadow[] shadows = buttonObject.GetComponents<Shadow>();
+        Shadow shadow = shadows[shadows.Length - 1];
+        shadow.effectColor = new Color(0f, 0f, 0f, 0.35f);
+        shadow.effectDistance = new Vector2(0f, -5f);
 
         Button button = buttonObject.GetComponent<Button>();
         ColorBlock colors = button.colors;
-        colors.normalColor = new Color(0.92f, 0.95f, 0.94f, 0.96f);
-        colors.highlightedColor = new Color(1f, 1f, 1f, 1f);
-        colors.pressedColor = new Color(0.75f, 0.82f, 0.80f, 1f);
+        colors.normalColor = Color.white;
+        colors.highlightedColor = new Color(1.24f, 1.24f, 1.24f, 1f);
+        colors.pressedColor = new Color(0.72f, 0.82f, 0.86f, 1f);
         colors.selectedColor = colors.highlightedColor;
+        colors.disabledColor = new Color(0.45f, 0.50f, 0.50f, 0.72f);
+        colors.fadeDuration = 0.20f;
         button.colors = colors;
         UnityEventTools.AddPersistentListener(button.onClick, action);
 
@@ -213,10 +248,10 @@ public static class MainMenuSceneBuilder
         Text text = textObject.GetComponent<Text>();
         text.text = label;
         text.font = GetBuiltInFont();
-        text.fontSize = 32;
+        text.fontSize = 22;
         text.fontStyle = FontStyle.Bold;
         text.alignment = TextAnchor.MiddleCenter;
-        text.color = new Color(0.07f, 0.09f, 0.10f);
+        text.color = new Color(0.96f, 0.98f, 0.94f);
     }
 
     private static void CreateChair(Transform parent, Vector3 basePosition, Material chairMaterial, Material metalMaterial)

@@ -54,7 +54,10 @@ public class PlayerTopDownController : MonoBehaviour
     private KeyboardTerminalInteractable highlightedComputerTerminal;
     private RouterInteractable openRouter;
     private ComputerInteractable openComputer;
-    private readonly Collider[] interactionHits = new Collider[16];
+    // Desks contain many small colliders (monitor, keyboard, chair, props, etc.).
+    // A 16-entry non-alloc buffer can fill before Unity returns the terminal
+    // trigger, making an otherwise valid interaction disappear unpredictably.
+    private readonly Collider[] interactionHits = new Collider[64];
     private CharacterController characterController;
     private float verticalVelocity;
     private bool movementLocked;
@@ -229,8 +232,15 @@ public class PlayerTopDownController : MonoBehaviour
 
     private void HandleComputerUseInput()
     {
+        KeyboardTerminalInteractable terminal = FindNearestComputerTerminal(out _);
+        if (terminal != null)
+        {
+            OpenComputerTerminal(terminal);
+            return;
+        }
+
         ComputerInteractable computer = FindNearestComputer(out _);
-        if (computer != null && computer.IsNetworkOperational)
+        if (computer != null && computer.CanUseTerminal)
         {
             OpenComputerTerminal(computer);
         }
@@ -592,7 +602,11 @@ public class PlayerTopDownController : MonoBehaviour
                 continue;
             }
 
-            float distance = Vector3.SqrMagnitude(hit.ClosestPoint(transform.position) - transform.position);
+            // Collider.ClosestPoint logs a warning every frame for non-convex MeshColliders.
+            // Bounds.ClosestPoint is supported by every collider type and is precise enough
+            // for ranking nearby interaction prompts.
+            Vector3 nearestPoint = hit.bounds.ClosestPoint(transform.position);
+            float distance = Vector3.SqrMagnitude(nearestPoint - transform.position);
 
             KeyboardTerminalInteractable terminal = hit.GetComponentInParent<KeyboardTerminalInteractable>();
             if (terminal != null && terminal.CanUse && terminal.ContainsCollider(hit) && terminal.IsPlayerNear(transform.position))
@@ -612,13 +626,26 @@ public class PlayerTopDownController : MonoBehaviour
             if (router != null)
             {
                 MovableDevice routerDevice = router.AllowMovement ? GetMovableDeviceForRouter(router) : null;
-                TrySelectPromptTarget(ref target, PromptTargetType.Router, distance, router, null, null, null, routerDevice);
+                if (router.AllowConfigurationAccess)
+                {
+                    TrySelectPromptTarget(ref target, PromptTargetType.Router, distance, router, null, null, null, routerDevice);
+                }
+                else if (CanHighlightMovableDevice(routerDevice))
+                {
+                    TrySelectPromptTarget(ref target, PromptTargetType.Device, distance, null, null, null, null, routerDevice);
+                }
                 continue;
             }
 
             ComputerInteractable computer = hit.GetComponentInParent<ComputerInteractable>();
             if (computer != null && computer.CanShowPrompt && !computer.IsTerminalCollider(hit))
             {
+                NetworkDoorDevice doorDevice = computer.GetComponent<NetworkDoorDevice>();
+                if (doorDevice != null && !doorDevice.CanPlayerInteract(transform))
+                {
+                    continue;
+                }
+
                 TrySelectPromptTarget(ref target, PromptTargetType.Computer, distance, null, computer, null, null, GetMovableDeviceForComputer(computer));
                 continue;
             }
@@ -633,7 +660,14 @@ public class PlayerTopDownController : MonoBehaviour
             if (deviceRouter != null)
             {
                 MovableDevice routerDevice = deviceRouter.AllowMovement ? device : null;
-                TrySelectPromptTarget(ref target, PromptTargetType.Router, distance, deviceRouter, null, null, null, routerDevice);
+                if (deviceRouter.AllowConfigurationAccess)
+                {
+                    TrySelectPromptTarget(ref target, PromptTargetType.Router, distance, deviceRouter, null, null, null, routerDevice);
+                }
+                else if (CanHighlightMovableDevice(routerDevice))
+                {
+                    TrySelectPromptTarget(ref target, PromptTargetType.Device, distance, null, null, null, null, routerDevice);
+                }
                 continue;
             }
 
@@ -813,6 +847,7 @@ public class PlayerTopDownController : MonoBehaviour
 
         if (Input.GetKeyDown(KeyCode.F) || Input.GetKeyDown(KeyCode.Escape))
         {
+            if (Input.GetKeyDown(KeyCode.Escape)) EscapeInputGuard.Consume();
             if (openRouter != null)
             {
                 openRouter.Close(this);
@@ -1009,7 +1044,7 @@ public class PlayerTopDownController : MonoBehaviour
             }
 
             RouterInteractable router = hit.GetComponentInParent<RouterInteractable>();
-            if (router == null)
+            if (router == null || !router.AllowConfigurationAccess)
             {
                 continue;
             }

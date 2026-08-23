@@ -7,19 +7,33 @@ public class NetworkDoorDevice : MonoBehaviour
     [SerializeField] private bool autoAssignPreferredIp = false;
     [SerializeField] private string preferredIpAddress = "";
     [SerializeField] private Transform doorPivot;
+    [SerializeField, Tooltip("Ponto 3D projetado na tela para posicionar o aviso de porta trancada. Procura automaticamente um filho chamado 'UI Text'.")]
+    private Transform uiTextAnchor;
     [SerializeField] private float openAngle = 90f;
     [SerializeField] private float rotationSpeed = 180f;
+    [SerializeField, Tooltip("Estado atual comandado para a porta. Visível para diagnóstico durante o Play Mode.")]
+    private bool isOpen;
+
+    [Header("Interação local")]
+    [SerializeField, Min(0.15f)] private float interactionRadius = 0.85f;
+    [SerializeField, Range(-1f, 1f)] private float minimumFacingDot = 0.35f;
+    [SerializeField] private Vector3 interactionCenterOffset = new Vector3(0f, 0.45f, 0f);
 
     private Quaternion closedRotation;
     private Quaternion openRotation;
     private bool controlledByAccessGroup;
     private bool capturedClosedRotation;
+    private Transform capturedDoorPivot;
 
     public string DeviceLabel => deviceLabel;
     public bool AutoAssignPreferredIp => autoAssignPreferredIp;
     public string PreferredIpAddress => preferredIpAddress;
     public bool IsControlledByAccessGroup => controlledByAccessGroup;
-    public bool IsOpen { get; private set; }
+    public bool IsOpen
+    {
+        get => isOpen;
+        private set => isOpen = value;
+    }
     public string StateLabel => IsOpen ? "Aberta" : "Fechada";
     public string ActionLabel => IsOpen ? "Fechar" : "Abrir";
     public bool CanOperate
@@ -27,13 +41,62 @@ public class NetworkDoorDevice : MonoBehaviour
         get
         {
             ComputerInteractable networkDevice = GetComponent<ComputerInteractable>();
-            return networkDevice != null && networkDevice.IsNetworkOperational;
+            return doorPivot != null
+                && networkDevice != null
+                && networkDevice.IsNetworkOperational
+                && !IsProgressionLocked();
         }
+    }
+
+    public Transform DoorPivot => doorPivot;
+    public Quaternion ClosedLocalRotation
+    {
+        get
+        {
+            EnsureRotationTargetsForAssignedPivot();
+            return closedRotation;
+        }
+    }
+    public Transform UiTextAnchor
+    {
+        get
+        {
+            ResolveUiTextAnchor();
+            return uiTextAnchor;
+        }
+    }
+
+    public bool CanPlayerInteract(Transform player)
+    {
+        if (player == null)
+        {
+            return false;
+        }
+
+        Vector3 center = transform.TransformPoint(interactionCenterOffset);
+        Vector3 playerPosition = player.position;
+        center.y = playerPosition.y;
+        Vector3 toDevice = center - playerPosition;
+        if (toDevice.sqrMagnitude > interactionRadius * interactionRadius)
+        {
+            return false;
+        }
+
+        toDevice.y = 0f;
+        Vector3 playerForward = player.forward;
+        playerForward.y = 0f;
+        if (toDevice.sqrMagnitude <= 0.0001f || playerForward.sqrMagnitude <= 0.0001f)
+        {
+            return true;
+        }
+
+        return Vector3.Dot(playerForward.normalized, toDevice.normalized) >= minimumFacingDot;
     }
 
     private void Awake()
     {
-        EnsureDoorPivot();
+        ValidateDoorPivotReference();
+        ResolveUiTextAnchor();
         CaptureClosedRotation();
     }
 
@@ -44,6 +107,8 @@ public class NetworkDoorDevice : MonoBehaviour
             return;
         }
 
+        EnsureRotationTargetsForAssignedPivot();
+
         Quaternion targetRotation = IsOpen ? openRotation : closedRotation;
         doorPivot.localRotation = Quaternion.RotateTowards(doorPivot.localRotation, targetRotation, rotationSpeed * Time.deltaTime);
     }
@@ -51,13 +116,20 @@ public class NetworkDoorDevice : MonoBehaviour
     public void Toggle()
     {
         EnsureDoorPivot();
-        if (doorPivot == null || controlledByAccessGroup || !CanOperate || !MissionManager.CanOperateDoorCommand(this))
+        if (doorPivot == null || !CanOperate || !MissionManager.CanOperateDoorCommand(this))
         {
             return;
         }
 
-        IsOpen = !IsOpen;
-        MissionManager.NotifySingleDoorStateChanged(IsOpen);
+        EnsureRotationTargetsForAssignedPivot();
+
+        bool isOpening = !IsOpen;
+        IsOpen = isOpening;
+        if (isOpening)
+        {
+            AudioManager.PlayDoorOpen(doorPivot);
+        }
+        MissionManager.NotifySingleDoorStateChanged(this, IsOpen);
     }
 
     public void SetControlledByAccessGroup(bool controlled)
@@ -73,13 +145,21 @@ public class NetworkDoorDevice : MonoBehaviour
             return;
         }
 
-        if (!capturedClosedRotation)
-        {
-            CaptureClosedRotation();
-        }
+        EnsureRotationTargetsForAssignedPivot();
 
         IsOpen = open;
-        MissionManager.NotifySingleDoorStateChanged(IsOpen);
+        MissionManager.NotifySingleDoorStateChanged(this, IsOpen);
+    }
+
+    public void CloseFromRoomTransition()
+    {
+        if (doorPivot == null)
+        {
+            return;
+        }
+
+        EnsureRotationTargetsForAssignedPivot();
+        IsOpen = false;
     }
 
     private void CaptureClosedRotation()
@@ -93,22 +173,121 @@ public class NetworkDoorDevice : MonoBehaviour
         closedRotation = doorPivot.localRotation;
         openRotation = closedRotation * Quaternion.Euler(0f, openAngle, 0f);
         capturedClosedRotation = true;
+        capturedDoorPivot = doorPivot;
+    }
+
+    private void EnsureRotationTargetsForAssignedPivot()
+    {
+        if (doorPivot != null && (!capturedClosedRotation || capturedDoorPivot != doorPivot))
+        {
+            CaptureClosedRotation();
+        }
     }
 
     private void EnsureDoorPivot()
     {
-        if (doorPivot != null)
+        // Door Pivot é uma referência obrigatória e deliberadamente não possui
+        // resolução automática. Cada dispositivo deve apontar explicitamente
+        // para a porta física que controla.
+    }
+
+    private void ValidateDoorPivotReference()
+    {
+        if (doorPivot == null)
         {
-            Transform resolvedPivot = ResolvePivotForDoorTransform(doorPivot);
-            if (resolvedPivot != null)
+            Debug.LogError(
+                $"NetworkDoorDevice '{name}' está sem Door Pivot. Atribua explicitamente o Pivot da porta no Inspector.",
+                this);
+        }
+    }
+
+    private Transform FindNearestUiTextAnchor()
+    {
+        Transform areaRoot = FindAreaRoot(transform);
+        Transform nearest = null;
+        float nearestDistance = float.MaxValue;
+        foreach (Transform candidate in FindObjectsOfType<Transform>(true))
+        {
+            if (candidate == null
+                || !candidate.name.Equals("UI Text", System.StringComparison.OrdinalIgnoreCase)
+                || !IsInSameArea(candidate, areaRoot))
             {
-                doorPivot = resolvedPivot;
+                continue;
             }
 
+            float sqrDistance = Vector3.SqrMagnitude(candidate.position - transform.position);
+            if (sqrDistance < nearestDistance)
+            {
+                nearestDistance = sqrDistance;
+                nearest = candidate;
+            }
+        }
+
+        return nearest;
+    }
+
+    private Transform FindPivotForUiTextAnchor(Transform anchor)
+    {
+        if (anchor == null || anchor.parent == null)
+        {
+            return null;
+        }
+
+        Transform directPivot = anchor.parent.Find("Pivot");
+        if (directPivot != null)
+        {
+            return directPivot;
+        }
+
+        return FindNearestPivotUnder(anchor.parent);
+    }
+
+    private bool IsProgressionLocked()
+    {
+        EnsureDoorPivot();
+        RoomProgressionDoorLock progressionLock = doorPivot != null
+            ? doorPivot.GetComponent<RoomProgressionDoorLock>()
+            : null;
+        return progressionLock != null && progressionLock.IsLocked;
+    }
+
+    private void ResolveUiTextAnchor()
+    {
+        if (uiTextAnchor != null)
+        {
             return;
         }
 
-        doorPivot = FindNearestDoorPivot();
+        uiTextAnchor = FindNearestUiTextAnchor();
+        if (uiTextAnchor != null)
+        {
+            return;
+        }
+
+        // A âncora da UI normalmente é irmã do Pivot:
+        // Door
+        //   Pivot
+        //   UI Text
+        // Portanto a busca deve começar no objeto Door externo, não no Pivot.
+        Transform searchRoot = doorPivot != null && doorPivot.parent != null
+            ? doorPivot.parent
+            : doorPivot != null ? doorPivot : transform;
+        Transform[] candidates = searchRoot.GetComponentsInChildren<Transform>(true);
+        foreach (Transform candidate in candidates)
+        {
+            if (candidate != null && candidate.name.Equals("UI Text", System.StringComparison.OrdinalIgnoreCase))
+            {
+                uiTextAnchor = candidate;
+                return;
+            }
+        }
+    }
+
+    private void OnValidate()
+    {
+        // Não percorre a cena aqui. OnValidate também é executado durante a
+        // desserialização de prefabs, quando alguns Transforms ainda não passaram
+        // pelo Awake. A resolução opcional do UI Text acontece somente em runtime.
     }
 
     private Transform FindNearestDoorPivot()
@@ -265,5 +444,12 @@ public class NetworkDoorDevice : MonoBehaviour
     private bool IsInSameArea(Transform candidate, Transform areaRoot)
     {
         return areaRoot == null || candidate == areaRoot || candidate.IsChildOf(areaRoot);
+    }
+
+    private void OnDrawGizmosSelected()
+    {
+        Vector3 center = transform.TransformPoint(interactionCenterOffset);
+        Gizmos.color = new Color(0.1f, 0.75f, 1f, 0.9f);
+        Gizmos.DrawWireSphere(center, Mathf.Max(interactionRadius, 0.15f));
     }
 }

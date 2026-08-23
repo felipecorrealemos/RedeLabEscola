@@ -72,7 +72,8 @@ public class PlayerCharacterVisualApplier : MonoBehaviour
 
         Animator animator = alunaVisual.GetComponentInChildren<Animator>();
         RuntimeAnimatorController sharedController = alunoAnimator != null ? alunoAnimator.runtimeAnimatorController : null;
-        ConfigureAnimator(animator, sharedController);
+        RuntimeAnimatorController alunaController = animator != null ? animator.runtimeAnimatorController : null;
+        ConfigureAnimator(animator, alunaController != null ? alunaController : sharedController);
     }
 
     private void ConfigureAnimator(Animator activeAnimator, RuntimeAnimatorController sharedController)

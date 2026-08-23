@@ -71,9 +71,19 @@ public class DualNetworkDoorController : MonoBehaviour
 
     private void SetOpen(bool open)
     {
+        bool isOpening = open && !IsOpen;
         IsOpen = open;
         SetDeviceOpen(FirstDevice, open);
         SetDeviceOpen(SecondDevice, open);
+        bool didBeginOpening = (FirstDevice != null && FirstDevice.IsOpen)
+            || (SecondDevice != null && SecondDevice.IsOpen);
+        if (isOpening && didBeginOpening)
+        {
+            Transform emitter = FirstDevice != null && FirstDevice.DoorPivot != null
+                ? FirstDevice.DoorPivot
+                : transform;
+            AudioManager.PlayDoorOpen(emitter);
+        }
         MissionManager.NotifyDualDoorsStateChanged(IsOpen);
     }
 

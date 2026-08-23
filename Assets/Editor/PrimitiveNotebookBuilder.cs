@@ -1,6 +1,5 @@
 using System.IO;
 using UnityEditor;
-using UnityEditor.Callbacks;
 using UnityEditor.SceneManagement;
 using UnityEngine;
 using UnityEngine.SceneManagement;
@@ -12,49 +11,22 @@ public static class PrimitiveNotebookBuilder
     private const string PrefabPath = PrefabFolder + "/Notebook.prefab";
     private const string ScenePath = "Assets/Scenes/SampleScene.unity";
     private const string NotebookInstanceName = "Notebook_Sala_3";
-    private const string AutoPlacementKey = "RedeLabEscola.PrimitiveNotebookPlaced.v2";
-
-    [InitializeOnLoadMethod]
-    private static void PlaceNotebookAfterScriptReload()
-    {
-        QueueAutoPlacement();
-    }
-
-    [DidReloadScripts]
-    private static void PlaceNotebookAfterDidReloadScripts()
-    {
-        QueueAutoPlacement();
-    }
-
-    private static void QueueAutoPlacement()
-    {
-        if (EditorPrefs.GetBool(AutoPlacementKey, false))
-        {
-            return;
-        }
-
-        EditorApplication.delayCall += () =>
-        {
-            if (EditorPrefs.GetBool(AutoPlacementKey, false))
-            {
-                return;
-            }
-
-            if (TryCreatePrefabAndPlaceInRoom3(true))
-            {
-                EditorPrefs.SetBool(AutoPlacementKey, true);
-            }
-        };
-    }
 
     [MenuItem("Tools/RedeLabEscola/Prefabs/Create Primitive Notebook")]
     public static void CreatePrimitiveNotebookPrefab()
     {
         EnsurePrefabFolder();
 
-        GameObject notebook = BuildNotebookRoot();
-        PrefabUtility.SaveAsPrefabAsset(notebook, PrefabPath);
-        Object.DestroyImmediate(notebook);
+        GameObject notebook = null;
+        try
+        {
+            notebook = BuildNotebookRoot();
+            PrefabUtility.SaveAsPrefabAsset(notebook, PrefabPath);
+        }
+        finally
+        {
+            if (notebook != null) Object.DestroyImmediate(notebook);
+        }
 
         AssetDatabase.SaveAssets();
         AssetDatabase.Refresh();

@@ -125,8 +125,13 @@ MonoBehaviour:
   autoAssignPreferredIp: 0
   preferredIpAddress: 
   doorPivot: {fileID: 0}
+  uiTextAnchor: {fileID: 0}
   openAngle: 90
   rotationSpeed: 180
+  isOpen: 0
+  interactionRadius: 0.85
+  minimumFacingDot: 0.35
+  interactionCenterOffset: {x: 0, y: 0.45, z: 0}
 --- !u!114 &5817392406500001002
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -156,6 +161,7 @@ MonoBehaviour:
   panelAnchorMax: {x: 0.98, y: 0.9}
   panelOpacity: 0.9
   scrollSensitivity: 40
+  terminalAutoRefreshInterval: 0.5
   rowHeight: 40
   statusColumnWidth: 88
   rowHorizontalPadding: 8

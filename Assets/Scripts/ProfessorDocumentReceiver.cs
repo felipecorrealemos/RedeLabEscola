@@ -18,25 +18,27 @@ public class ProfessorDocumentReceiver : MonoBehaviour
     [SerializeField] private Vector3 triggerSize = new Vector3(2f, 2f, 2f);
     [SerializeField] private Vector3 triggerCenter = new Vector3(0f, 1f, 0f);
     [SerializeField] private Animator animator;
+    [SerializeField, Tooltip("Animator Controller do professor, com Standard Idle/Pointing/Carrying e os parâmetros Point/IsCarrying.")]
+    private RuntimeAnimatorController animatorController;
     [SerializeField] private string carryingParameter = "IsCarrying";
     [SerializeField] private string carryingStateName = "Carrying";
-    [SerializeField] private float carryingTransitionDuration = 0.04f;
-    [SerializeField] private bool useHandIk = true;
+    [SerializeField] [Min(0f)] private float carryingTransitionDuration = 0.04f;
+    [SerializeField] private bool useHandIk = false;
     [SerializeField] private AvatarIKGoal documentHandIkGoal = AvatarIKGoal.RightHand;
     [SerializeField] private Vector3 handIkLocalPosition = new Vector3(0.32f, 1.05f, 0.28f);
     [SerializeField] private Vector3 handIkLocalEulerAngles = new Vector3(75f, 0f, 0f);
     [SerializeField] [Range(0f, 1f)] private float handIkWeight = 1f;
+    [SerializeField] [Min(0.05f)] private float receiveHandBlendDuration = 0.35f;
     [SerializeField] private Canvas canvas;
     [SerializeField] private GameObject promptObject;
     [SerializeField] private Text promptLabel;
+    private InteractionPromptPresenter promptPresenter;
 
     private BoxCollider triggerCollider;
     private bool hasCarryingParameter;
-    private bool hasCarryingState;
-    private int carryingStateHash;
-    private int carryingStateLayer;
     private bool isHoldingDocument;
-    private Coroutine carryingRoutine;
+    private Coroutine handIkBlendRoutine;
+    private float currentHandIkWeight;
 
     public Transform DocumentAnchor
     {
@@ -70,15 +72,19 @@ public class ProfessorDocumentReceiver : MonoBehaviour
 
         document.DeliverTo(DocumentAnchor);
         isHoldingDocument = true;
-        SetCarryingAnimation(true);
+        PlayReceiveDocumentAnimation();
     }
 
     public void SetPromptVisible(bool visible)
     {
         EnsurePrompt();
-        if (promptObject != null)
+        if (visible)
         {
-            promptObject.SetActive(visible);
+            promptPresenter?.Show(this, "PROFESSOR", new InteractionPromptAction("F", "Entregar documento"));
+        }
+        else
+        {
+            promptPresenter?.Hide(this);
         }
     }
 
@@ -177,8 +183,28 @@ public class ProfessorDocumentReceiver : MonoBehaviour
             animator = GetComponentInChildren<Animator>();
         }
 
+        if (animator != null)
+        {
+            if (animator.runtimeAnimatorController == null && animatorController != null)
+            {
+                animator.runtimeAnimatorController = animatorController;
+            }
+
+            ProfessorDocumentIkRelay relay = animator.GetComponent<ProfessorDocumentIkRelay>();
+            if (relay == null)
+            {
+                relay = animator.gameObject.AddComponent<ProfessorDocumentIkRelay>();
+            }
+
+            relay.Configure(this);
+        }
+
         hasCarryingParameter = false;
-        if (animator == null || string.IsNullOrWhiteSpace(carryingParameter))
+        if (animator == null
+            || animator.runtimeAnimatorController == null
+            || !animator.isActiveAndEnabled
+            || !animator.isInitialized
+            || string.IsNullOrWhiteSpace(carryingParameter))
         {
             return;
         }
@@ -193,71 +219,39 @@ public class ProfessorDocumentReceiver : MonoBehaviour
                 break;
             }
         }
+    }
 
-        hasCarryingState = false;
-        carryingStateLayer = 0;
+    private void PlayReceiveDocumentAnimation()
+    {
+        EnsureAnimator();
+        if (animator == null)
+        {
+            return;
+        }
+
+        animator.speed = 1f;
+        if (hasCarryingParameter)
+        {
+            animator.SetBool(carryingParameter, true);
+            return;
+        }
+
         if (!string.IsNullOrWhiteSpace(carryingStateName))
         {
-            for (int i = 0; i < animator.layerCount; i++)
+            int stateHash = Animator.StringToHash(carryingStateName);
+            int fullPathHash = Animator.StringToHash("Base Layer." + carryingStateName);
+            if (animator.HasState(0, stateHash))
             {
-                int shortHash = Animator.StringToHash(carryingStateName);
-                int fullPathHash = Animator.StringToHash(animator.GetLayerName(i) + "." + carryingStateName);
-                if (animator.HasState(i, shortHash))
-                {
-                    carryingStateHash = shortHash;
-                    hasCarryingState = true;
-                    carryingStateLayer = i;
-                    break;
-                }
-
-                if (animator.HasState(i, fullPathHash))
-                {
-                    carryingStateHash = fullPathHash;
-                    hasCarryingState = true;
-                    carryingStateLayer = i;
-                    break;
-                }
+                animator.CrossFade(stateHash, carryingTransitionDuration, 0);
+            }
+            else if (animator.HasState(0, fullPathHash))
+            {
+                animator.CrossFade(fullPathHash, carryingTransitionDuration, 0);
             }
         }
     }
 
-    private void SetCarryingAnimation(bool carrying)
-    {
-        EnsureAnimator();
-        if (animator != null && hasCarryingParameter)
-        {
-            animator.SetBool(carryingParameter, carrying);
-        }
-
-        if (animator != null && carrying && hasCarryingState)
-        {
-            animator.Play(carryingStateHash, carryingStateLayer, 0f);
-            animator.Update(0f);
-
-            if (carryingRoutine != null)
-            {
-                StopCoroutine(carryingRoutine);
-            }
-
-            carryingRoutine = StartCoroutine(ForceCarryingPoseNextFrame());
-        }
-    }
-
-    private IEnumerator ForceCarryingPoseNextFrame()
-    {
-        yield return null;
-
-        EnsureAnimator();
-        if (isHoldingDocument && animator != null && hasCarryingState)
-        {
-            animator.Play(carryingStateHash, carryingStateLayer, 0f);
-            animator.Update(0f);
-        }
-
-        carryingRoutine = null;
-    }
-
-    private void OnAnimatorIK(int layerIndex)
+    internal void ApplyDocumentHandIk(int layerIndex)
     {
         if (!isHoldingDocument || !useHandIk || animator == null || animator.avatar == null || !animator.avatar.isHuman)
         {
@@ -266,10 +260,25 @@ public class ProfessorDocumentReceiver : MonoBehaviour
 
         Vector3 targetPosition = transform.TransformPoint(handIkLocalPosition);
         Quaternion targetRotation = transform.rotation * Quaternion.Euler(handIkLocalEulerAngles);
-        animator.SetIKPositionWeight(documentHandIkGoal, handIkWeight);
-        animator.SetIKRotationWeight(documentHandIkGoal, handIkWeight);
+        animator.SetIKPositionWeight(documentHandIkGoal, currentHandIkWeight);
+        animator.SetIKRotationWeight(documentHandIkGoal, currentHandIkWeight);
         animator.SetIKPosition(documentHandIkGoal, targetPosition);
         animator.SetIKRotation(documentHandIkGoal, targetRotation);
+    }
+
+    private IEnumerator BlendDocumentHandIk()
+    {
+        float duration = Mathf.Max(receiveHandBlendDuration, 0.05f);
+        float elapsed = 0f;
+        while (elapsed < duration)
+        {
+            elapsed += Time.deltaTime;
+            currentHandIkWeight = Mathf.SmoothStep(0f, handIkWeight, Mathf.Clamp01(elapsed / duration));
+            yield return null;
+        }
+
+        currentHandIkWeight = handIkWeight;
+        handIkBlendRoutine = null;
     }
 
     private void EnsurePrompt()
@@ -290,47 +299,22 @@ public class ProfessorDocumentReceiver : MonoBehaviour
 
         EnsureEventSystem();
 
-        if (promptObject == null)
+        GameObject legacyPrompt = promptObject;
+        promptPresenter = InteractionPromptPresenter.GetOrCreate(canvas);
+        promptObject = promptPresenter != null ? promptPresenter.gameObject : null;
+        promptLabel = null;
+
+        if (legacyPrompt != null && legacyPrompt != promptObject && legacyPrompt.name == "ProfessorDocumentPrompt")
         {
-            Transform existingPrompt = canvas.transform.Find("ProfessorDocumentPrompt");
-            if (existingPrompt != null)
-            {
-                promptObject = existingPrompt.gameObject;
-                promptLabel = existingPrompt.GetComponentInChildren<Text>(true);
-            }
+            legacyPrompt.SetActive(false);
+            Destroy(legacyPrompt);
         }
 
-        if (promptObject == null)
+        Transform legacyCanvasPrompt = canvas.transform.Find("ProfessorDocumentPrompt");
+        if (legacyCanvasPrompt != null && legacyCanvasPrompt.gameObject != promptObject)
         {
-            promptObject = new GameObject("ProfessorDocumentPrompt");
-            promptObject.transform.SetParent(canvas.transform, false);
-            RectTransform promptRect = promptObject.AddComponent<RectTransform>();
-            promptRect.anchorMin = new Vector2(0.5f, 0f);
-            promptRect.anchorMax = new Vector2(0.5f, 0f);
-            promptRect.pivot = new Vector2(0.5f, 0f);
-            promptRect.anchoredPosition = new Vector2(0f, 132f);
-            promptRect.sizeDelta = new Vector2(380f, 42f);
-
-            Image background = promptObject.AddComponent<Image>();
-            background.color = new Color(0f, 0f, 0f, 0.55f);
-
-            GameObject labelObject = new GameObject("Text");
-            labelObject.transform.SetParent(promptObject.transform, false);
-            RectTransform labelRect = labelObject.AddComponent<RectTransform>();
-            labelRect.anchorMin = Vector2.zero;
-            labelRect.anchorMax = Vector2.one;
-            labelRect.offsetMin = Vector2.zero;
-            labelRect.offsetMax = Vector2.zero;
-            promptLabel = labelObject.AddComponent<Text>();
-        }
-
-        if (promptLabel != null)
-        {
-            promptLabel.text = promptText;
-            promptLabel.alignment = TextAnchor.MiddleCenter;
-            promptLabel.color = Color.white;
-            promptLabel.font = GetDefaultFont();
-            promptLabel.fontSize = 18;
+            legacyCanvasPrompt.gameObject.SetActive(false);
+            Destroy(legacyCanvasPrompt.gameObject);
         }
     }
 
@@ -362,5 +346,21 @@ public class ProfessorDocumentReceiver : MonoBehaviour
         }
 
         return font;
+    }
+}
+
+[DisallowMultipleComponent]
+public sealed class ProfessorDocumentIkRelay : MonoBehaviour
+{
+    private ProfessorDocumentReceiver receiver;
+
+    public void Configure(ProfessorDocumentReceiver target)
+    {
+        receiver = target;
+    }
+
+    private void OnAnimatorIK(int layerIndex)
+    {
+        receiver?.ApplyDocumentHandIk(layerIndex);
     }
 }

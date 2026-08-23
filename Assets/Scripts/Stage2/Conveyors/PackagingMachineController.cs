@@ -290,6 +290,10 @@ public class PackagingMachineController : MonoBehaviour
 
         pendingPackedBoxes--;
         onBoxCreated?.Invoke();
+        if (string.Equals(packedBoxProductId, "PalletWithBoxes", System.StringComparison.OrdinalIgnoreCase))
+        {
+            MissionManager.NotifyStage2MachinePalletSent(boxObject);
+        }
         ChangeState(storedInputItems >= requiredInputItems ? ProcessingMachineState.Ready : ProcessingMachineState.WaitingForMaterials);
     }
 
