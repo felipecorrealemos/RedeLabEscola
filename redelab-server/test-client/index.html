@@ -1,0 +1,113 @@
+<!doctype html>
+<html lang="pt-BR">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>RedeLab - Teste Auth0</title>
+    <link rel="stylesheet" href="/style.css">
+  </head>
+  <body>
+    <main class="container">
+      <header>
+        <p class="badge">Ferramenta temporária de desenvolvimento</p>
+        <h1>RedeLab - Teste Auth0</h1>
+        <p>Validação isolada de Auth0 + Google + API Node.js + MySQL.</p>
+      </header>
+
+      <section class="status-card" aria-live="polite">
+        <strong>Status:</strong>
+        <span id="auth-status" data-state="loading">Inicializando...</span>
+        <span id="token-status">Token não verificado</span>
+      </section>
+
+      <section>
+        <h2>Sessão</h2>
+        <div class="actions">
+          <button id="login-button" type="button">Entrar com Google</button>
+          <button id="logout-button" type="button" disabled>Sair</button>
+        </div>
+      </section>
+
+      <section>
+        <h2>Usuário</h2>
+        <div class="actions">
+          <button id="sync-button" type="button" data-requires-auth disabled>
+            Sincronizar usuário
+          </button>
+          <button id="me-button" type="button" data-requires-auth disabled>
+            Consultar meu usuário
+          </button>
+        </div>
+      </section>
+
+      <section>
+        <h2>Personagem</h2>
+        <div class="actions">
+          <button id="boy-button" type="button" data-requires-auth disabled>
+            Selecionar Menino
+          </button>
+          <button id="girl-button" type="button" data-requires-auth disabled>
+            Selecionar Menina
+          </button>
+        </div>
+      </section>
+
+      <section>
+        <h2>Progresso</h2>
+        <div class="actions">
+          <button id="progress-button" type="button" data-requires-auth disabled>
+            Consultar progresso
+          </button>
+          <button id="delete-progress-button" class="danger" type="button" data-requires-auth disabled>
+            Apagar progresso
+          </button>
+        </div>
+      </section>
+
+      <section>
+        <h2>Missão</h2>
+        <label for="mission-code">Código da missão</label>
+        <div class="mission-form">
+          <input
+            id="mission-code"
+            type="text"
+            value="sala1_colocar_gabinete"
+            maxlength="255"
+            autocomplete="off"
+          >
+          <button id="complete-button" type="button" data-requires-auth disabled>
+            Concluir missão
+          </button>
+        </div>
+      </section>
+
+      <section>
+        <h2>WebSocket</h2>
+        <div class="status-card" aria-live="polite">
+          <strong>Status:</strong>
+          <span id="websocket-status" data-state="disconnected">Desconectado</span>
+        </div>
+        <div class="actions">
+          <button id="websocket-connect-button" type="button" data-requires-auth disabled>
+            Conectar WebSocket
+          </button>
+          <button id="websocket-disconnect-button" class="secondary" type="button" disabled>
+            Desconectar WebSocket
+          </button>
+        </div>
+      </section>
+
+      <section>
+        <div class="response-heading">
+          <h2>Resposta</h2>
+          <button id="clear-button" class="secondary" type="button">Limpar</button>
+        </div>
+        <pre id="response-output" aria-live="polite">Aguardando uma ação.</pre>
+      </section>
+    </main>
+
+    <script src="/config.js"></script>
+    <script src="/vendor/auth0-spa-js.production.js"></script>
+    <script src="/app.js"></script>
+  </body>
+</html>

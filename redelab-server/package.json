@@ -1,0 +1,29 @@
+{
+  "name": "redelab-server",
+  "version": "1.0.0",
+  "private": true,
+  "description": "API REST do projeto RedeLab Escola",
+  "main": "src/server.js",
+  "scripts": {
+    "start": "node src/server.js",
+    "dev": "nodemon src/server.js",
+    "test": "node --test test/*.test.js",
+    "auth-test": "node scripts/auth-test-server.js",
+    "unity-webgl-auth": "node scripts/unity-webgl-auth-server.js"
+  },
+  "engines": {
+    "node": ">=18"
+  },
+  "dependencies": {
+    "@auth0/auth0-spa-js": "^2.24.1",
+    "cors": "^2.8.5",
+    "dotenv": "^17.2.2",
+    "express": "^5.1.0",
+    "express-oauth2-jwt-bearer": "^1.10.0",
+    "mysql2": "^3.14.5",
+    "ws": "^8.21.3"
+  },
+  "devDependencies": {
+    "nodemon": "^3.1.10"
+  }
+}

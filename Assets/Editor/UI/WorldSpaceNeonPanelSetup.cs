@@ -18,31 +18,6 @@ public static class WorldSpaceNeonPanelSetup
     private const string TitleTextValue = "ROUTER";
     private const string SubtitleTextValue = "Control room network";
 
-    [InitializeOnLoadMethod]
-    private static void AutoCreateInOpenStage2Scene()
-    {
-        EditorApplication.delayCall += () =>
-        {
-            if (EditorApplication.isPlayingOrWillChangePlaymode || EditorApplication.isCompiling)
-            {
-                return;
-            }
-
-            Scene activeScene = SceneManager.GetActiveScene();
-            if (!activeScene.IsValid() || activeScene.path != Stage2ScenePath)
-            {
-                return;
-            }
-
-            if (FindExistingPanel() != null)
-            {
-                return;
-            }
-
-            CreatePanelInScene(activeScene, true);
-        };
-    }
-
     [MenuItem(MenuPath)]
     public static void CreatePanelFromMenu()
     {

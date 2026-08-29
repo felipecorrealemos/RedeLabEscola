@@ -1,0 +1,168 @@
+:root {
+  color-scheme: light;
+  font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  background: #eef2f6;
+  color: #17212b;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+}
+
+.container {
+  width: min(900px, calc(100% - 32px));
+  margin: 32px auto;
+}
+
+header,
+section {
+  background: #fff;
+  border: 1px solid #d6dee8;
+  border-radius: 10px;
+  padding: 20px;
+  margin-bottom: 16px;
+}
+
+h1,
+h2,
+p {
+  margin-top: 0;
+}
+
+h2 {
+  font-size: 1.1rem;
+}
+
+.badge {
+  display: inline-block;
+  padding: 4px 8px;
+  border-radius: 999px;
+  background: #fff1c7;
+  color: #6a4b00;
+  font-size: 0.85rem;
+  font-weight: 700;
+}
+
+.status-card,
+.actions,
+.mission-form,
+.response-heading {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 10px;
+}
+
+#auth-status,
+#token-status,
+#websocket-status {
+  padding: 4px 8px;
+  border-radius: 6px;
+  background: #e8edf3;
+}
+
+#auth-status[data-state="authenticated"] {
+  background: #d8f5df;
+  color: #126126;
+}
+
+#auth-status[data-state="error"] {
+  background: #ffe0e0;
+  color: #8b1c1c;
+}
+
+#websocket-status[data-state="authenticated"] {
+  background: #d8f5df;
+  color: #126126;
+}
+
+#websocket-status[data-state="connecting"] {
+  background: #fff1c7;
+  color: #6a4b00;
+}
+
+#websocket-status[data-state="error"] {
+  background: #ffe0e0;
+  color: #8b1c1c;
+}
+
+button,
+input {
+  min-height: 40px;
+  border-radius: 6px;
+  border: 1px solid #9aa9b8;
+  font: inherit;
+}
+
+button {
+  padding: 8px 14px;
+  background: #1769aa;
+  border-color: #1769aa;
+  color: #fff;
+  cursor: pointer;
+}
+
+button.secondary {
+  background: #fff;
+  color: #293847;
+  border-color: #9aa9b8;
+}
+
+button.danger {
+  background: #a52828;
+  border-color: #a52828;
+}
+
+button:disabled {
+  cursor: not-allowed;
+  opacity: 0.5;
+}
+
+input {
+  flex: 1 1 320px;
+  padding: 8px 10px;
+  background: #fff;
+  color: #17212b;
+}
+
+label {
+  display: block;
+  margin-bottom: 8px;
+  font-weight: 600;
+}
+
+.response-heading {
+  justify-content: space-between;
+}
+
+pre {
+  min-height: 160px;
+  margin: 12px 0 0;
+  padding: 14px;
+  overflow: auto;
+  border-radius: 6px;
+  background: #101820;
+  color: #d8e7f3;
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+
+@media (max-width: 560px) {
+  .container {
+    width: min(100% - 20px, 900px);
+    margin: 10px auto;
+  }
+
+  header,
+  section {
+    padding: 15px;
+  }
+
+  button {
+    width: 100%;
+  }
+}

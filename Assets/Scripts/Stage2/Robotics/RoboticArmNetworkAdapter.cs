@@ -65,6 +65,7 @@ public class RoboticArmNetworkAdapter : MonoBehaviour
     private NetworkState lastLoggedState = (NetworkState)(-1);
     private NetworkState stateAfterSafeStop = NetworkState.SemRede;
     private OperationalState cachedOperationalState = OperationalState.Off;
+    private bool restoredPersistentOperation;
 
     public event Action<RoboticArmNetworkAdapter> OnConnected;
     public event Action<RoboticArmNetworkAdapter> OnDisconnected;
@@ -122,6 +123,12 @@ public class RoboticArmNetworkAdapter : MonoBehaviour
     private void Update()
     {
         UpdateStatusLight();
+
+        if (restoredPersistentOperation)
+        {
+            if (currentNetworkState != NetworkState.Operating) ApplyState(NetworkState.Operating, false);
+            return;
+        }
 
         if (Time.time < nextDiscoveryTime)
         {
@@ -235,6 +242,17 @@ public class RoboticArmNetworkAdapter : MonoBehaviour
     public void AuthorizeOperation()
     {
         RequestStartWork();
+    }
+
+    public void RestorePersistedOperatingState()
+    {
+        restoredPersistentOperation = true;
+        hasValidNetwork = true;
+        hasNetworkConflict = false;
+        operationalAuthorization = true;
+        if (string.IsNullOrWhiteSpace(assignedIp)) assignedIp = "restored";
+        if (string.IsNullOrWhiteSpace(connectedNetworkId)) connectedNetworkId = "restored-save";
+        ApplyState(NetworkState.Operating, false);
     }
 
     public void RequestStopOperation()

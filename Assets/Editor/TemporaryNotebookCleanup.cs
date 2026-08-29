@@ -3,14 +3,8 @@ using UnityEditor.SceneManagement;
 using UnityEngine;
 using UnityEngine.SceneManagement;
 
-[InitializeOnLoad]
 public static class TemporaryNotebookCleanup
 {
-    static TemporaryNotebookCleanup()
-    {
-        EditorApplication.delayCall += CleanupActiveSampleScene;
-    }
-
     [MenuItem("Tools/RedeLabEscola/Scene/Remove Temporary Notebook Duplicates")]
     public static void CleanupActiveSampleScene()
     {

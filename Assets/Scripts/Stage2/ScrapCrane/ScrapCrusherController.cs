@@ -445,6 +445,8 @@ public class ScrapCrusherController : MonoBehaviour
 
     private void EnsureIntakeTrigger()
     {
+        bool created = false;
+
         if (intakeTrigger == null)
         {
             Transform existing = transform.Find("CrusherIntakeTrigger");
@@ -463,15 +465,16 @@ public class ScrapCrusherController : MonoBehaviour
             triggerObject.transform.localScale = Vector3.one;
             BoxCollider box = triggerObject.AddComponent<BoxCollider>();
             intakeTrigger = box;
+            created = true;
         }
 
-        intakeTrigger.transform.localPosition = DefaultIntakeTriggerLocalPosition;
-        intakeTrigger.transform.localRotation = Quaternion.identity;
-        intakeTrigger.transform.localScale = Vector3.one;
         if (intakeTrigger is BoxCollider intakeBox)
         {
-            intakeBox.center = DefaultIntakeTriggerCenter;
-            intakeBox.size = DefaultIntakeTriggerSize;
+            if (created)
+            {
+                intakeBox.center = DefaultIntakeTriggerCenter;
+                intakeBox.size = DefaultIntakeTriggerSize;
+            }
         }
 
         intakeTrigger.isTrigger = true;

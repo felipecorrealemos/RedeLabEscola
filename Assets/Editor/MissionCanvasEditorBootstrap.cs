@@ -4,19 +4,11 @@ using UnityEngine;
 using UnityEngine.SceneManagement;
 using UnityEngine.UI;
 
-[InitializeOnLoad]
 public static class MissionCanvasEditorBootstrap
 {
     private const string GameplaySceneName = "SampleScene";
     private const string Stage2SceneName = "Stage2_Factory";
     private const string MissionManagerName = "MissionManager";
-
-    static MissionCanvasEditorBootstrap()
-    {
-        EditorApplication.delayCall += EnsureMissionCanvasInActiveScene;
-        EditorSceneManager.sceneOpened += (_, __) => EditorApplication.delayCall += EnsureMissionCanvasInActiveScene;
-        EditorSceneManager.activeSceneChangedInEditMode += (_, __) => EditorApplication.delayCall += EnsureMissionCanvasInActiveScene;
-    }
 
     [MenuItem("Tools/RedeLabEscola/Missions/Ensure Mission Canvas In Scene")]
     public static void EnsureMissionCanvasInActiveScene()

@@ -7,16 +7,7 @@ using UnityEngine.UI;
 public static class MainMenuVerticalLayoutRefinement
 {
     private const string ScenePath = "Assets/Scenes/MainMenu.unity";
-    private const string SessionKey = "RedeLabEscola.MainMenuVerticalLayout.v1";
     private const string RoundedTexturePath = "Assets/Materials/Menu/Menu_UI_Rounded.asset";
-
-    [InitializeOnLoadMethod]
-    private static void ApplyOnce()
-    {
-        if (SessionState.GetBool(SessionKey, false)) return;
-        SessionState.SetBool(SessionKey, true);
-        EditorApplication.delayCall += Apply;
-    }
 
     [MenuItem("Tools/RedeLabEscola/Refine Main Menu Vertical Layout")]
     public static void Apply()

@@ -2,6 +2,7 @@ using System.Collections;
 using UnityEngine;
 using UnityEngine.SceneManagement;
 using UnityEngine.UI;
+using RedeLabEscola.Auth;
 
 public class CharacterSelectionController : MonoBehaviour
 {
@@ -38,6 +39,8 @@ public class CharacterSelectionController : MonoBehaviour
         Time.timeScale = 1f;
         Cursor.visible = true;
         Cursor.lockState = CursorLockMode.None;
+        CharacterSelectionState.ClearPendingGameplayScene();
+        RedeLabLoadContext.Clear();
         if (sceneTransition != null) sceneTransition.LoadScene(mainMenuSceneName);
         else SceneManager.LoadScene(mainMenuSceneName);
     }
@@ -81,16 +84,56 @@ public class CharacterSelectionController : MonoBehaviour
             return;
         }
 
-        CharacterSelectionState.SaveChoice(selectedChoice);
         transitionStarted = true;
         if (confirmButton != null) confirmButton.interactable = false;
         alunoOption?.SetInteractionEnabled(false);
         alunaOption?.SetInteractionEnabled(false);
+
+#if UNITY_EDITOR
+        CharacterSelectionState.SetRuntimeChoice(selectedChoice);
         StartCoroutine(FadeAndLoadGameplay());
+#else
+        RedeLabAuthManager auth = RedeLabAuthManager.Instance;
+        if (auth == null || !auth.IsAuthenticated)
+        {
+            ShowSaveError("Entre com sua conta no menu principal antes de escolher o personagem.");
+            return;
+        }
+        if (confirmationLabel != null) confirmationLabel.text = "Salvando personagem...";
+        StartCoroutine(SaveCharacterAndStart(auth));
+#endif
+    }
+
+    private IEnumerator SaveCharacterAndStart(RedeLabAuthManager auth)
+    {
+        string error = null;
+        yield return auth.SetCharacter((int)selectedChoice, () => { }, value => error = value);
+        if (!string.IsNullOrEmpty(error))
+        {
+            ShowSaveError(error);
+            yield break;
+        }
+
+        CharacterSelectionState.SaveChoice(selectedChoice);
+        if (RedeLabLoadContext.Current != null)
+        {
+            RedeLabLoadContext.Current.IdPersonagem = (int)selectedChoice;
+        }
+        StartCoroutine(FadeAndLoadGameplay());
+    }
+
+    private void ShowSaveError(string message)
+    {
+        transitionStarted = false;
+        if (confirmButton != null) confirmButton.interactable = selectedChoice != CharacterSelectionChoice.None;
+        alunoOption?.SetInteractionEnabled(true);
+        alunaOption?.SetInteractionEnabled(true);
+        if (confirmationLabel != null) confirmationLabel.text = "Falha ao salvar: " + message;
     }
 
     private IEnumerator FadeAndLoadGameplay()
     {
+        string targetScene = CharacterSelectionState.ConsumePendingGameplayScene(gameplaySceneName);
         AudioManager.FadeOutMusic(Mathf.Max(0.1f, fadeToBlackDuration));
         if (loadingLabel != null) loadingLabel.gameObject.SetActive(false);
         if (loadingGroup != null)
@@ -109,7 +152,7 @@ public class CharacterSelectionController : MonoBehaviour
         }
 
         if (loadingLabel != null) loadingLabel.gameObject.SetActive(true);
-        AsyncOperation operation = SceneManager.LoadSceneAsync(gameplaySceneName);
+        AsyncOperation operation = SceneManager.LoadSceneAsync(targetScene);
         if (operation == null) yield break;
         operation.allowSceneActivation = false;
         float startedAt = Time.realtimeSinceStartup;

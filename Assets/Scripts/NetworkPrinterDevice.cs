@@ -47,6 +47,25 @@ public class NetworkPrinterDevice : MonoBehaviour
         return true;
     }
 
+    public PrintedDocumentInteractable RestorePrintedDocumentState()
+    {
+        HasPrintedDocument = true;
+        EnsureOutputSlot();
+        PrintedDocumentInteractable document = EnsurePrintedDocument();
+        if (document == null) return null;
+
+        document.gameObject.SetActive(true);
+        document.PrepareForPrint();
+        if (outputSlot != null)
+        {
+            document.transform.SetParent(outputSlot, false);
+            document.transform.localPosition = documentEndLocalPosition;
+            document.transform.localRotation = Quaternion.Euler(documentLocalEulerAngles);
+        }
+        document.SetPromptVisible(true);
+        return document;
+    }
+
     private IEnumerator PrintDocumentRoutine()
     {
         EnsureOutputSlot();

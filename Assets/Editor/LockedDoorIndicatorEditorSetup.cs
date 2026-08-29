@@ -4,17 +4,10 @@ using UnityEngine;
 using UnityEngine.SceneManagement;
 using UnityEngine.UI;
 
-[InitializeOnLoad]
 public static class LockedDoorIndicatorEditorSetup
 {
     private const string IconPath = "Assets/Imagens/Caminho_bloqueado.png";
     private const string CanvasName = "LockedDoorIndicatorCanvas";
-
-    static LockedDoorIndicatorEditorSetup()
-    {
-        EditorApplication.delayCall += EnsureSharedIndicator;
-        EditorSceneManager.sceneOpened += (_, __) => EditorApplication.delayCall += EnsureSharedIndicator;
-    }
 
     [MenuItem("Tools/RedeLabEscola/Doors/Ensure Shared Locked Door Indicator")]
     public static void EnsureSharedIndicator()

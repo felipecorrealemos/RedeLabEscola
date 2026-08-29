@@ -3,24 +3,12 @@ using UnityEditor.SceneManagement;
 using UnityEngine;
 using UnityEngine.SceneManagement;
 
-[InitializeOnLoad]
 public static class AudioManagerSceneBootstrap
 {
     private const string PrefabPath = "Assets/Prefabs/Audio/AudioManager.prefab";
 
-    static AudioManagerSceneBootstrap()
-    {
-        EditorApplication.delayCall += EnsureInLoadedScenes;
-        EditorSceneManager.sceneOpened -= HandleSceneOpened;
-        EditorSceneManager.sceneOpened += HandleSceneOpened;
-    }
-
-    private static void HandleSceneOpened(Scene scene, OpenSceneMode mode)
-    {
-        EditorApplication.delayCall += () => EnsureInScene(scene);
-    }
-
-    private static void EnsureInLoadedScenes()
+    [MenuItem("Tools/RedeLabEscola/Audio/Ensure Audio Manager In Loaded Scenes")]
+    public static void EnsureInLoadedScenes()
     {
         if (EditorApplication.isPlayingOrWillChangePlaymode)
         {

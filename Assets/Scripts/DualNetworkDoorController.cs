@@ -69,6 +69,13 @@ public class DualNetworkDoorController : MonoBehaviour
         SetOpen(!IsOpen);
     }
 
+    public void RestoreOpenState(bool open)
+    {
+        IsOpen = open;
+        FirstDevice?.RestoreOpenState(open);
+        SecondDevice?.RestoreOpenState(open);
+    }
+
     private void SetOpen(bool open)
     {
         bool isOpening = open && !IsOpen;

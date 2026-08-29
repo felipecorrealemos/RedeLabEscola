@@ -10,15 +10,6 @@ public static class InitialSceneFlowSetup
 {
     private const string MainMenuPath = "Assets/Scenes/MainMenu.unity";
     private const string CharacterSelectionPath = "Assets/Scenes/CharacterSelection.unity";
-    private const string SessionKey = "RedeLabEscola.InitialSceneFlowSetup.v1";
-
-    [InitializeOnLoadMethod]
-    private static void ApplyOnce()
-    {
-        if (SessionState.GetBool(SessionKey, false)) return;
-        SessionState.SetBool(SessionKey, true);
-        EditorApplication.delayCall += Apply;
-    }
 
     [MenuItem("Tools/RedeLabEscola/Setup Initial Scene Fades And Quit Dialog")]
     public static void Apply()

@@ -642,6 +642,7 @@ GameObject:
   - component: {fileID: 7773519582039438596}
   - component: {fileID: 2167847605080859147}
   - component: {fileID: 6859576771489262221}
+  - component: {fileID: -3170060681538123927}
   m_Layer: 0
   m_Name: Printer_Button_Power
   m_TagString: Untagged
@@ -735,6 +736,20 @@ MeshRenderer:
   m_SortingLayer: 0
   m_SortingOrder: 0
   m_AdditionalVertexStreams: {fileID: 0}
+--- !u!114 &-3170060681538123927
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 2581712559357244029}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 596503f95a5d99342a0958d22a50fdd2, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: 
+  targetRenderer: {fileID: 6859576771489262221}
+  blinkFrequency: 4
 --- !u!1 &2724776757986767894
 GameObject:
   m_ObjectHideFlags: 0

@@ -118,6 +118,41 @@ public class ComputerInteractable : MonoBehaviour
     public bool CanBePickedUp => movableDevice != null && !stationaryNetworkDevice && (!IsNetworkOperational || HasWiFiInterface);
     public bool CanShowPrompt => stationaryNetworkDevice || (movableDevice != null && !movableDevice.IsCarried);
 
+    public bool RestoreNetworkOperationalState()
+    {
+        if (IsNetworkOperational) return true;
+
+        EnsureRouter();
+        RouterInteractable targetRouter = ResolveSelectedRouterForIpAssignment();
+        NetworkScope scope = targetRouter != null ? targetRouter.ActiveNetworkScope : ResolveNetworkScope(false);
+        if (targetRouter == null || scope == null || (!IsConnectedToNetworkJack && !connectedByWiFi)) return false;
+
+        string targetAddress = ResolvePreferredIpAddress(scope);
+        if (string.IsNullOrWhiteSpace(targetAddress) || !scope.ContainsAddress(targetAddress))
+        {
+            foreach (NetworkScope.IpLease lease in scope.Leases)
+            {
+                if (lease != null && lease.IsAvailable)
+                {
+                    targetAddress = lease.Address;
+                    break;
+                }
+            }
+        }
+
+        if (string.IsNullOrWhiteSpace(targetAddress)) return false;
+        bool assigned = connectedByWiFi
+            ? targetRouter.TryConnectWiFi(this, wiFiDevice, targetAddress, reservedDeviceName)
+            : targetRouter.TryAssignIp(this, targetAddress, reservedDeviceName);
+        if (!assigned) return false;
+
+        SetRouter(targetRouter);
+        assignedIp = targetAddress;
+        UpdateStatusLight();
+        RefreshIpRows();
+        return IsNetworkOperational;
+    }
+
     private void Awake()
     {
         movableDevice = GetComponent<MovableDevice>();
@@ -2626,7 +2661,7 @@ public class ComputerInteractable : MonoBehaviour
             }
         }
 
-        return FindObjectOfType<Canvas>();
+        return null;
     }
 
     private void EnsureNetworkJackPoints()

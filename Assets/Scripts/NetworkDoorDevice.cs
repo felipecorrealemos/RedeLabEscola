@@ -137,6 +137,27 @@ public class NetworkDoorDevice : MonoBehaviour
         controlledByAccessGroup = controlled;
     }
 
+    public void RestoreOpenState(bool open)
+    {
+        EnsureDoorPivot();
+        if (doorPivot == null) return;
+        EnsureRotationTargetsForAssignedPivot();
+        IsOpen = open;
+        doorPivot.localRotation = open ? openRotation : closedRotation;
+    }
+
+    // Restaura somente o efeito funcional derivado das missoes persistidas.
+    // Nao chama MissionManager e, portanto, nao conclui a missao de abertura.
+    public void RestoreFunctionalStateAfterLoad(bool open)
+    {
+        EnsureDoorPivot();
+        if (doorPivot == null) return;
+
+        RoomProgressionDoorLock progressionLock = doorPivot.GetComponent<RoomProgressionDoorLock>();
+        progressionLock?.Unlock();
+        RestoreOpenState(open);
+    }
+
     public void SetOpenFromAccessGroup(bool open)
     {
         EnsureDoorPivot();

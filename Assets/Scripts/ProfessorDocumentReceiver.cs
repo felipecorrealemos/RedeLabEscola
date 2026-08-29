@@ -329,7 +329,7 @@ public class ProfessorDocumentReceiver : MonoBehaviour
             }
         }
 
-        return FindObjectOfType<Canvas>();
+        return null;
     }
 
     private void EnsureEventSystem()

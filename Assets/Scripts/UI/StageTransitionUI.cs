@@ -166,10 +166,19 @@ public sealed class StageTransitionUI : MonoBehaviour
         }
 
         MissionManager manager = MissionManager.Instance;
-        if (!bypassMissionRequirements && manager != null && !manager.AreAllCurrentTasksComplete)
+        bool hasIncompleteMission = manager != null && !manager.AreAllCurrentTasksComplete;
+        if (!bypassMissionRequirements && hasIncompleteMission)
         {
             Debug.Log("A saída da fase ainda está bloqueada: existem tarefas pendentes.", this);
             return false;
+        }
+
+        // O sinalizador apenas autoriza pular tarefas pendentes durante desenvolvimento.
+        // Uma conclusão normal não pode desligar a sessão online só porque o campo está
+        // habilitado no Inspector.
+        if (bypassMissionRequirements && hasIncompleteMission)
+        {
+            RedeLabEscola.Auth.RedeLabProgressService.Instance?.DisablePersistenceForDebugBypass();
         }
 
         transitionStarted = true;

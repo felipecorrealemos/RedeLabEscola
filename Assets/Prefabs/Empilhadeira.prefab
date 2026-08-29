@@ -392,6 +392,7 @@ MonoBehaviour:
   engineContinuousClip: {fileID: 8300000, guid: 68d546d1c0c33ec4b8035ebbf5c4c9a1, type: 3}
   forkMovementClip: {fileID: 8300000, guid: ba0ad6d311de6fc48b3c5dc37ea11a30, type: 3}
   forkStopClip: {fileID: 8300000, guid: be21bf4f134d06543ae71f4b296bcb9b, type: 3}
+  engineVolumeMultiplier: 0.6
   engineIdlePitch: 1
   engineAcceleratedPitch: 1.3
   enginePitchTransitionDuration: 0.4

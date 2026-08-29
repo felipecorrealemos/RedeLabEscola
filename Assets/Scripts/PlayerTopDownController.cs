@@ -276,6 +276,16 @@ public class PlayerTopDownController : MonoBehaviour
         SetAnimatorBool(carryingParameter, true);
     }
 
+    public void RestoreCarriedDocument(PrintedDocumentInteractable document)
+    {
+        if (document == null) return;
+        EnsureCarryAnchor();
+        if (carryAnchor == null) return;
+        carriedDocument = document;
+        carriedDocument.PickUp(carryAnchor);
+        SetAnimatorBool(carryingParameter, true);
+    }
+
     private void TryDropCarriedDevice()
     {
         DeviceDropZone dropZone = FindNearestDropZone();

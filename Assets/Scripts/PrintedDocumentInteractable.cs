@@ -89,6 +89,21 @@ public class PrintedDocumentInteractable : MonoBehaviour
         MissionManager.NotifyDocumentDelivered(this);
     }
 
+    public void RestoreDeliveredState(Transform receiverAnchor)
+    {
+        isCarried = false;
+        isDelivered = true;
+        SetPromptVisible(false);
+        if (receiverAnchor != null)
+        {
+            transform.SetParent(receiverAnchor, false);
+            transform.localPosition = Vector3.zero;
+            transform.localRotation = Quaternion.identity;
+            transform.localScale = GetLocalScaleForWorldScale(carriedLocalScale);
+        }
+        SetPhysicsEnabled(false);
+    }
+
     private Vector3 GetLocalScaleForWorldScale(Vector3 worldScale)
     {
         Transform currentParent = transform.parent;
@@ -205,7 +220,7 @@ public class PrintedDocumentInteractable : MonoBehaviour
             }
         }
 
-        return FindObjectOfType<Canvas>();
+        return null;
     }
 
     private void EnsureEventSystem()

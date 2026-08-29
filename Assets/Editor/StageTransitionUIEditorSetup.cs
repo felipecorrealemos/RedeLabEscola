@@ -4,27 +4,11 @@ using UnityEngine;
 using UnityEngine.SceneManagement;
 using UnityEngine.UI;
 
-[InitializeOnLoad]
 public static class StageTransitionUIEditorSetup
 {
     private const string CanvasName = "StageTransitionCanvas";
     private const string ExitTriggerName = "Stage1ExitTrigger_AJUSTAR_POSICAO";
     private const string Stage2ScenePath = "Assets/Scenes/Stage2/Stage2_Factory.unity";
-
-    static StageTransitionUIEditorSetup()
-    {
-        EditorApplication.delayCall += EnsureInActiveScene;
-        EditorApplication.delayCall += EnsureStage2SceneAsset;
-        EditorSceneManager.sceneOpened += (_, __) => EditorApplication.delayCall += EnsureInActiveScene;
-        EditorApplication.playModeStateChanged += state =>
-        {
-            if (state == PlayModeStateChange.EnteredEditMode)
-            {
-                EditorApplication.delayCall += EnsureInActiveScene;
-                EditorApplication.delayCall += EnsureStage2SceneAsset;
-            }
-        };
-    }
 
     [MenuItem("Tools/RedeLabEscola/Stages/Ensure Stage Transition UI")]
     public static void EnsureInActiveScene()

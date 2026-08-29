@@ -552,6 +552,7 @@ GameObject:
   - component: {fileID: 233146659}
   - component: {fileID: 233146658}
   - component: {fileID: 233146657}
+  - component: {fileID: 233146660}
   m_Layer: 0
   m_Name: Character Selection Camera
   m_TagString: MainCamera
@@ -559,6 +560,14 @@ GameObject:
   m_NavMeshLayer: 0
   m_StaticEditorFlags: 0
   m_IsActive: 1
+--- !u!81 &233146660
+AudioListener:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 233146656}
+  m_Enabled: 1
 --- !u!114 &233146657
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -1727,6 +1736,19 @@ Transform:
   m_Children: []
   m_Father: {fileID: 0}
   m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
+--- !u!1001 &910200001
+PrefabInstance:
+  m_ObjectHideFlags: 0
+  serializedVersion: 2
+  m_Modification:
+    serializedVersion: 3
+    m_TransformParent: {fileID: 0}
+    m_Modifications: []
+    m_RemovedComponents: []
+    m_RemovedGameObjects: []
+    m_AddedGameObjects: []
+    m_AddedComponents: []
+  m_SourcePrefab: {fileID: 100100000, guid: 7ec31f077e664dfeb1f84f87a1f40368, type: 3}
 --- !u!1 &927565599
 GameObject:
   m_ObjectHideFlags: 0
@@ -3279,24 +3301,6 @@ CanvasRenderer:
   m_PrefabAsset: {fileID: 0}
   m_GameObject: {fileID: 2125626711}
   m_CullTransparentMesh: 1
---- !u!1001 &910200001
-PrefabInstance:
-  m_ObjectHideFlags: 0
-  serializedVersion: 2
-  m_Modification:
-    serializedVersion: 3
-    m_TransformParent: {fileID: 0}
-    m_Modifications: []
-    m_RemovedComponents: []
-    m_RemovedGameObjects: []
-    m_AddedGameObjects: []
-    m_AddedComponents: []
-  m_SourcePrefab: {fileID: 100100000, guid: 7ec31f077e664dfeb1f84f87a1f40368, type: 3}
---- !u!4 &910200002 stripped
-Transform:
-  m_CorrespondingSourceObject: {fileID: 880100000000000002, guid: 7ec31f077e664dfeb1f84f87a1f40368, type: 3}
-  m_PrefabInstance: {fileID: 910200001}
-  m_PrefabAsset: {fileID: 0}
 --- !u!1660057539 &9223372036854775807
 SceneRoots:
   m_ObjectHideFlags: 0
@@ -3310,4 +3314,4 @@ SceneRoots:
   - {fileID: 1134092811}
   - {fileID: 1312419703}
   - {fileID: 1952772933}
-  - {fileID: 910200002}
+  - {fileID: 910200001}

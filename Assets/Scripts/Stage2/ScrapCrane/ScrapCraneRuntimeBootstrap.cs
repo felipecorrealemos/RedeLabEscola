@@ -48,7 +48,6 @@ public static class ScrapCraneRuntimeBootstrap
 
         Transform carryPoint = GetOrCreateChild(claw, "CarryPoint", new Vector3(0f, -0.85f, 0f));
         Transform cameraTarget = GetOrCreateChild(area, "CraneCameraTarget", GetCameraTargetLocalPosition(area, movementArea));
-        cameraTarget.localPosition = DefaultCameraTargetLocalPosition;
 
         ScrapCraneController controller = areaObject.AddComponent<ScrapCraneController>();
         ScrapCraneInputController input = areaObject.AddComponent<ScrapCraneInputController>();
@@ -79,17 +78,18 @@ public static class ScrapCraneRuntimeBootstrap
     private static ScrapGrabDetectionZone ConfigureGrabZone(Transform claw)
     {
         Transform grabZoneTransform = GetOrCreateChild(claw, "GrabDetectionZone", DefaultGrabZoneLocalPosition);
-        grabZoneTransform.localPosition = DefaultGrabZoneLocalPosition;
-        grabZoneTransform.localRotation = Quaternion.identity;
-        grabZoneTransform.localScale = Vector3.one;
         BoxCollider grabZoneCollider = grabZoneTransform.GetComponent<BoxCollider>();
+        bool createdCollider = grabZoneCollider == null;
         if (grabZoneCollider == null)
         {
             grabZoneCollider = grabZoneTransform.gameObject.AddComponent<BoxCollider>();
         }
 
         grabZoneCollider.isTrigger = true;
-        grabZoneCollider.size = DefaultGrabZoneSize;
+        if (createdCollider)
+        {
+            grabZoneCollider.size = DefaultGrabZoneSize;
+        }
         Rigidbody grabZoneBody = grabZoneTransform.GetComponent<Rigidbody>();
         if (grabZoneBody == null)
         {

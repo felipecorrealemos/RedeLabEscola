@@ -303,6 +303,7 @@ GameObject:
   - component: {fileID: 40055303022330757}
   - component: {fileID: 5491253973357143074}
   - component: {fileID: 7488288252620554606}
+  - component: {fileID: 5828362894561594141}
   m_Layer: 0
   m_Name: lampada
   m_TagString: Untagged
@@ -396,3 +397,17 @@ BoxCollider:
   serializedVersion: 3
   m_Size: {x: 1, y: 1, z: 1}
   m_Center: {x: 0, y: 0, z: 0}
+--- !u!114 &5828362894561594141
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 8219882712419904506}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 596503f95a5d99342a0958d22a50fdd2, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: 
+  targetRenderer: {fileID: 5491253973357143074}
+  blinkFrequency: 4

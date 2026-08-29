@@ -517,7 +517,7 @@ public class ScrapCraneControlStation : MonoBehaviour
             }
         }
 
-        return FindObjectOfType<Canvas>();
+        return null;
     }
 
     private void SetPromptVisible(bool visible)

@@ -124,6 +124,31 @@ public class MovableDevice : MonoBehaviour
         currentDropZone = dropZone;
     }
 
+    public void RestorePlacedAt(DeviceDropZone dropZone)
+    {
+        if (dropZone == null) return;
+
+        RefreshReferences();
+        currentDropZone?.Release(this);
+        IsCarried = false;
+        isDropping = false;
+        pendingDropZone = null;
+        targetAnchor = null;
+        currentDropZone = dropZone;
+        transform.SetParent(GetStablePlacementParent(dropZone.transform), true);
+        transform.SetPositionAndRotation(dropZone.GetDropPositionFor(this), dropZone.PlaceRotation);
+        transform.localScale = defaultLocalScale;
+        if (rigidBody != null)
+        {
+            rigidBody.isKinematic = true;
+            rigidBody.useGravity = false;
+        }
+        SetCollidersEnabled(true);
+        SetInteractionHighlighted(false);
+        dropZone.Receive(this);
+        GetComponent<ComputerInteractable>()?.HandlePlaced(dropZone);
+    }
+
     public float GetBottomToPivotOffset()
     {
         Bounds bounds = GetInteractionBounds();

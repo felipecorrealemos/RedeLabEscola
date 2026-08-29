@@ -1,5 +1,6 @@
 using System.Collections;
 using System.Collections.Generic;
+using RedeLabEscola.Auth;
 using UnityEngine;
 using UnityEngine.EventSystems;
 using UnityEngine.SceneManagement;
@@ -39,6 +40,11 @@ public class MissionManager : MonoBehaviour
     [SerializeField] private RectTransform panelRect;
     [SerializeField] private Button toggleButton;
     [SerializeField] private GameObject expandedContent;
+    [Header("Template visual das tarefas (editavel no Inspector)")]
+    [SerializeField] private GameObject taskRowTemplate;
+    [SerializeField] private Color completedCheckColor = new Color(0.16f, 0.92f, 0.34f, 1f);
+    [SerializeField] private Color incompleteCircleColor = new Color(0.94f, 0.97f, 1f, 0.96f);
+    [SerializeField] private Color completedTaskTextColor = new Color(0.75f, 1f, 0.8f, 1f);
     [SerializeField] private Vector2 panelAnchorMin = new Vector2(0.02f, 0.34f);
     [SerializeField] private Vector2 panelAnchorMax = new Vector2(0.34f, 0.96f);
     [SerializeField] private Vector2 panelOffsetMin = Vector2.zero;
@@ -50,8 +56,6 @@ public class MissionManager : MonoBehaviour
     [SerializeField] [Range(0.25f, 1f)] private float panelOpacity = 0.86f;
     [SerializeField] private float taskRowHeight = 36.8f;
     [SerializeField] private int taskFontSize = 16;
-    [SerializeField] private float taskTextPaddingLeft = 33.6f;
-    [SerializeField] private float taskTextPaddingRight = 14.4f;
     [SerializeField] private float minimumExpandedPanelHeight = 344f;
     [SerializeField] private float autoCollapseDelay = 5f;
     [SerializeField] private bool updateMissionFromNearestRouter = true;
@@ -79,6 +83,7 @@ public class MissionManager : MonoBehaviour
     private readonly HashSet<int> stage2PlacedPalletIds = new HashSet<int>();
     private readonly HashSet<int> stage2MachinePalletIds = new HashSet<int>();
     private readonly HashSet<int> stage2ConsumedScrapIds = new HashSet<int>();
+    private readonly HashSet<string> persistentlyCompletedTaskIds = new HashSet<string>();
     private bool stage2CompletionPresentationStarted;
     private bool stage2TestCompletionApplied;
     private string lastUiStateSignature;
@@ -216,6 +221,7 @@ public class MissionManager : MonoBehaviour
         }
 
         Instance = this;
+        InitializeOnlineProgressSession();
         ApplyMissionUiTypographyMigration();
         ConfigureMissionsForActiveScene();
         RebuildMissionLookup();
@@ -275,6 +281,18 @@ public class MissionManager : MonoBehaviour
 
     public void SetMission(int missionNumber)
     {
+        SetMissionInternal(missionNumber, true);
+    }
+
+    // Seleciona a sala durante Load Game sem reproduzir a passagem física
+    // entre salas nem agendar uma nova trava de entrada.
+    public void RestoreMission(int missionNumber)
+    {
+        SetMissionInternal(missionNumber, false);
+    }
+
+    private void SetMissionInternal(int missionNumber, bool applyRoomTransitionEffects)
+    {
         RebuildMissionLookup();
         if (!missionsByNumber.TryGetValue(missionNumber, out Mission mission))
         {
@@ -283,7 +301,8 @@ public class MissionManager : MonoBehaviour
         }
 
         int previousMissionNumber = CurrentMissionNumber;
-        bool shouldLockPreviousRoom = previousMissionNumber > 0
+        bool shouldLockPreviousRoom = applyRoomTransitionEffects
+            && previousMissionNumber > 0
             && missionNumber == previousMissionNumber + 1
             && AreAllCurrentTasksComplete;
 
@@ -467,6 +486,11 @@ public class MissionManager : MonoBehaviour
             return;
         }
 
+        if (!complete && persistentlyCompletedTaskIds.Contains(taskId))
+        {
+            return;
+        }
+
         RebuildMissionLookup();
         if (!missionsByNumber.TryGetValue(missionNumber, out Mission mission))
         {
@@ -479,13 +503,73 @@ public class MissionManager : MonoBehaviour
             return;
         }
 
+        bool wasComplete = task.IsComplete;
         task.IsComplete = complete;
+        if (IsNewCompletionTransition(wasComplete, complete))
+        {
+            // A conclusao e monotona: depois do primeiro false -> true, reavaliacoes
+            // de objetos reversiveis nao podem apagar uma unidade de progresso.
+            persistentlyCompletedTaskIds.Add(taskId);
+            RedeLabProgressService.Instance?.TryQueueMissionCompletion(taskId);
+        }
         if (currentMission == mission)
         {
             ExpandForDelay();
             RefreshUi();
             TryPresentStage2Completion();
         }
+    }
+
+    public static bool IsNewCompletionTransition(bool previousState, bool nextState)
+    {
+        return !previousState && nextState;
+    }
+
+    public void RestoreCompletedMissions(IEnumerable<string> completedTaskIds)
+    {
+        if (completedTaskIds == null) return;
+
+        RebuildMissionLookup();
+        foreach (string taskId in completedTaskIds)
+        {
+            if (string.IsNullOrWhiteSpace(taskId)) continue;
+            foreach (Mission mission in missions)
+            {
+                if (mission == null || mission.Tasks == null) continue;
+                MissionTask task = mission.Tasks.Find(candidate => candidate != null && candidate.Id == taskId);
+                if (task == null) continue;
+                task.IsComplete = true;
+                persistentlyCompletedTaskIds.Add(taskId);
+                break;
+            }
+        }
+
+        RefreshUiIfStateChanged(true);
+    }
+
+    private void InitializeOnlineProgressSession()
+    {
+        Scene scene = GetMissionSceneContext();
+        if (!RedeLabLoadContext.TryGetForScene(scene.name, out RedeLabLoadContextData context)) return;
+        RedeLabProgressService.EnsureInstance().BeginOnlineGameplaySession(
+            context.MissoesConcluidas,
+            context.IsLoadGame);
+    }
+
+    public void RestoreStage2AggregateState(ISet<string> completedTaskIds)
+    {
+        if (!usingStage2MissionProfile || completedTaskIds == null) return;
+
+        if (completedTaskIds.Contains("fabrica_bracos_roboticos")) stage2RoboticArmOperatingCount = 3;
+        if (completedTaskIds.Contains("fabrica_limpar_entulhos_garra"))
+        {
+            stage2ScrapTotalCount = Mathf.Max(1, FindObjectsOfType<ScrapItem>(true).Length);
+            stage2ScrapConsumedCount = stage2ScrapTotalCount;
+        }
+        if (completedTaskIds.Contains("fabrica_pallets_esteira_empilhadeira")) stage2PalletsPlacedCount = 4;
+        if (completedTaskIds.Contains("fabrica_pallets_gerados_enviados")) stage2MachinePalletsSentCount = 3;
+
+        RefreshUiIfStateChanged(true);
     }
 
     public static void CompleteCurrentTask(string taskId)
@@ -1908,43 +1992,48 @@ public class MissionManager : MonoBehaviour
 
     private void CreateTaskRow(MissionTask task)
     {
-        GameObject rowObject = new GameObject("Task_" + task.Id);
-        rowObject.transform.SetParent(taskListRoot, false);
+        if (taskRowTemplate == null)
+        {
+            Debug.LogError(
+                "MissionManager: atribua o Mission Task Row Template no Inspector para exibir as tarefas.",
+                this);
+            return;
+        }
 
-        RectTransform rowRect = rowObject.AddComponent<RectTransform>();
-        rowRect.sizeDelta = new Vector2(0f, taskRowHeight);
+        GameObject rowObject = Instantiate(taskRowTemplate, taskListRoot, false);
+        rowObject.name = "Task_" + task.Id;
+        rowObject.SetActive(true);
 
-        LayoutElement layout = rowObject.AddComponent<LayoutElement>();
+        RectTransform rowRect = rowObject.GetComponent<RectTransform>();
+        if (rowRect != null) rowRect.sizeDelta = new Vector2(rowRect.sizeDelta.x, taskRowHeight);
+
+        LayoutElement layout = rowObject.GetComponent<LayoutElement>();
+        if (layout == null) layout = rowObject.AddComponent<LayoutElement>();
         layout.minHeight = taskRowHeight;
         layout.preferredHeight = taskRowHeight;
 
-        GameObject markerObject = new GameObject("Marker");
-        markerObject.transform.SetParent(rowObject.transform, false);
-        RectTransform markerRect = markerObject.AddComponent<RectTransform>();
-        markerRect.anchorMin = new Vector2(0f, 0.5f);
-        markerRect.anchorMax = new Vector2(0f, 0.5f);
-        markerRect.pivot = new Vector2(0.5f, 0.5f);
-        markerRect.anchoredPosition = new Vector2(20f, 0f);
-        markerRect.sizeDelta = new Vector2(12f, 12f);
+        Image checkboxBorder = rowObject.transform.Find("Checkbox")?.GetComponent<Image>();
+        if (checkboxBorder != null)
+        {
+            checkboxBorder.color = task.IsComplete ? completedCheckColor : incompleteCircleColor;
+        }
 
-        Image markerImage = markerObject.AddComponent<Image>();
-        markerImage.color = task.IsComplete ? new Color(0.1f, 0.85f, 0.32f, 1f) : new Color(0.9f, 0.72f, 0.16f, 1f);
+        Image checkmark = rowObject.transform.Find("Checkbox/Checkmark")?.GetComponent<Image>();
+        if (checkmark != null)
+        {
+            checkmark.color = completedCheckColor;
+            checkmark.gameObject.SetActive(task.IsComplete);
+            checkmark.transform.SetAsLastSibling();
+        }
 
-        GameObject textObject = new GameObject("Text");
-        textObject.transform.SetParent(rowObject.transform, false);
-        RectTransform textRect = textObject.AddComponent<RectTransform>();
-        textRect.anchorMin = Vector2.zero;
-        textRect.anchorMax = Vector2.one;
-        textRect.offsetMin = new Vector2(taskTextPaddingLeft, 0f);
-        textRect.offsetMax = new Vector2(-taskTextPaddingRight, 0f);
-
-        Text taskText = textObject.AddComponent<Text>();
-        taskText.font = GetDefaultFont();
+        Text taskText = rowObject.transform.Find("Text")?.GetComponent<Text>();
+        if (taskText == null)
+        {
+            Debug.LogError("Mission Task Row Template precisa de um filho Text com componente Text.", this);
+            return;
+        }
         taskText.fontSize = taskFontSize;
-        taskText.alignment = TextAnchor.MiddleLeft;
-        taskText.horizontalOverflow = HorizontalWrapMode.Wrap;
-        taskText.verticalOverflow = VerticalWrapMode.Overflow;
-        taskText.color = task.IsComplete ? new Color(0.75f, 1f, 0.8f, 1f) : Color.white;
+        taskText.color = task.IsComplete ? completedTaskTextColor : Color.white;
         taskText.text = GetTaskDisplayDescription(task);
     }
 
@@ -2131,6 +2220,11 @@ public sealed class RoomProgressionDoorLock : MonoBehaviour
                 doorCollider.enabled = true;
             }
         }
+    }
+
+    public void Unlock()
+    {
+        isLocked = false;
     }
 
     private void LateUpdate()

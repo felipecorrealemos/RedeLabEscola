@@ -20,19 +20,21 @@ public static class ScrapCrusherRuntimeBootstrap
         Transform crusher = crusherObject.transform;
         Transform blades = FindChildRecursive(crusher, "laminas");
         Transform blades01 = FindChildRecursive(crusher, "laminas.001");
+        bool createdTrigger = crusher.Find("CrusherIntakeTrigger") == null;
         Transform triggerTransform = GetOrCreateChild(crusher, "CrusherIntakeTrigger", DefaultIntakeTriggerLocalPosition);
-        triggerTransform.localPosition = DefaultIntakeTriggerLocalPosition;
-        triggerTransform.localRotation = Quaternion.identity;
-        triggerTransform.localScale = Vector3.one;
         BoxCollider trigger = triggerTransform.GetComponent<BoxCollider>();
+        bool createdCollider = trigger == null;
         if (trigger == null)
         {
             trigger = triggerTransform.gameObject.AddComponent<BoxCollider>();
         }
 
         trigger.isTrigger = true;
-        trigger.center = DefaultIntakeTriggerCenter;
-        trigger.size = DefaultIntakeTriggerSize;
+        if (createdTrigger || createdCollider)
+        {
+            trigger.center = DefaultIntakeTriggerCenter;
+            trigger.size = DefaultIntakeTriggerSize;
+        }
         ConfigureDropCatchCollider(crusher);
 
         ScrapCrusherController controller = crusherObject.GetComponent<ScrapCrusherController>();

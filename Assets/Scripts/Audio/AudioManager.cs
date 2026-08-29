@@ -1,5 +1,6 @@
 using System.Collections.Generic;
 using System.Collections;
+using System.Runtime.InteropServices;
 using UnityEngine;
 using UnityEngine.SceneManagement;
 
@@ -31,7 +32,9 @@ public sealed class AudioManager : MonoBehaviour
     private bool disableAllAudioForTesting;
 
     private Coroutine musicFadeRoutine;
+    private Coroutine musicStartRoutine;
     private string activeMusicSceneName;
+    private int musicRequestVersion;
 
     public static AudioManager Instance => instance;
     public float MasterVolume => masterVolume;
@@ -72,6 +75,10 @@ public sealed class AudioManager : MonoBehaviour
         }
 
         ApplyVolumeSettings(false);
+
+#if UNITY_WEBGL && !UNITY_EDITOR
+        RedeLabAudio_InstallUnlockHandlers(gameObject.name);
+#endif
     }
 
     private void OnValidate()
@@ -108,6 +115,23 @@ public sealed class AudioManager : MonoBehaviour
     {
         if (!TryGetReadyInstance(out AudioManager manager)) return;
         manager.PlayAtEmitter(manager.settings.DoorOpen, emitter, "door_open", false);
+    }
+
+    public static void ResumeAfterUserInteraction()
+    {
+#if UNITY_WEBGL && !UNITY_EDITOR
+        if (instance != null) RedeLabAudio_ResumeContext(instance.gameObject.name);
+#endif
+        if (instance != null)
+        {
+            instance.EnsureCurrentMusicPlaying();
+        }
+    }
+
+    // Chamado pelo plugin WebGL somente depois que AudioContext.resume() for concluido.
+    public void OnWebGLAudioUnlocked(string ignored)
+    {
+        EnsureCurrentMusicPlaying();
     }
 
     public static AudioSource StartPrinter(Transform emitter)
@@ -214,19 +238,84 @@ public sealed class AudioManager : MonoBehaviour
             return;
         }
 
+        activeMusicSceneName = sceneName;
         if (musicSource.clip == requestedClip && musicSource.isPlaying)
         {
+            ApplyMuteSettings();
             return;
         }
 
+        musicRequestVersion++;
+        if (musicStartRoutine != null)
+        {
+            StopCoroutine(musicStartRoutine);
+            musicStartRoutine = null;
+        }
+        if (musicFadeRoutine != null)
+        {
+            StopCoroutine(musicFadeRoutine);
+            musicFadeRoutine = null;
+        }
         musicSource.Stop();
         musicSource.clip = requestedClip;
         musicSource.volume = 0f;
         musicSource.loop = true;
-        musicSource.Play();
-        activeMusicSceneName = sceneName;
         ApplyMuteSettings();
+        musicStartRoutine = StartCoroutine(StartMusicWhenReady(
+            requestedClip,
+            sceneName,
+            musicRequestVersion));
+    }
+
+    private IEnumerator StartMusicWhenReady(AudioClip clip, string sceneName, int requestVersion)
+    {
+        if (clip.loadState == AudioDataLoadState.Unloaded)
+        {
+            clip.LoadAudioData();
+        }
+
+        while (clip.loadState == AudioDataLoadState.Loading)
+        {
+            if (requestVersion != musicRequestVersion) yield break;
+            yield return null;
+        }
+
+        musicStartRoutine = null;
+        if (requestVersion != musicRequestVersion
+            || musicSource == null
+            || musicSource.clip != clip
+            || activeMusicSceneName != sceneName)
+        {
+            yield break;
+        }
+
+        if (clip.loadState == AudioDataLoadState.Failed)
+        {
+            Debug.LogError("AudioManager nao conseguiu carregar a musica da cena " + sceneName + ".", this);
+            yield break;
+        }
+
+        musicSource.Play();
         StartMusicFade(GetEffectiveMusicVolume(sceneName), musicFadeInDuration, false);
+    }
+
+    private void EnsureCurrentMusicPlaying()
+    {
+        string sceneName = SceneManager.GetActiveScene().name;
+        if (settings == null || !settings.IsMusicScene(sceneName)) return;
+
+        AudioClip requestedClip = settings.GetMusicForScene(sceneName);
+        if (musicSource != null && musicSource.clip == requestedClip && musicSource.isPlaying)
+        {
+            ApplyMuteSettings();
+            if (musicFadeRoutine == null)
+            {
+                musicSource.volume = GetEffectiveMusicVolume(sceneName);
+            }
+            return;
+        }
+
+        ApplyMusicForScene(sceneName);
     }
 
     private void PlayAtEmitter(
@@ -484,4 +573,12 @@ public sealed class AudioManager : MonoBehaviour
         globalSfxSource.spatialBlend = 0f;
         ApplyGlobalSfxVolume();
     }
+
+#if UNITY_WEBGL && !UNITY_EDITOR
+    [DllImport("__Internal")]
+    private static extern void RedeLabAudio_InstallUnlockHandlers(string receiver);
+
+    [DllImport("__Internal")]
+    private static extern void RedeLabAudio_ResumeContext(string receiver);
+#endif
 }

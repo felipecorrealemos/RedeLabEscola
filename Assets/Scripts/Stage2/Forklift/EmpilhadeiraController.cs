@@ -60,6 +60,7 @@ public class EmpilhadeiraController : MonoBehaviour
     [SerializeField] private AudioClip engineContinuousClip;
     [SerializeField] private AudioClip forkMovementClip;
     [SerializeField] private AudioClip forkStopClip;
+    [SerializeField, Range(0f, 1f)] private float engineVolumeMultiplier = 0.6f;
     [SerializeField, Range(0.1f, 3f)] private float engineIdlePitch = 1f;
     [SerializeField, Range(0.1f, 3f)] private float engineAcceleratedPitch = 1.3f;
     [SerializeField, Range(0.05f, 1f)] private float enginePitchTransitionDuration = 0.4f;
@@ -1400,7 +1401,7 @@ public class EmpilhadeiraController : MonoBehaviour
     {
         currentSfxVolume = Mathf.Clamp01(volume);
         currentSfxMuted = muted;
-        ApplyAudioVolume(engineAudioSource, currentSfxVolume, currentSfxMuted);
+        ApplyAudioVolume(engineAudioSource, currentSfxVolume * engineVolumeMultiplier, currentSfxMuted);
         ApplyAudioVolume(forkAudioSource, currentSfxVolume, currentSfxMuted);
     }
 
@@ -1881,7 +1882,7 @@ public class EmpilhadeiraController : MonoBehaviour
             }
         }
 
-        return FindObjectOfType<Canvas>();
+        return null;
     }
 
     private void SetPromptText(string text)

@@ -1374,7 +1374,7 @@ public class RouterInteractable : MonoBehaviour
             }
         }
 
-        return FindObjectOfType<Canvas>();
+        return null;
     }
 
     private GameObject CreateUiObject(string objectName, Transform parent)
