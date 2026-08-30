@@ -8,6 +8,12 @@ A proposta do projeto é transformar o aprendizado de redes em uma experiência 
 
 O jogador controla um personagem em terceira pessoa/top-down, interage com computadores, mesas, pontos de rede, roteadores, switches e outros dispositivos, realizando tarefas relacionadas à montagem e configuração de uma rede local.
 
+## Identidade do build WebGL
+
+O Player Settings usa o template persistente `Assets/WebGLTemplates/RedeLabEscola`. Ele mantém o título da aba como **Rede Lab. Escola** nas próximas builds e não usa o texto “Unity WebGL Player”. O build atual em `Build_WebGL/index.html` também já possui o título corrigido.
+
+Enquanto não há ícone oficial, o template declara um favicon vazio para não exibir o ícone padrão do Unity nem inventar uma marca provisória. As instruções e o caminho futuro `Assets/WebGLTemplates/RedeLabEscola/TemplateData/redelab-favicon.png` estão em `Assets/WebGLTemplates/RedeLabEscola/FAVICON.md`. Após instalar o ícone, é necessário gerar novamente o WebGL para propagá-lo ao build.
+
 ## Objetivo educacional
 
 O principal objetivo do projeto é ajudar os alunos a compreenderem, na prática, conceitos fundamentais de redes de computadores, como:

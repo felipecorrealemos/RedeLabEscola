@@ -2,8 +2,10 @@ const { WebSocket, WebSocketServer } = require('ws');
 const { pool } = require('../config/database');
 const { validarAccessTokenSocket } = require('../middleware/auth');
 const { Presenca } = require('./presenca');
+const { monitorUpdates } = require('../services/monitorUpdates');
 
 const WS_PATH = '/ws';
+const MONITOR_WS_PATH = '/ws/monitor';
 const AUTH_TIMEOUT_MS = 8000;
 const HEARTBEAT_INTERVAL_MS = 30000;
 const MAX_PAYLOAD_BYTES = 16 * 1024;
@@ -52,14 +54,43 @@ function criarServidorWebSocket({
   }
 
   const estados = new WeakMap();
-  const wss = new WebSocketServer({
-    server,
-    path: WS_PATH,
-    maxPayload,
-    verifyClient(info, callback) {
-      callback(origemPermitida(info.origin), 403, 'Origem não permitida');
-    },
-  });
+  const estadosMonitor = new WeakMap();
+  const wss = new WebSocketServer({ noServer: true, maxPayload });
+  const monitorWss = new WebSocketServer({ noServer: true, maxPayload: 1024 });
+
+  function rejeitarUpgrade(socket, status, mensagem) {
+    socket.write(
+      `HTTP/1.1 ${status}\r\nConnection: close\r\nContent-Type: text/plain\r\n\r\n${mensagem}`
+    );
+    socket.destroy();
+  }
+
+  function tratarUpgrade(request, socket, head) {
+    if (!origemPermitida(request.headers.origin)) {
+      rejeitarUpgrade(socket, '403 Forbidden', 'Origem não permitida');
+      return;
+    }
+
+    let pathname;
+    try {
+      pathname = new URL(request.url, 'http://localhost').pathname;
+    } catch {
+      rejeitarUpgrade(socket, '400 Bad Request', 'URL inválida');
+      return;
+    }
+
+    const destino = pathname === WS_PATH ? wss : pathname === MONITOR_WS_PATH ? monitorWss : null;
+    if (!destino) {
+      rejeitarUpgrade(socket, '404 Not Found', 'WebSocket não encontrado');
+      return;
+    }
+
+    destino.handleUpgrade(request, socket, head, (websocket) => {
+      destino.emit('connection', websocket, request);
+    });
+  }
+
+  server.on('upgrade', tratarUpgrade);
 
   function removerDaPresenca(socket) {
     const estado = estados.get(socket);
@@ -177,9 +208,66 @@ function criarServidorWebSocket({
     });
   });
 
+  // Canal temporariamente público e estritamente somente leitura para o monitor.
+  // Ele não autentica jogadores, não entra na presença e não aceita comandos.
+  monitorWss.on('connection', (socket) => {
+    estadosMonitor.set(socket, { respondeuHeartbeat: true });
+    enviar(socket, { type: 'monitor_ready' });
+    socket.on('pong', () => {
+      const estado = estadosMonitor.get(socket);
+      if (estado) {
+        estado.respondeuHeartbeat = true;
+      }
+    });
+    socket.on('message', () => {
+      enviar(socket, { type: 'error', error: 'read_only' });
+      socket.close(1008, 'read_only');
+    });
+    socket.on('error', (error) => {
+      console.warn('Erro no WebSocket do monitor:', error.message);
+    });
+  });
+
+  const aoMudarPresenca = (evento) => {
+    for (const socket of monitorWss.clients) {
+      enviar(socket, {
+        type: 'monitor_update',
+        reason: evento.online ? 'usuario_online' : 'usuario_offline',
+        id_usuario: Number(evento.id_usuario),
+      });
+    }
+  };
+  const aoAtualizarDados = (evento) => {
+    const motivo = typeof evento === 'string' ? evento : evento.motivo;
+    const idUsuario = typeof evento === 'object' ? evento.id_usuario : null;
+    for (const socket of monitorWss.clients) {
+      enviar(socket, {
+        type: 'monitor_update',
+        reason: motivo,
+        ...(idUsuario ? { id_usuario: Number(idUsuario) } : {}),
+      });
+    }
+  };
+  presenca.on('change', aoMudarPresenca);
+  monitorUpdates.on('update', aoAtualizarDados);
+
   const heartbeatTimer = setInterval(() => {
     for (const socket of wss.clients) {
       const estado = estados.get(socket);
+      if (!estado) {
+        continue;
+      }
+      if (!estado.respondeuHeartbeat) {
+        socket.terminate();
+        continue;
+      }
+      estado.respondeuHeartbeat = false;
+      if (socket.readyState === WebSocket.OPEN) {
+        socket.ping();
+      }
+    }
+    for (const socket of monitorWss.clients) {
+      const estado = estadosMonitor.get(socket);
       if (!estado) {
         continue;
       }
@@ -197,19 +285,30 @@ function criarServidorWebSocket({
 
   async function encerrar() {
     clearInterval(heartbeatTimer);
-    for (const socket of wss.clients) {
-      socket.terminate();
+    server.off('upgrade', tratarUpgrade);
+    presenca.off('change', aoMudarPresenca);
+    monitorUpdates.off('update', aoAtualizarDados);
+    for (const servidorWebSocket of [wss, monitorWss]) {
+      for (const socket of servidorWebSocket.clients) {
+        socket.terminate();
+      }
     }
-    await new Promise((resolve) => wss.close(resolve));
+    await Promise.all(
+      [wss, monitorWss].map(
+        (servidorWebSocket) =>
+          new Promise((resolve) => servidorWebSocket.close(() => resolve()))
+      )
+    );
   }
 
-  return { wss, presenca, encerrar };
+  return { wss, monitorWss, presenca, encerrar };
 }
 
 module.exports = {
   AUTH_TIMEOUT_MS,
   HEARTBEAT_INTERVAL_MS,
   MAX_PAYLOAD_BYTES,
+  MONITOR_WS_PATH,
   WS_PATH,
   criarServidorWebSocket,
 };

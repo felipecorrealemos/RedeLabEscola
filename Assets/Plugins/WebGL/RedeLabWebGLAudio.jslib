@@ -25,6 +25,7 @@ mergeInto(LibraryManager.library, {
       if (!context) return;
       if (context.state === "running") {
         removeHandlers();
+        if (typeof SendMessage === "function") SendMessage(receiver, "OnWebGLAudioUnlocked", "");
         return;
       }
       var result = context.resume();
@@ -34,7 +35,10 @@ mergeInto(LibraryManager.library, {
             removeHandlers();
             if (typeof SendMessage === "function") SendMessage(receiver, "OnWebGLAudioUnlocked", "");
           }
-        }).catch(function () {
+        }).catch(function (error) {
+          if (typeof console !== "undefined" && console.warn) {
+            console.warn("[RedeLab Audio] Nao foi possivel retomar o AudioContext.", error);
+          }
           // Mantem os listeners para tentar novamente no proximo gesto valido.
         });
       }
@@ -43,7 +47,6 @@ mergeInto(LibraryManager.library, {
     document.addEventListener("pointerdown", resumeAudio, true);
     document.addEventListener("touchstart", resumeAudio, true);
     document.addEventListener("keydown", resumeAudio, true);
-    resumeAudio();
   },
 
   RedeLabAudio_ResumeContext: function (receiverPtr) {
@@ -59,7 +62,11 @@ mergeInto(LibraryManager.library, {
       if (result && typeof result.then === "function") {
         result.then(function () {
           if (typeof SendMessage === "function") SendMessage(receiver, "OnWebGLAudioUnlocked", "");
-        }).catch(function () {});
+        }).catch(function (error) {
+          if (typeof console !== "undefined" && console.warn) {
+            console.warn("[RedeLab Audio] Nao foi possivel retomar o AudioContext.", error);
+          }
+        });
       }
     } else if (context && typeof SendMessage === "function") {
       SendMessage(receiver, "OnWebGLAudioUnlocked", "");

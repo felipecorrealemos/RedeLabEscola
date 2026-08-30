@@ -22,6 +22,7 @@ function developmentHeaders(req, res, next) {
       "script-src 'self' 'unsafe-inline' 'unsafe-eval' 'wasm-unsafe-eval'",
       "style-src 'self' 'unsafe-inline'",
       "img-src 'self' data: blob:",
+      "media-src 'self' blob: data:",
       "connect-src 'self' http://localhost:3000 ws://localhost:3000 https://dev-ldgwwvi01va0qxzx.us.auth0.com",
       "frame-src https://dev-ldgwwvi01va0qxzx.us.auth0.com",
       "worker-src 'self' blob:",

@@ -24,6 +24,8 @@ public sealed class AudioManager : MonoBehaviour
     [SerializeField, Range(0f, 1f)] private float gameplayMusicVolume = 0.18f;
     [SerializeField, Range(0f, 1f)] private float sfxVolume = 0.9f;
     [SerializeField, Min(0f)] private float musicFadeInDuration = 3f;
+    [SerializeField, Min(0f), Tooltip("Espera antes da primeira tentativa automatica de musica no MainMenu.")]
+    private float mainMenuInitialPlayDelay = 1.5f;
 
     [Header("Mute e Debug")]
     [SerializeField] private bool muteMusic;
@@ -35,6 +37,7 @@ public sealed class AudioManager : MonoBehaviour
     private Coroutine musicStartRoutine;
     private string activeMusicSceneName;
     private int musicRequestVersion;
+    private bool mainMenuInitialAttemptScheduled;
 
     public static AudioManager Instance => instance;
     public float MasterVolume => masterVolume;
@@ -223,7 +226,7 @@ public sealed class AudioManager : MonoBehaviour
         ApplyVolumeSettings(false);
     }
 
-    private void ApplyMusicForScene(string sceneName)
+    private void ApplyMusicForScene(string sceneName, bool forceImmediate = false)
     {
         if (settings == null || !settings.IsMusicScene(sceneName))
         {
@@ -245,6 +248,22 @@ public sealed class AudioManager : MonoBehaviour
             return;
         }
 
+        if (!forceImmediate
+            && musicSource.clip == requestedClip
+            && musicStartRoutine != null)
+        {
+            return;
+        }
+
+        float playDelay = 0f;
+        if (!forceImmediate
+            && !mainMenuInitialAttemptScheduled
+            && sceneName == settings.MainMenuScene)
+        {
+            mainMenuInitialAttemptScheduled = true;
+            playDelay = mainMenuInitialPlayDelay;
+        }
+
         musicRequestVersion++;
         if (musicStartRoutine != null)
         {
@@ -264,14 +283,30 @@ public sealed class AudioManager : MonoBehaviour
         musicStartRoutine = StartCoroutine(StartMusicWhenReady(
             requestedClip,
             sceneName,
-            musicRequestVersion));
+            musicRequestVersion,
+            playDelay));
     }
 
-    private IEnumerator StartMusicWhenReady(AudioClip clip, string sceneName, int requestVersion)
+    private IEnumerator StartMusicWhenReady(
+        AudioClip clip,
+        string sceneName,
+        int requestVersion,
+        float playDelay)
     {
         if (clip.loadState == AudioDataLoadState.Unloaded)
         {
             clip.LoadAudioData();
+        }
+
+        if (playDelay > 0f)
+        {
+            float elapsed = 0f;
+            while (elapsed < playDelay)
+            {
+                if (requestVersion != musicRequestVersion) yield break;
+                elapsed += Time.unscaledDeltaTime;
+                yield return null;
+            }
         }
 
         while (clip.loadState == AudioDataLoadState.Loading)
@@ -315,7 +350,7 @@ public sealed class AudioManager : MonoBehaviour
             return;
         }
 
-        ApplyMusicForScene(sceneName);
+        ApplyMusicForScene(sceneName, true);
     }
 
     private void PlayAtEmitter(
@@ -515,6 +550,7 @@ public sealed class AudioManager : MonoBehaviour
         gameplayMusicVolume = Mathf.Clamp01(gameplayMusicVolume);
         sfxVolume = Mathf.Clamp01(sfxVolume);
         musicFadeInDuration = Mathf.Max(0f, musicFadeInDuration);
+        mainMenuInitialPlayDelay = Mathf.Max(0f, mainMenuInitialPlayDelay);
     }
 
     private bool ValidateClip(AudioClip clip, string label)

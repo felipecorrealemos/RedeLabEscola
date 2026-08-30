@@ -1,5 +1,8 @@
-class Presenca {
+const { EventEmitter } = require('node:events');
+
+class Presenca extends EventEmitter {
   constructor() {
+    super();
     this.conexoesPorUsuario = new Map();
   }
 
@@ -10,6 +13,9 @@ class Presenca {
       this.conexoesPorUsuario.set(idUsuario, conexoes);
     }
     conexoes.add(socket);
+    if (conexoes.size === 1) {
+      this.emit('change', { id_usuario: idUsuario, online: true });
+    }
     return conexoes.size;
   }
 
@@ -22,6 +28,7 @@ class Presenca {
     conexoes.delete(socket);
     if (conexoes.size === 0) {
       this.conexoesPorUsuario.delete(idUsuario);
+      this.emit('change', { id_usuario: idUsuario, online: false });
       return 0;
     }
     return conexoes.size;

@@ -3,6 +3,7 @@ require('dotenv').config({ quiet: true });
 const express = require('express');
 const cors = require('cors');
 const http = require('node:http');
+const path = require('node:path');
 const { pool, testDatabaseConnection } = require('./config/database');
 const faseRoutes = require('./routes/faseRoutes');
 const missaoRoutes = require('./routes/missaoRoutes');
@@ -15,9 +16,19 @@ const { tratarErroAutenticacao } = require('./middleware/auth');
 const { criarDevPresencaRoutes } = require('./routes/devPresencaRoutes');
 const { Presenca } = require('./websocket/presenca');
 const { criarServidorWebSocket } = require('./websocket/webSocketServer');
+const { criarMonitorRoutes } = require('./routes/monitorRoutes');
 
 const port = Number(process.env.PORT || 3000);
 const devRoutesHabilitadas = String(process.env.ENABLE_DEV_ROUTES || '').toLowerCase() === 'true';
+const monitorPublicDirectory = path.join(__dirname, '..', 'public', 'monitor');
+const bootstrapDirectory = path.join(__dirname, '..', 'node_modules', 'bootstrap', 'dist');
+const bootstrapIconsDirectory = path.join(
+  __dirname,
+  '..',
+  'node_modules',
+  'bootstrap-icons',
+  'font'
+);
 
 function detalheTecnico(error) {
   if (error.message) {
@@ -58,6 +69,14 @@ function criarApp({
   app.use(cors(criarOpcoesCors()));
   app.use(express.json({ limit: '100kb' }));
 
+  app.get('/monitor', (req, res) => res.sendFile(path.join(monitorPublicDirectory, 'index.html')));
+  app.use('/monitor', express.static(monitorPublicDirectory, { index: false }));
+  app.use('/monitor/vendor/bootstrap', express.static(bootstrapDirectory, { index: false }));
+  app.use(
+    '/monitor/vendor/bootstrap-icons',
+    express.static(bootstrapIconsDirectory, { index: false })
+  );
+
   app.get('/api/health', async (req, res) => {
     try {
       await testDatabaseConnection();
@@ -73,6 +92,7 @@ function criarApp({
   app.use('/api/auth', authRoutes);
   app.use('/api/me', meRoutes);
   app.use('/api/progresso', progressoRoutes);
+  app.use('/api/monitor', criarMonitorRoutes(presenca));
 
   if (habilitarRotasDev) {
     app.use('/api/usuarios', usuarioRoutes);
@@ -140,6 +160,7 @@ async function iniciarServidor() {
   server.listen(port, () => {
     console.log(`API RedeLab Escola disponível em http://localhost:${port}`);
     console.log(`WebSocket disponível em ws://localhost:${port}/ws`);
+    console.log(`Monitor disponível em http://localhost:${port}/monitor`);
     console.log(`Rotas DEV/LEGACY: ${devRoutesHabilitadas ? 'habilitadas' : 'desabilitadas'}`);
   });
 

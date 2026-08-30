@@ -11,11 +11,13 @@ process.env.CORS_ORIGIN = '*';
 const { validarAccessTokenSocket } = require('../src/middleware/auth');
 const { Presenca } = require('../src/websocket/presenca');
 const { criarServidorWebSocket } = require('../src/websocket/webSocketServer');
+const { notificarMonitor } = require('../src/services/monitorUpdates');
 
 let server;
 let service;
 let presenca;
 let wsUrl;
+let monitorWsUrl;
 let httpUrl;
 
 function aguardarEvento(emissor, evento) {
@@ -28,6 +30,14 @@ function aguardarEvento(emissor, evento) {
 async function abrirSocket() {
   const socket = new WebSocket(wsUrl);
   await aguardarEvento(socket, 'open');
+  return socket;
+}
+
+async function abrirSocketMonitor() {
+  const socket = new WebSocket(monitorWsUrl);
+  const mensagem = proximaMensagem(socket);
+  await aguardarEvento(socket, 'open');
+  assert.deepEqual(await mensagem, { type: 'monitor_ready' });
   return socket;
 }
 
@@ -92,6 +102,7 @@ before(async () => {
   await aguardarEvento(server, 'listening');
   const porta = server.address().port;
   wsUrl = `ws://127.0.0.1:${porta}/ws`;
+  monitorWsUrl = `ws://127.0.0.1:${porta}/ws/monitor`;
   httpUrl = `http://127.0.0.1:${porta}`;
 });
 
@@ -110,6 +121,69 @@ test('REST e WebSocket compartilham o mesmo servidor HTTP', async () => {
   const socket = await autenticarSocket();
   await fecharSocket(socket);
   await aguardarCondicao(() => presenca.resumo().online === 0);
+});
+
+test('canal do monitor é somente leitura e recebe mudanças da presença existente', async () => {
+  const monitor = await abrirSocketMonitor();
+  assert.equal(presenca.resumo().online, 0);
+
+  const entrada = proximaMensagem(monitor);
+  const jogo = await autenticarSocket();
+  assert.deepEqual(await entrada, {
+    type: 'monitor_update',
+    reason: 'usuario_online',
+    id_usuario: 77,
+  });
+  assert.equal(presenca.resumo().online, 1);
+
+  const saida = proximaMensagem(monitor);
+  await fecharSocket(jogo);
+  assert.deepEqual(await saida, {
+    type: 'monitor_update',
+    reason: 'usuario_offline',
+    id_usuario: 77,
+  });
+  await fecharSocket(monitor);
+});
+
+test('canal do monitor identifica o usuário em atualizações de progresso e reset', async () => {
+  const monitor = await abrirSocketMonitor();
+  const progresso = proximaMensagem(monitor);
+  notificarMonitor('missao_concluida', 77);
+  assert.deepEqual(await progresso, {
+    type: 'monitor_update',
+    reason: 'missao_concluida',
+    id_usuario: 77,
+  });
+
+  const reset = proximaMensagem(monitor);
+  notificarMonitor('progresso_reset', 77);
+  assert.deepEqual(await reset, {
+    type: 'monitor_update',
+    reason: 'progresso_reset',
+    id_usuario: 77,
+  });
+  await fecharSocket(monitor);
+});
+
+test('canal do monitor rejeita comandos sem afetar o WebSocket autenticado', async () => {
+  const monitor = await abrirSocketMonitor();
+  const mensagem = proximaMensagem(monitor);
+  const fechamento = aguardarEvento(monitor, 'close');
+  monitor.send(JSON.stringify({ type: 'auth', accessToken: 'nao-deve-ser-usado' }));
+  assert.deepEqual(await mensagem, { type: 'error', error: 'read_only' });
+  const [codigo, razao] = await fechamento;
+  assert.equal(codigo, 1008);
+  assert.equal(razao.toString(), 'read_only');
+  assert.equal(presenca.resumo().online, 0);
+});
+
+test('heartbeat mantém o canal do monitor responsivo sem contar presença', async () => {
+  const monitor = await abrirSocketMonitor();
+  await new Promise((resolve) => setTimeout(resolve, 130));
+  assert.equal(monitor.readyState, WebSocket.OPEN);
+  assert.equal(presenca.resumo().online, 0);
+  await fecharSocket(monitor);
 });
 
 test('socket sem autenticação é fechado após o timeout', async () => {

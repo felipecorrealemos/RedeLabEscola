@@ -18,8 +18,13 @@ test('servidor Unity entrega pagina, SDK Auth0 local e headers WebGL', async () 
   await withServer(async (baseUrl) => {
     const page = await fetch(baseUrl);
     assert.equal(page.status, 200);
-    assert.match(await page.text(), /Unity WebGL Player/);
-    assert.match(page.headers.get('content-security-policy'), /localhost:3000/);
+    const html = await page.text();
+    assert.match(html, /<title>Rede Lab\. Escola<\/title>/);
+    assert.doesNotMatch(html, /Unity WebGL Player/);
+    assert.match(html, /<link rel="icon" href="data:,">/);
+    const contentSecurityPolicy = page.headers.get('content-security-policy');
+    assert.match(contentSecurityPolicy, /localhost:3000/);
+    assert.match(contentSecurityPolicy, /media-src 'self' blob: data:/);
 
     const sdk = await fetch(`${baseUrl}/vendor/auth0-spa-js.production.js`);
     assert.equal(sdk.status, 200);

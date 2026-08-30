@@ -1,4 +1,5 @@
 const { pool } = require('../config/database');
+const { notificarMonitor } = require('../services/monitorUpdates');
 
 function parseIdUsuario(valor) {
   const idUsuario = Number(valor);
@@ -88,6 +89,10 @@ async function concluirMissao(req, res, next) {
       }
     }
 
+    if (!alreadyCompleted) {
+      notificarMonitor('missao_concluida', idUsuario);
+    }
+
     return res.status(alreadyCompleted ? 200 : 201).json({
       success: true,
       alreadyCompleted,
@@ -131,6 +136,9 @@ async function apagarMeuProgresso(req, res, next) {
       'DELETE FROM missao_concluida WHERE id_usuario = ?',
       [idUsuario]
     );
+    if (resultado.affectedRows > 0) {
+      notificarMonitor('progresso_reset', idUsuario);
+    }
     return res.json({
       success: true,
       id_usuario: idUsuario,
@@ -160,6 +168,9 @@ async function apagarProgresso(req, res, next) {
       'DELETE FROM missao_concluida WHERE id_usuario = ?',
       [idUsuario]
     );
+    if (resultado.affectedRows > 0) {
+      notificarMonitor('progresso_reset', idUsuario);
+    }
     return res.json({
       success: true,
       id_usuario: idUsuario,

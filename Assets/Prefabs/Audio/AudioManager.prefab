@@ -54,6 +54,7 @@ MonoBehaviour:
   gameplayMusicVolume: 0.18
   sfxVolume: 1
   musicFadeInDuration: 3
+  mainMenuInitialPlayDelay: 1.5
   muteMusic: 0
   muteSfx: 0
   disableAllAudioForTesting: 0

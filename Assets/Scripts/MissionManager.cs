@@ -911,8 +911,6 @@ public class MissionManager : MonoBehaviour
         if (missionUiTypographyVersion >= 6) return;
         taskFontSize = 16;
         taskRowHeight = 36.8f;
-        taskTextPaddingLeft = 33.6f;
-        taskTextPaddingRight = 14.4f;
         minimumExpandedPanelHeight = 344f;
         panelOpacity = 0.86f;
         missionUiTypographyVersion = 6;

@@ -1,5 +1,6 @@
 const { pool } = require('../config/database');
 const { obterPerfilAuth0 } = require('../services/auth0UserInfo');
+const { notificarMonitor } = require('../services/monitorUpdates');
 
 const EMAIL_PATTERN = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 const CAMPOS_RETORNO = 'id_usuario, nome, email, id_personagem';
@@ -53,6 +54,7 @@ async function sincronizarUsuario(req, res, next) {
         `SELECT ${CAMPOS_RETORNO} FROM usuario WHERE id_usuario = ?`,
         [resultado.insertId]
       );
+      notificarMonitor('cadastro', usuarios[0].id_usuario);
       return res.status(201).json({ ...usuarios[0], novo_usuario: true });
     } catch (error) {
       if (error.code !== 'ER_DUP_ENTRY') {

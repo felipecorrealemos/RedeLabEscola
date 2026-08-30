@@ -36,7 +36,7 @@ namespace RedeLabEscola.Auth
         [Tooltip("Deixe vazio para derivar automaticamente da URL da API (http->ws, https->wss).")]
         [SerializeField] private string manualWebSocketUrl;
         [SerializeField, Min(1f)] private float maximumReconnectDelay = 20f;
-        [Tooltip("Logs temporarios de diagnostico. Nunca imprime o Access Token.")]
+        [Tooltip("Logs informativos apenas no Editor ou Development Build. Nunca imprime o Access Token.")]
         [SerializeField] private bool enableDiagnosticLogs = true;
 
         private RedeLabAuthManager auth;
@@ -456,6 +456,8 @@ namespace RedeLabEscola.Auth
                 && !string.IsNullOrWhiteSpace(auth.AccessToken);
         }
 
+        [System.Diagnostics.Conditional("UNITY_EDITOR")]
+        [System.Diagnostics.Conditional("DEVELOPMENT_BUILD")]
         private void DiagnosticLog(string message)
         {
             if (enableDiagnosticLogs) Debug.Log("[RedeLab WS] " + message, this);
@@ -463,7 +465,7 @@ namespace RedeLabEscola.Auth
 
         private void DiagnosticWarning(string message)
         {
-            if (enableDiagnosticLogs) Debug.LogWarning("[RedeLab WS] " + message, this);
+            Debug.LogWarning("[RedeLab WS] " + message, this);
         }
 
         private static string SafeAuthError(string error)

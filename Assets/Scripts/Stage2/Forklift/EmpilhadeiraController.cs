@@ -141,6 +141,7 @@ public class EmpilhadeiraController : MonoBehaviour
     private bool forkAudioMoving;
     private float currentSfxVolume = 1f;
     private bool currentSfxMuted;
+    private bool gameplayPermanentlyLocked;
 
     private void Awake()
     {
@@ -195,6 +196,11 @@ public class EmpilhadeiraController : MonoBehaviour
 
     private void Update()
     {
+        if (gameplayPermanentlyLocked)
+        {
+            return;
+        }
+
         ValidateNearbyPlayer();
         UpdateInputDebug();
         UpdateEnginePitch(Time.deltaTime);
@@ -278,6 +284,11 @@ public class EmpilhadeiraController : MonoBehaviour
 
     public void NotifyPlayerEnterInteraction(Collider other)
     {
+        if (gameplayPermanentlyLocked)
+        {
+            return;
+        }
+
         PlayerTopDownController player = ResolvePlayer(other);
         if (player == null)
         {
@@ -442,7 +453,7 @@ public class EmpilhadeiraController : MonoBehaviour
 
     private void EnterForklift()
     {
-        if (nearbyPlayer == null || driverSeatPoint == null)
+        if (gameplayPermanentlyLocked || nearbyPlayer == null || driverSeatPoint == null)
         {
             return;
         }
@@ -466,6 +477,11 @@ public class EmpilhadeiraController : MonoBehaviour
 
     private void ExitForklift()
     {
+        ExitForklift(false);
+    }
+
+    private void ExitForklift(bool forceExit)
+    {
         if (currentPlayer == null)
         {
             playerDriving = false;
@@ -476,7 +492,14 @@ public class EmpilhadeiraController : MonoBehaviour
 
         if (!TryFindSafeExitPose(out Vector3 exitPosition, out Quaternion exitRotation))
         {
-            return;
+            if (!forceExit)
+            {
+                return;
+            }
+
+            Transform fallback = playerExitPoint != null ? playerExitPoint : transform;
+            exitPosition = fallback.position;
+            exitRotation = fallback.rotation;
         }
 
         currentPlayer.transform.SetParent(originalPlayerParent, true);
@@ -493,6 +516,33 @@ public class EmpilhadeiraController : MonoBehaviour
         StopVehicleAudio(true);
         SetPromptVisible(false);
         SetDrivingPanelVisible(false);
+    }
+
+    public void PrepareForStageCompletion()
+    {
+        if (gameplayPermanentlyLocked)
+        {
+            return;
+        }
+
+        if (playerDriving || currentPlayer != null)
+        {
+            ExitForklift(true);
+        }
+
+        gameplayPermanentlyLocked = true;
+        nearbyPlayer = null;
+        playerNearby = false;
+        playerDriving = false;
+        ClearInputDebug();
+        SetParkedKinematic(true);
+        StopVehicleAudio(false);
+        SetPromptVisible(false);
+        SetDrivingPanelVisible(false);
+        if (interactionTrigger != null)
+        {
+            interactionTrigger.enabled = false;
+        }
     }
 
     private bool TryFindSafeExitPose(out Vector3 safePosition, out Quaternion safeRotation)

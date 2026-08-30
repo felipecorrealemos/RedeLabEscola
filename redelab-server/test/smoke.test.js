@@ -30,15 +30,41 @@ after(async () => {
 });
 
 test('rotas públicas continuam acessíveis com o MySQL real', async () => {
-  const [health, fases, missoes] = await Promise.all([
-    fetch(`${baseUrl}/api/health`),
-    fetch(`${baseUrl}/api/fases`),
-    fetch(`${baseUrl}/api/missoes`),
-  ]);
+  const [health, fases, missoes, monitor, pagina, css, javascript, bootstrap, icons] =
+    await Promise.all([
+      fetch(`${baseUrl}/api/health`),
+      fetch(`${baseUrl}/api/fases`),
+      fetch(`${baseUrl}/api/missoes`),
+      fetch(`${baseUrl}/api/monitor/alunos`),
+      fetch(`${baseUrl}/monitor`),
+      fetch(`${baseUrl}/monitor/css/monitor.css`),
+      fetch(`${baseUrl}/monitor/js/monitor.js`),
+      fetch(`${baseUrl}/monitor/vendor/bootstrap/css/bootstrap.min.css`),
+      fetch(`${baseUrl}/monitor/vendor/bootstrap-icons/bootstrap-icons.min.css`),
+    ]);
 
   assert.equal(health.status, 200);
   assert.equal(fases.status, 200);
   assert.equal(missoes.status, 200);
+  assert.equal(monitor.status, 200);
+  assert.equal(pagina.status, 200);
+  assert.equal(css.status, 200);
+  assert.equal(javascript.status, 200);
+  assert.equal(bootstrap.status, 200);
+  assert.equal(icons.status, 200);
+
+  const monitorHtml = await pagina.text();
+  assert.match(monitorHtml, /id="filterAll"/);
+  assert.match(monitorHtml, /id="filterOnline"/);
+  assert.match(monitorHtml, /id="brandLogo"/);
+  assert.doesNotMatch(monitorHtml, /id="offlineStudents"/);
+  assert.doesNotMatch(monitorHtml, /id="completedMissions"/);
+  assert.doesNotMatch(monitorHtml, /animate\.css/i);
+
+  const dadosMonitor = await monitor.json();
+  assert.equal(typeof dadosMonitor.resumo.alunos_cadastrados, 'number');
+  assert.equal(Array.isArray(dadosMonitor.alunos), true);
+  assert.equal(monitor.headers.get('cache-control'), 'no-store');
 });
 
 test('rotas protegidas sem Bearer token retornam 401 padronizado', async () => {

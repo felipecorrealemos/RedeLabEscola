@@ -1,4 +1,5 @@
 const { pool } = require('../config/database');
+const { notificarMonitor } = require('../services/monitorUpdates');
 
 function obterMe(req, res) {
   const { id_usuario, nome, email, id_personagem } = req.usuario;
@@ -57,6 +58,7 @@ async function reiniciarMeuJogo(req, res, next) {
       req.usuario.id_usuario,
     ]);
     await connection.commit();
+    notificarMonitor('progresso_reset', req.usuario.id_usuario);
     return res.json({
       success: true,
       id_usuario: req.usuario.id_usuario,

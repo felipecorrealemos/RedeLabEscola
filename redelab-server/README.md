@@ -4,6 +4,36 @@ API REST e presença WebSocket em Node.js para o RedeLab Escola. O catálogo de 
 
 REST e WebSocket compartilham um único processo e a mesma porta. Não há senha local, autenticação própria nem alterações na Unity.
 
+## Monitor de Turma
+
+Com a API em execução, acesse:
+
+```text
+http://localhost:3000/monitor
+```
+
+O painel usa HTML, CSS e JavaScript puros, com Bootstrap 5 e Bootstrap Icons instalados pelo npm e servidos localmente. Ele não depende de CDN ou internet externa para carregar a interface.
+
+O filtro da tabela começa em **Todos os alunos** e também oferece **Apenas online**. Os cards permanecem globais. No filtro online, entradas usam fade/zoom de 360 ms e saídas usam fade/zoom de 320 ms, implementados no CSS local sem Animate.css. O último aluno só é removido depois da animação; então aparece o estado “Nenhum aluno online”.
+
+`GET /api/monitor/alunos` monta uma visão agregada somente de leitura com nome, presença, `ultimo_acesso`, fase, progresso e missões. A presença vem da mesma instância `Presenca` alimentada pelo `/ws` autenticado do jogo. Como o banco não possui uma coluna de fase atual, o monitor considera a primeira fase ativa ainda incompleta; quando todas estão concluídas, mostra a última fase ativa. Fases e missões sem registros ativos não são inventadas.
+
+O navegador do monitor se conecta a `ws://HOST/ws/monitor` (ou `wss://` em HTTPS). Esse canal envia apenas `monitor_ready` e `monitor_update`, não recebe comandos, não entra na contagem de presença e não altera o protocolo `/ws` do jogo. Os eventos identificam `id_usuario` e usam os motivos `usuario_online`, `usuario_offline`, `cadastro`, `missao_concluida` e `progresso_reset`. Conclusões, exclusões de progresso e `DELETE /api/me/novo-jogo` publicam a notificação somente depois da gravação/commit. A página reconsulta a API agregada, atualiza apenas a área de dados — nunca recarrega a página — e usa o ID para animar a linha afetada. Eventos próximos são consolidados por um debounce curto de 120 ms. A reconexão usa atrasos de 1, 2, 5 e 10 segundos, limitados em 10 segundos.
+
+O espaço de marca do cabeçalho possui `#brandLogo` e o fallback Bootstrap atual. O caminho e os dois ajustes de classe para instalar o logo oficial estão documentados em `public/monitor/img/README.md`.
+
+### Segurança temporária do monitor
+
+Nesta primeira versão, conforme o requisito da sala de aula, `/monitor`, `GET /api/monitor/alunos` e `/ws/monitor` abrem sem login. Isso expõe nomes e progresso a quem puder alcançar o servidor, portanto restrinja a aplicação à rede confiável da escola até implementar a autorização administrativa.
+
+A próxima etapa de produção deve proteger **no servidor** tanto o endpoint REST quanto o handshake do canal do monitor:
+
+```text
+/monitor -> Auth0 -> Google -> validação do token no Node -> verificação de administrador -> painel autorizado
+```
+
+Uma lista de emails no JavaScript não é controle de acesso. A verificação administrativa deve usar identidade validada e uma política no backend. O `/ws` do jogo permanece inalterado, exigindo a mensagem inicial `auth` com Access Token válido.
+
 ## Requisitos
 
 - Node.js 18 ou superior e npm
@@ -204,6 +234,7 @@ Invoke-RestMethod `
 | GET | `/api/missoes` | Listar missões |
 | GET | `/api/missoes/fase/:id_fase` | Listar missões da fase |
 | GET | `/api/missoes/codigo/:codigo` | Buscar missão pelo código da Unity |
+| GET | `/api/monitor/alunos` | Visão agregada temporariamente pública do Monitor de Turma |
 
 ## Endpoints autenticados
 

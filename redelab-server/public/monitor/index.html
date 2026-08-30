@@ -1,0 +1,99 @@
+<!doctype html>
+<html lang="pt-BR">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <meta name="color-scheme" content="light">
+    <title>RedeLab Escola — Monitor de Turma</title>
+    <link rel="stylesheet" href="/monitor/vendor/bootstrap/css/bootstrap.min.css">
+    <link rel="stylesheet" href="/monitor/vendor/bootstrap-icons/bootstrap-icons.min.css">
+    <link rel="stylesheet" href="/monitor/css/monitor.css">
+    <script defer src="/monitor/vendor/bootstrap/js/bootstrap.bundle.min.js"></script>
+    <script defer src="/monitor/js/monitor.js"></script>
+  </head>
+  <body>
+    <main class="monitor-shell container-fluid">
+      <header class="monitor-header card border-0">
+        <div class="d-flex flex-wrap align-items-center justify-content-between gap-3">
+          <div class="brand-block d-flex align-items-center gap-3">
+            <div class="brand-icon" aria-hidden="true">
+              <!-- Logo futuro: defina src="/monitor/img/redelab-logo.svg" e remova d-none. -->
+              <img id="brandLogo" class="brand-logo d-none" alt="">
+              <i id="brandIconFallback" class="bi bi-diagram-3-fill"></i>
+            </div>
+            <div>
+              <div class="d-flex flex-wrap align-items-baseline gap-2">
+                <h1 class="brand-title mb-0">RedeLab Escola</h1>
+                <span class="brand-section">Monitor de Turma</span>
+              </div>
+              <p class="brand-subtitle mb-0">Acompanhamento de conexões e progresso em tempo real</p>
+            </div>
+          </div>
+
+          <div class="header-actions d-flex align-items-center gap-2">
+            <div id="realtimeStatus" class="realtime-status is-connecting" role="status" aria-live="polite">
+              <span class="status-dot" aria-hidden="true"></span>
+              <span><strong>Tempo real</strong> — <span id="realtimeText">Conectando</span></span>
+            </div>
+            <button id="fullscreenButton" type="button" class="btn btn-outline-primary fullscreen-button">
+              <i class="bi bi-arrows-fullscreen" aria-hidden="true"></i>
+              <span>Tela cheia</span>
+            </button>
+          </div>
+        </div>
+      </header>
+
+      <section class="summary-grid" aria-label="Resumo da turma">
+        <article class="summary-card card border-0">
+          <div class="summary-icon icon-students"><i class="bi bi-people-fill"></i></div>
+          <div><span>Alunos cadastrados</span><strong id="totalStudents">—</strong></div>
+        </article>
+        <article class="summary-card card border-0">
+          <div class="summary-icon icon-online"><i class="bi bi-wifi"></i></div>
+          <div><span>Online</span><strong id="onlineStudents">—</strong></div>
+        </article>
+      </section>
+
+      <section class="students-panel card border-0" aria-labelledby="studentsTitle">
+        <div class="panel-heading d-flex flex-wrap align-items-center justify-content-between gap-2">
+          <div>
+            <h2 id="studentsTitle" class="panel-title mb-0">Alunos</h2>
+            <p id="lastUpdate" class="last-update mb-0">Carregando dados da turma…</p>
+          </div>
+          <div class="table-controls d-flex flex-wrap align-items-center gap-2">
+            <div id="noOnlineNotice" class="no-online-notice d-none">
+              <i class="bi bi-info-circle" aria-hidden="true"></i> Nenhum aluno online
+            </div>
+            <div class="student-filter" role="group" aria-label="Filtrar alunos">
+              <input class="btn-check" type="radio" name="studentFilter" id="filterAll" value="all" checked>
+              <label class="btn" for="filterAll"><i class="bi bi-people" aria-hidden="true"></i> Todos os alunos</label>
+              <input class="btn-check" type="radio" name="studentFilter" id="filterOnline" value="online">
+              <label class="btn" for="filterOnline"><i class="bi bi-wifi" aria-hidden="true"></i> Apenas online</label>
+            </div>
+          </div>
+        </div>
+
+        <div id="interfaceState" class="interface-state" role="status" aria-live="polite">
+          <div class="spinner-border text-primary" aria-hidden="true"></div>
+          <span>Carregando alunos…</span>
+        </div>
+
+        <div id="tableContainer" class="table-responsive d-none">
+          <table class="table students-table align-middle mb-0">
+            <thead>
+              <tr>
+                <th scope="col">Status</th>
+                <th scope="col">Aluno</th>
+                <th scope="col">Fase atual</th>
+                <th scope="col">Progresso</th>
+                <th scope="col">Missões</th>
+                <th scope="col">Última atividade</th>
+              </tr>
+            </thead>
+            <tbody id="studentsBody"></tbody>
+          </table>
+        </div>
+      </section>
+    </main>
+  </body>
+</html>

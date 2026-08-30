@@ -184,6 +184,7 @@ public sealed class StageTransitionUI : MonoBehaviour
         transitionStarted = true;
         HasPresentationPriority = true;
         SetMissionUiPriority(true);
+        PrepareVehiclesForGameplayLock();
         LockGameplayAndHideOtherUi();
         StopAllCoroutines();
         StartCoroutine(CompleteAndLoadNextStage());
@@ -462,6 +463,15 @@ public sealed class StageTransitionUI : MonoBehaviour
             }
 
             candidate.enabled = false;
+        }
+    }
+
+    private static void PrepareVehiclesForGameplayLock()
+    {
+        EmpilhadeiraController[] forklifts = FindObjectsOfType<EmpilhadeiraController>(true);
+        foreach (EmpilhadeiraController forklift in forklifts)
+        {
+            forklift?.PrepareForStageCompletion();
         }
     }
 
