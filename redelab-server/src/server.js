@@ -3,8 +3,10 @@ require('dotenv').config({ quiet: true });
 const express = require('express');
 const cors = require('cors');
 const http = require('node:http');
+const https = require('node:https');
 const path = require('node:path');
 const { pool, testDatabaseConnection } = require('./config/database');
+const { carregarOpcoesHttps } = require('./config/https');
 const faseRoutes = require('./routes/faseRoutes');
 const missaoRoutes = require('./routes/missaoRoutes');
 const usuarioRoutes = require('./routes/usuarioRoutes');
@@ -128,20 +130,50 @@ function criarServidorHttp({
   aplicacao = app,
   presencaWebSocket = presenca,
   opcoesWebSocket,
+  opcoesHttps = carregarOpcoesHttps({
+    enabled: process.env.HTTPS_ENABLED,
+    keyPath: process.env.HTTPS_KEY_PATH,
+    certPath: process.env.HTTPS_CERT_PATH,
+    label: 'HTTPS da API',
+  }),
 } = {}) {
-  const server = http.createServer(aplicacao);
+  const httpsHabilitado = opcoesHttps !== null;
+  const server = httpsHabilitado
+    ? https.createServer(opcoesHttps, aplicacao)
+    : http.createServer(aplicacao);
   const websocket = criarServidorWebSocket({
     server,
     presenca: presencaWebSocket,
     ...opcoesWebSocket,
   });
-  return { server, websocket, presenca: presencaWebSocket };
+  return {
+    server,
+    websocket,
+    presenca: presencaWebSocket,
+    protocoloHttp: httpsHabilitado ? 'https' : 'http',
+    protocoloWebSocket: httpsHabilitado ? 'wss' : 'ws',
+  };
 }
 
 async function iniciarServidor() {
   if (!Number.isInteger(port) || port <= 0 || port > 65535) {
     console.error('PORT deve ser um número entre 1 e 65535.');
     process.exitCode = 1;
+    return;
+  }
+
+  let opcoesHttps;
+  try {
+    opcoesHttps = carregarOpcoesHttps({
+      enabled: process.env.HTTPS_ENABLED,
+      keyPath: process.env.HTTPS_KEY_PATH,
+      certPath: process.env.HTTPS_CERT_PATH,
+      label: 'HTTPS da API',
+    });
+  } catch (error) {
+    console.error(`Não foi possível configurar o HTTPS da API: ${detalheTecnico(error)}`);
+    process.exitCode = 1;
+    await pool.end();
     return;
   }
 
@@ -156,11 +188,21 @@ async function iniciarServidor() {
     return;
   }
 
-  const { server, websocket } = criarServidorHttp();
+  let servidorConfigurado;
+  try {
+    servidorConfigurado = criarServidorHttp({ opcoesHttps });
+  } catch (error) {
+    console.error(`Não foi possível criar o servidor da API: ${detalheTecnico(error)}`);
+    process.exitCode = 1;
+    await pool.end();
+    return;
+  }
+
+  const { server, websocket, protocoloHttp, protocoloWebSocket } = servidorConfigurado;
   server.listen(port, () => {
-    console.log(`API RedeLab Escola disponível em http://localhost:${port}`);
-    console.log(`WebSocket disponível em ws://localhost:${port}/ws`);
-    console.log(`Monitor disponível em http://localhost:${port}/monitor`);
+    console.log(`API RedeLab Escola disponível em ${protocoloHttp}://localhost:${port}`);
+    console.log(`WebSocket disponível em ${protocoloWebSocket}://localhost:${port}/ws`);
+    console.log(`Monitor disponível em ${protocoloHttp}://localhost:${port}/monitor`);
     console.log(`Rotas DEV/LEGACY: ${devRoutesHabilitadas ? 'habilitadas' : 'desabilitadas'}`);
   });
 

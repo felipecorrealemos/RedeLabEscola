@@ -50,7 +50,7 @@ function criarServidorWebSocket({
   maxPayload = MAX_PAYLOAD_BYTES,
 } = {}) {
   if (!server) {
-    throw new Error('Uma instância de servidor HTTP é obrigatória para o WebSocket.');
+    throw new Error('Uma instância de servidor HTTP ou HTTPS é obrigatória para o WebSocket.');
   }
 
   const estados = new WeakMap();

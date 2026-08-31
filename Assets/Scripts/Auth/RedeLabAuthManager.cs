@@ -12,6 +12,7 @@ namespace RedeLabEscola.Auth
         public const string Auth0ClientId = "Ai8Q8DjlvFJqmcwkcedu5Spdu7XGkrmd";
         public const string Auth0Audience = "https://api.redelab.local";
         public const string DefaultApiBaseUrl = "http://localhost:3000";
+        private const int PublishedApiPort = 3001;
 
         private static RedeLabAuthManager instance;
         private RedeLabApiClient apiClient;
@@ -60,7 +61,52 @@ namespace RedeLabEscola.Auth
 
             instance = this;
             DontDestroyOnLoad(gameObject);
-            ConfigureApiClient(DefaultApiBaseUrl);
+            ConfigureApiClient(ResolveRuntimeApiBaseUrl());
+        }
+
+        public static string ResolveApiBaseUrl(string pageAbsoluteUrl)
+        {
+            if (!Uri.TryCreate(pageAbsoluteUrl, UriKind.Absolute, out Uri pageUri))
+            {
+                return DefaultApiBaseUrl;
+            }
+
+            bool isHttp = string.Equals(
+                pageUri.Scheme,
+                Uri.UriSchemeHttp,
+                StringComparison.OrdinalIgnoreCase);
+            bool isHttps = string.Equals(
+                pageUri.Scheme,
+                Uri.UriSchemeHttps,
+                StringComparison.OrdinalIgnoreCase);
+            if ((!isHttp && !isHttps) || pageUri.IsLoopback)
+            {
+                return DefaultApiBaseUrl;
+            }
+
+            try
+            {
+                UriBuilder apiUri = new UriBuilder(pageUri.Scheme, pageUri.Host, PublishedApiPort)
+                {
+                    Path = string.Empty,
+                    Query = string.Empty,
+                    Fragment = string.Empty
+                };
+                return apiUri.Uri.GetLeftPart(UriPartial.Authority);
+            }
+            catch (UriFormatException)
+            {
+                return DefaultApiBaseUrl;
+            }
+        }
+
+        private static string ResolveRuntimeApiBaseUrl()
+        {
+#if UNITY_WEBGL && !UNITY_EDITOR
+            return ResolveApiBaseUrl(Application.absoluteURL);
+#else
+            return DefaultApiBaseUrl;
+#endif
         }
 
         private void Start()

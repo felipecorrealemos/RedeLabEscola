@@ -60,27 +60,69 @@ DB_USER=root
 DB_PASSWORD=sua_senha
 DB_NAME=redelab_escola
 PORT=3000
-CORS_ORIGIN=*
+HTTPS_ENABLED=false
+HTTPS_KEY_PATH=
+HTTPS_CERT_PATH=
+CORS_ORIGIN=http://localhost:8081
 
 AUTH0_DOMAIN=seu-tenant.REGIAO.auth0.com
 AUTH0_AUDIENCE=https://identificador-da-api-redelab
 
-ENABLE_DEV_ROUTES=true
+ENABLE_DEV_ROUTES=false
+
+UNITY_WEBGL_PORT=8081
+UNITY_WEBGL_HOST=127.0.0.1
+UNITY_WEBGL_HTTPS_ENABLED=false
+UNITY_WEBGL_HTTPS_KEY_PATH=
+UNITY_WEBGL_HTTPS_CERT_PATH=
+UNITY_WEBGL_BUILD_DIR=
+API_PUBLIC_URL=http://localhost:3000
+WS_PUBLIC_URL=ws://localhost:3000
 ```
 
 - `AUTH0_DOMAIN`: domínio do tenant, sem caminhos. A API monta o issuer HTTPS e valida o claim `iss`.
 - `AUTH0_AUDIENCE`: Identifier da API cadastrada no Auth0; deve coincidir com o claim `aud`.
 - `ENABLE_DEV_ROUTES`: habilita rotas antigas que aceitam `id_usuario`. Use `true` somente no computador de desenvolvimento e `false` em qualquer servidor publicado.
 - `CORS_ORIGIN`: aceita `*` ou uma lista separada por vírgulas. Restrinja à origem do WebGL quando ela existir.
+- `HTTPS_ENABLED`: quando `true`, a API lê `HTTPS_KEY_PATH` e `HTTPS_CERT_PATH` e publica REST e WebSocket no mesmo servidor TLS. Arquivo ausente encerra a inicialização; não há fallback para HTTP.
+- `UNITY_WEBGL_*`: configura porta, interface, TLS e caminho da build servida por `npm run unity-webgl-auth`.
+- `API_PUBLIC_URL` e `WS_PUBLIC_URL`: origens inseridas na CSP da página WebGL. Use respectivamente `https://...` e `wss://...` quando o servidor WebGL estiver em HTTPS.
 
 A aplicação falha ao iniciar se `AUTH0_DOMAIN` ou `AUTH0_AUDIENCE` estiverem vazios. Isso evita publicar uma API aparentemente protegida sem validação configurada.
 
+### HTTPS opcional sem proxy
+
+Em desenvolvimento, os defaults continuam sendo `http://localhost:3000`, `ws://localhost:3000/ws` e WebGL em `http://127.0.0.1:8081`.
+
+Para TLS direto no Node, configure a API e o servidor WebGL separadamente. Os dois podem apontar para o mesmo par de certificado/chave, desde que o certificado seja válido para o host usado pelos navegadores:
+
+```dotenv
+PORT=3001
+HTTPS_ENABLED=true
+HTTPS_KEY_PATH=/etc/redelab/ssl/redelab.key
+HTTPS_CERT_PATH=/etc/redelab/ssl/redelab.crt
+
+UNITY_WEBGL_PORT=8081
+UNITY_WEBGL_HOST=0.0.0.0
+UNITY_WEBGL_HTTPS_ENABLED=true
+UNITY_WEBGL_HTTPS_KEY_PATH=/etc/redelab/ssl/redelab.key
+UNITY_WEBGL_HTTPS_CERT_PATH=/etc/redelab/ssl/redelab.crt
+UNITY_WEBGL_BUILD_DIR=/var/www/redelab-webgl
+
+API_PUBLIC_URL=https://HOST:3001
+WS_PUBLIC_URL=wss://HOST:3001
+CORS_ORIGIN=https://HOST:8081
+```
+
+`UNITY_WEBGL_BUILD_DIR` é opcional no layout normal do repositório. Quando backend e build forem copiados para diretórios independentes no servidor, defina-o com o caminho absoluto que contém `index.html`.
+
 ## Execução e testes
 
-```powershell
+```bash
 npm start
 npm run dev
 npm test
+npm run unity-webgl-auth
 ```
 
 O teste automatizado usa o MySQL configurado no `.env`, verifica as rotas públicas, confirma `401` para rotas protegidas sem token, testa o protocolo WebSocket, timeout, múltiplas abas, heartbeat e comprova que as rotas DEV aparecem somente quando habilitadas. Um token Auth0 real não é fabricado pelos testes.
@@ -299,8 +341,8 @@ Consulte a documentação oficial sobre [`express-oauth2-jwt-bearer`](https://gi
 
 1. Instalar uma versão suportada do Node.js e executar `npm ci --omit=dev` dentro de `redelab-server`. O `ws` será instalado pelo `package-lock.json`.
 2. Copiar o código sem `node_modules` e sem o `.env` local.
-3. Criar o `.env` do servidor com credenciais próprias do MySQL, `AUTH0_DOMAIN`, `AUTH0_AUDIENCE`, `ENABLE_DEV_ROUTES=false` e `CORS_ORIGIN` restrito ao WebGL publicado.
-4. Garantir acesso HTTPS externo à API e manter o MySQL protegido da internet pública. Uma página WebGL em HTTPS deve usar `wss://`; navegadores bloqueiam `ws://` como conteúdo misto.
+3. Criar o `.env` do servidor com credenciais próprias do MySQL, configurações HTTPS, `AUTH0_DOMAIN`, `AUTH0_AUDIENCE`, `ENABLE_DEV_ROUTES=false`, `CORS_ORIGIN` restrito e o caminho real de `UNITY_WEBGL_BUILD_DIR`.
+4. Garantir acesso HTTPS à API e à WebGL e manter o MySQL protegido da internet pública. Uma página WebGL em HTTPS deve usar `wss://`; navegadores bloqueiam `ws://` como conteúdo misto.
 5. Iniciar a API com um gerenciador de processos/serviço e conferir `/api/health`.
 6. Reproduzir no Auth0 as URLs reais de callback, logout e origem do WebGL.
 7. Liberar no firewall somente a porta pública usada pelo HTTP/HTTPS. REST e WebSocket usam o mesmo processo e a mesma porta; não é necessária uma segunda porta para `/ws`.
