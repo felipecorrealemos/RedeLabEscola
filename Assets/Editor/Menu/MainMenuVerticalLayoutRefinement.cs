@@ -6,7 +6,7 @@ using UnityEngine.UI;
 
 public static class MainMenuVerticalLayoutRefinement
 {
-    private const string ScenePath = "Assets/Scenes/MainMenu.unity";
+    private const string ScenePath = SceneNames.MainMenuPath;
     private const string RoundedTexturePath = "Assets/Materials/Menu/Menu_UI_Rounded.asset";
 
     [MenuItem("Tools/RedeLabEscola/Refine Main Menu Vertical Layout")]

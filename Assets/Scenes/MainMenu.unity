@@ -1168,8 +1168,8 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: f829a91a21104780a2c8b65ac504b060, type: 3}
   m_Name: 
   m_EditorClassIdentifier: 
-  gameplaySceneName: SampleScene
-  factorySceneName: Stage2_Factory
+  gameplaySceneName: O_escritorio
+  factorySceneName: A_fabrica
   characterSelectionSceneName: CharacterSelection
   sceneTransition: {fileID: 277405388}
   quitConfirmationDialog: {fileID: 674352930}

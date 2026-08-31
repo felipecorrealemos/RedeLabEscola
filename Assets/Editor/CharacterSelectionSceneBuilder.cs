@@ -11,9 +11,9 @@ using UnityEngine.UI;
 
 public static class CharacterSelectionSceneBuilder
 {
-    private const string ScenePath = "Assets/Scenes/CharacterSelection.unity";
-    private const string MainMenuScenePath = "Assets/Scenes/MainMenu.unity";
-    private const string GameplayScenePath = "Assets/Scenes/SampleScene.unity";
+    private const string ScenePath = SceneNames.CharacterSelectionPath;
+    private const string MainMenuScenePath = SceneNames.MainMenuPath;
+    private const string GameplayScenePath = SceneNames.OfficePath;
     private const string AlunoPrefabPath = "Assets/Prefabs/Personagens/Players/Player Aluno.prefab";
     private const string AlunaPrefabPath = "Assets/Prefabs/Personagens/Players/Player Aluna.prefab";
     private const string MaterialsFolder = "Assets/Materials/CharacterSelection";
@@ -26,7 +26,7 @@ public static class CharacterSelectionSceneBuilder
         EnsureFolder("Assets/Materials", "CharacterSelection");
 
         Scene scene = EditorSceneManager.NewScene(NewSceneSetup.EmptyScene, NewSceneMode.Single);
-        scene.name = "CharacterSelection";
+        scene.name = SceneNames.CharacterSelection;
 
         Material floorMaterial = GetOrCreateMaterial("Selection_Floor", new Color(0.44f, 0.52f, 0.48f));
         Material wallMaterial = GetOrCreateMaterial("Selection_Backdrop", new Color(0.70f, 0.78f, 0.80f));
@@ -461,13 +461,13 @@ public static class CharacterSelectionSceneBuilder
             SerializedProperty selectionScene = serializedController.FindProperty("characterSelectionSceneName");
             if (selectionScene != null)
             {
-                selectionScene.stringValue = "CharacterSelection";
+                selectionScene.stringValue = SceneNames.CharacterSelection;
             }
 
             SerializedProperty gameplayScene = serializedController.FindProperty("gameplaySceneName");
             if (gameplayScene != null)
             {
-                gameplayScene.stringValue = "SampleScene";
+                gameplayScene.stringValue = SceneNames.Office;
             }
 
             serializedController.ApplyModifiedPropertiesWithoutUndo();
@@ -496,12 +496,18 @@ public static class CharacterSelectionSceneBuilder
         {
             new EditorBuildSettingsScene(MainMenuScenePath, true),
             new EditorBuildSettingsScene(ScenePath, true),
-            new EditorBuildSettingsScene(GameplayScenePath, true)
+            new EditorBuildSettingsScene(GameplayScenePath, true),
+            new EditorBuildSettingsScene(SceneNames.FactoryPath, true),
+            new EditorBuildSettingsScene(SceneNames.ProviderPath, true)
         };
 
         foreach (EditorBuildSettingsScene scene in EditorBuildSettings.scenes)
         {
-            if (scene.path == MainMenuScenePath || scene.path == ScenePath || scene.path == GameplayScenePath)
+            if (scene.path == MainMenuScenePath
+                || scene.path == ScenePath
+                || scene.path == GameplayScenePath
+                || scene.path == SceneNames.FactoryPath
+                || scene.path == SceneNames.ProviderPath)
             {
                 continue;
             }

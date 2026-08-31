@@ -80,6 +80,7 @@ public class ComputerInteractable : MonoBehaviour
     private RouterInteractable selectedWiFiRouter;
     private NetworkJackConnectionPoint connectedJack;
     private DeviceDropZone currentDropZone;
+    private ComputerWorkstation currentWorkstation;
     private string assignedIp;
     private bool isOpen;
     private bool showingTerminalPanel;
@@ -91,7 +92,7 @@ public class ComputerInteractable : MonoBehaviour
     private string lastFactorySystemRowsSignature;
     private InteractionPromptPresenter promptPresenter;
 
-    private bool UsesFactoryTerminal => gameObject.scene.name == "Stage2_Factory";
+    private bool UsesFactoryTerminal => gameObject.scene.name == SceneNames.Factory;
 
     public bool IsOpen => isOpen;
     public string AssignedIp => assignedIp;
@@ -230,7 +231,12 @@ public class ComputerInteractable : MonoBehaviour
 
     public void HandlePlaced(DeviceDropZone dropZone)
     {
+        if (currentWorkstation != null && currentWorkstation != dropZone?.ComputerWorkstation)
+        {
+            currentWorkstation.SetPowered(false);
+        }
         currentDropZone = dropZone;
+        currentWorkstation = dropZone != null ? dropZone.ComputerWorkstation : null;
         SetRouter(null);
         EnsureNetworkJackPoints();
         EnsureNetworkDoorDevices();
@@ -243,6 +249,10 @@ public class ComputerInteractable : MonoBehaviour
 
     public void HandlePickedUp()
     {
+        if (currentWorkstation != null)
+        {
+            currentWorkstation.SetPowered(false);
+        }
         bool keepWiFiConnectionWhileCarried = HasWiFiInterface && connectedByWiFi;
         if (!keepWiFiConnectionWhileCarried)
         {
@@ -252,6 +262,7 @@ public class ComputerInteractable : MonoBehaviour
         }
 
         currentDropZone = null;
+        currentWorkstation = null;
         SetNetworkJack(null);
         SetPromptVisible(false);
         Close(null);
@@ -898,6 +909,10 @@ public class ComputerInteractable : MonoBehaviour
 
     private void EnsureMonitorScreen()
     {
+        if (currentWorkstation != null)
+        {
+            return;
+        }
         if (stationaryNetworkDevice || IsPrinterDevice())
         {
             monitorScreenRenderer = null;
@@ -948,6 +963,12 @@ public class ComputerInteractable : MonoBehaviour
     {
         if (stationaryNetworkDevice || IsPrinterDevice())
         {
+            return;
+        }
+
+        if (currentWorkstation != null)
+        {
+            currentWorkstation.SetPowered(IsNetworkOperational, screenOnMaterial);
             return;
         }
 

@@ -7,9 +7,9 @@ using UnityEngine.UI;
 
 public static class FinalPolishSceneSetup
 {
-    private const string MainMenuPath = "Assets/Scenes/MainMenu.unity";
-    private const string OfficePath = "Assets/Scenes/SampleScene.unity";
-    private const string FactoryPath = "Assets/Scenes/Stage2/Stage2_Factory.unity";
+    private const string MainMenuPath = SceneNames.MainMenuPath;
+    private const string OfficePath = SceneNames.OfficePath;
+    private const string FactoryPath = SceneNames.FactoryPath;
     private const string GoogleSpritePath = "Assets/Imagens/icone google.png";
 
     [MenuItem("Tools/RedeLabEscola/Final Polish/Apply Scene Setup")]

@@ -1,0 +1,216 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!1001 &8475090432951471343
+PrefabInstance:
+  m_ObjectHideFlags: 0
+  serializedVersion: 2
+  m_Modification:
+    serializedVersion: 3
+    m_TransformParent: {fileID: 0}
+    m_Modifications:
+    - target: {fileID: -8679921383154817045, guid: bb1905a33137acb419c3b2e8d0399900, type: 3}
+      propertyPath: m_LocalScale.x
+      value: 0.4
+      objectReference: {fileID: 0}
+    - target: {fileID: -8679921383154817045, guid: bb1905a33137acb419c3b2e8d0399900, type: 3}
+      propertyPath: m_LocalScale.y
+      value: 0.4
+      objectReference: {fileID: 0}
+    - target: {fileID: -8679921383154817045, guid: bb1905a33137acb419c3b2e8d0399900, type: 3}
+      propertyPath: m_LocalScale.z
+      value: 0.4
+      objectReference: {fileID: 0}
+    - target: {fileID: -8679921383154817045, guid: bb1905a33137acb419c3b2e8d0399900, type: 3}
+      propertyPath: m_LocalPosition.x
+      value: 1.733
+      objectReference: {fileID: 0}
+    - target: {fileID: -8679921383154817045, guid: bb1905a33137acb419c3b2e8d0399900, type: 3}
+      propertyPath: m_LocalPosition.y
+      value: 1.073
+      objectReference: {fileID: 0}
+    - target: {fileID: -8679921383154817045, guid: bb1905a33137acb419c3b2e8d0399900, type: 3}
+      propertyPath: m_LocalPosition.z
+      value: 2.9799995
+      objectReference: {fileID: 0}
+    - target: {fileID: -8679921383154817045, guid: bb1905a33137acb419c3b2e8d0399900, type: 3}
+      propertyPath: m_LocalRotation.w
+      value: 0
+      objectReference: {fileID: 0}
+    - target: {fileID: -8679921383154817045, guid: bb1905a33137acb419c3b2e8d0399900, type: 3}
+      propertyPath: m_LocalRotation.x
+      value: -0
+      objectReference: {fileID: 0}
+    - target: {fileID: -8679921383154817045, guid: bb1905a33137acb419c3b2e8d0399900, type: 3}
+      propertyPath: m_LocalRotation.y
+      value: 1
+      objectReference: {fileID: 0}
+    - target: {fileID: -8679921383154817045, guid: bb1905a33137acb419c3b2e8d0399900, type: 3}
+      propertyPath: m_LocalRotation.z
+      value: -0
+      objectReference: {fileID: 0}
+    - target: {fileID: -8679921383154817045, guid: bb1905a33137acb419c3b2e8d0399900, type: 3}
+      propertyPath: m_LocalEulerAnglesHint.x
+      value: 0
+      objectReference: {fileID: 0}
+    - target: {fileID: -8679921383154817045, guid: bb1905a33137acb419c3b2e8d0399900, type: 3}
+      propertyPath: m_LocalEulerAnglesHint.y
+      value: 180
+      objectReference: {fileID: 0}
+    - target: {fileID: -8679921383154817045, guid: bb1905a33137acb419c3b2e8d0399900, type: 3}
+      propertyPath: m_LocalEulerAnglesHint.z
+      value: 0
+      objectReference: {fileID: 0}
+    - target: {fileID: -8679921383154817045, guid: bb1905a33137acb419c3b2e8d0399900, type: 3}
+      propertyPath: m_ConstrainProportionsScale
+      value: 1
+      objectReference: {fileID: 0}
+    - target: {fileID: 919132149155446097, guid: bb1905a33137acb419c3b2e8d0399900, type: 3}
+      propertyPath: m_Name
+      value: Roteador
+      objectReference: {fileID: 0}
+    m_RemovedComponents: []
+    m_RemovedGameObjects: []
+    m_AddedGameObjects: []
+    m_AddedComponents:
+    - targetCorrespondingSourceObject: {fileID: 919132149155446097, guid: bb1905a33137acb419c3b2e8d0399900, type: 3}
+      insertIndex: -1
+      addedObject: {fileID: 5272971388168720326}
+    - targetCorrespondingSourceObject: {fileID: 919132149155446097, guid: bb1905a33137acb419c3b2e8d0399900, type: 3}
+      insertIndex: -1
+      addedObject: {fileID: 3756943247341703583}
+    - targetCorrespondingSourceObject: {fileID: 919132149155446097, guid: bb1905a33137acb419c3b2e8d0399900, type: 3}
+      insertIndex: -1
+      addedObject: {fileID: 5784914941570623181}
+    - targetCorrespondingSourceObject: {fileID: 7929496950298281910, guid: bb1905a33137acb419c3b2e8d0399900, type: 3}
+      insertIndex: -1
+      addedObject: {fileID: 1998105268184083929}
+  m_SourcePrefab: {fileID: 100100000, guid: bb1905a33137acb419c3b2e8d0399900, type: 3}
+--- !u!1 &1987963951130921817 stripped
+GameObject:
+  m_CorrespondingSourceObject: {fileID: 7929496950298281910, guid: bb1905a33137acb419c3b2e8d0399900, type: 3}
+  m_PrefabInstance: {fileID: 8475090432951471343}
+  m_PrefabAsset: {fileID: 0}
+--- !u!65 &1998105268184083929
+BoxCollider:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 1987963951130921817}
+  m_Material: {fileID: 0}
+  m_IncludeLayers:
+    serializedVersion: 2
+    m_Bits: 0
+  m_ExcludeLayers:
+    serializedVersion: 2
+    m_Bits: 0
+  m_LayerOverridePriority: 0
+  m_IsTrigger: 0
+  m_ProvidesContacts: 0
+  m_Enabled: 1
+  serializedVersion: 3
+  m_Size: {x: 0.027999997, y: 0.017599996, z: 0.005799998}
+  m_Center: {x: 0, y: 2.7711163e-17, z: 0.0038999985}
+--- !u!1 &8745137295653302718 stripped
+GameObject:
+  m_CorrespondingSourceObject: {fileID: 919132149155446097, guid: bb1905a33137acb419c3b2e8d0399900, type: 3}
+  m_PrefabInstance: {fileID: 8475090432951471343}
+  m_PrefabAsset: {fileID: 0}
+--- !u!114 &5272971388168720326
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 8745137295653302718}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 970c8db1b917442f97db8f4b3a285fda, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: 
+  allowConfigurationAccess: 1
+  allowMovement: 0
+  initialWiFiEnabled: 0
+  dhcpEnabled: 1
+  wifiRange: 5
+  wifiDetectionInterval: 1
+  wifiDeviceLayerMask:
+    serializedVersion: 2
+    m_Bits: 4294967295
+  promptText: F configurar roteador
+  networkScope: {fileID: 0}
+  networkPrefix: 192.168.0.
+  routerAddress: 1
+  firstDeviceAddress: 2
+  availableAddressCount: 4
+  dhcpDiscoveryInterval: 1
+  logDhcpEvents: 0
+  panelAnchorMin: {x: 0.52, y: 0.14}
+  panelAnchorMax: {x: 0.96, y: 0.86}
+  panelOpacity: 0.88
+  scrollSensitivity: 40
+  titleFontSize: 24
+  hintFontSize: 16
+  rangeFontSize: 14
+  rowFontSize: 16
+  statusFontSize: 14
+  rowHeight: 38
+  statusColumnWidth: 86
+  rowHorizontalPadding: 10
+  greenLightBlinkFrequency: 4
+  canvas: {fileID: 0}
+  panelObject: {fileID: 0}
+  promptObject: {fileID: 0}
+  promptLabel: {fileID: 0}
+  titleLabel: {fileID: 0}
+  closeHintLabel: {fileID: 0}
+  rangeLabel: {fileID: 0}
+  ipScrollRect: {fileID: 0}
+--- !u!114 &3756943247341703583
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 8745137295653302718}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 4aa34b4e5f2743f4ab2a09b098f7c7d1, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: 
+  routerInteractable: {fileID: 5272971388168720326}
+  groundLayerMask:
+    serializedVersion: 2
+    m_Bits: 4294967295
+  groundOffset: 0.02
+  groundRaycastHeight: 3
+  groundRaycastDistance: 40
+  showRangeAtStart: 0
+  ringColor: {r: 0.08, g: 0.85, b: 1, a: 0.72}
+  outerRingWidth: 0.035
+  innerRingWidth: 0.018
+  outerDashCount: 32
+  circleResolution: 48
+  innerRingCount: 3
+  animateRings: 1
+  animationSpeed: 0.25
+  animationUpdateInterval: 0.08
+--- !u!114 &5784914941570623181
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 8745137295653302718}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: f515645f97674f54c9c5a3d3994d9de5, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: 
+  deviceName: Roteador
+  settleSpeed: 10
+  interactionIndicatorSize: {x: 1.4, y: 1.4}
+  interactionColor: {r: 1, g: 0.85, b: 0.15, a: 0.45}
+  interactionIndicatorHeight: 0.03
+  interactionPulseAmount: 0.12
+  interactionPulseSpeed: 5

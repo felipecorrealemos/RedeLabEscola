@@ -6,7 +6,7 @@ using UnityEngine.UI;
 
 public static class Stage2ScrapCraneSceneSetup
 {
-    private const string ScenePath = "Assets/Scenes/Stage2/Stage2_Factory.unity";
+    private const string ScenePath = SceneNames.FactoryPath;
     private const string FakeShadowMaterialPath = "Assets/Materials/Player_FakeShadow.mat";
     private const string CraneIconSpritePath = "Assets/Imagens/Garra/imagem garra.png";
     private static readonly Vector3 DefaultCameraTargetLocalPosition = new Vector3(1.77f, -14.4f, 1.8f);
@@ -26,7 +26,7 @@ public static class Stage2ScrapCraneSceneSetup
         GameObject areaObject = GameObject.Find("AreaGarra");
         if (areaObject == null)
         {
-            Debug.LogError("AreaGarra not found in Stage2_Factory.");
+            Debug.LogError("AreaGarra not found in A_fabrica.");
             return;
         }
 

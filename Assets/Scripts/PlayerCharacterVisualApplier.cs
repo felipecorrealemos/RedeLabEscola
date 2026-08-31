@@ -10,7 +10,7 @@ public class PlayerCharacterVisualApplier : MonoBehaviour
 
     private void Awake()
     {
-        if (SceneManager.GetActiveScene().name == "CharacterSelection")
+        if (SceneManager.GetActiveScene().name == SceneNames.CharacterSelection)
         {
             return;
         }

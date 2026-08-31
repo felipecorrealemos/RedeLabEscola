@@ -13,8 +13,8 @@ MonoBehaviour:
   m_Name: RedeLabAudioSettings
   m_EditorClassIdentifier: 
   mainMenuScene: MainMenu
-  stage01Scene: SampleScene
-  stage02Scene: Stage2_Factory
+  stage01Scene: O_escritorio
+  stage02Scene: A_fabrica
   mainMenuMusic: {fileID: 8300000, guid: bd33fe18a227c824398a94f07d171964, type: 3}
   stage01Music: {fileID: 8300000, guid: 8ac76bf4eb053484aa8fa03b59312b81, type: 3}
   stage02Music: {fileID: 8300000, guid: 3d49f47a7f4f16447b1f5287aad1c35d, type: 3}

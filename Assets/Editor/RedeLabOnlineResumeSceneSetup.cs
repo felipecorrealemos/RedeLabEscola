@@ -9,9 +9,9 @@ using UnityEngine.UI;
 
 public static class RedeLabOnlineResumeSceneSetup
 {
-    private const string MainMenuPath = "Assets/Scenes/MainMenu.unity";
-    private const string OfficePath = "Assets/Scenes/SampleScene.unity";
-    private const string FactoryPath = "Assets/Scenes/Stage2/Stage2_Factory.unity";
+    private const string MainMenuPath = SceneNames.MainMenuPath;
+    private const string OfficePath = SceneNames.OfficePath;
+    private const string FactoryPath = SceneNames.FactoryPath;
 
     [MenuItem("Tools/RedeLabEscola/Online/Setup New Game And Resume Scenes")]
     public static void SetupAll()

@@ -5,7 +5,7 @@ using UnityEngine.UI;
 
 public static class Stage2ForkliftUiSetup
 {
-    private const string ScenePath = "Assets/Scenes/Stage2/Stage2_Factory.unity";
+    private const string ScenePath = SceneNames.FactoryPath;
     private const string ForkliftIconSpritePath = "Assets/Imagens/empilhadeira/imagem empilhadeira.png";
 
     [MenuItem("Tools/RedeLabEscola/Stage2/Setup Forklift UI")]
@@ -19,7 +19,7 @@ public static class Stage2ForkliftUiSetup
         EmpilhadeiraController[] forklifts = Object.FindObjectsOfType<EmpilhadeiraController>(true);
         if (forklifts.Length == 0)
         {
-            Debug.LogWarning("No EmpilhadeiraController found in Stage2_Factory.");
+            Debug.LogWarning("No EmpilhadeiraController found in A_fabrica.");
             return;
         }
 

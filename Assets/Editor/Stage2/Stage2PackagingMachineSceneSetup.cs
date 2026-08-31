@@ -5,7 +5,7 @@ using UnityEngine.SceneManagement;
 
 public static class Stage2PackagingMachineSceneSetup
 {
-    private const string ScenePath = "Assets/Scenes/Stage2/Stage2_Factory.unity";
+    private const string ScenePath = SceneNames.FactoryPath;
     private const string MachineRootName = "PackagingMachine_Boxes";
     private const string BoxPrefabPath = "Assets/Modelos 3D/Stage2_Factory/Prefabs/IndustrialProps/Stage2_LargeBox_Static.prefab";
 

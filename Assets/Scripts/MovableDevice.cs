@@ -239,6 +239,11 @@ public class MovableDevice : MonoBehaviour
 
     public bool IsComputerDevice()
     {
+        if (GetComponent<ComputerCabinet>() != null)
+        {
+            return true;
+        }
+
         string lowerDeviceName = deviceName.ToLowerInvariant();
         string lowerObjectName = name.ToLowerInvariant();
         return lowerDeviceName.Contains("computer")
@@ -255,29 +260,7 @@ public class MovableDevice : MonoBehaviour
 
     public bool IsComputerCabinetDevice()
     {
-        if (HasChildNamed(transform, "Computer_Base"))
-        {
-            return true;
-        }
-
-        string lowerDeviceName = deviceName.ToLowerInvariant();
-        string lowerObjectName = name.ToLowerInvariant();
-        bool isPrinter = lowerDeviceName.Contains("printer")
-            || lowerDeviceName.Contains("impressora")
-            || lowerObjectName.Contains("printer")
-            || lowerObjectName.Contains("impressora");
-
-        if (isPrinter)
-        {
-            return false;
-        }
-
-        return lowerDeviceName.Contains("computer")
-            || lowerDeviceName.Contains("computador")
-            || lowerDeviceName.Contains("gabinete")
-            || lowerObjectName.Contains("computer")
-            || lowerObjectName.Contains("computador")
-            || lowerObjectName.Contains("gabinete");
+        return GetComponent<ComputerCabinet>() != null;
     }
 
     public bool IsPrinterDevice()
@@ -298,24 +281,6 @@ public class MovableDevice : MonoBehaviour
             || lowerDeviceName.Contains("roteador")
             || lowerObjectName.Contains("router")
             || lowerObjectName.Contains("roteador");
-    }
-
-    private bool HasChildNamed(Transform root, string childName)
-    {
-        if (root == null || string.IsNullOrWhiteSpace(childName))
-        {
-            return false;
-        }
-
-        foreach (Transform child in root.GetComponentsInChildren<Transform>(true))
-        {
-            if (child != null && string.Equals(child.name, childName, System.StringComparison.OrdinalIgnoreCase))
-            {
-                return true;
-            }
-        }
-
-        return false;
     }
 
     private void EnsureInteractionIndicator()

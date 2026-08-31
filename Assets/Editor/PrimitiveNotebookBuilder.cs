@@ -9,7 +9,7 @@ public static class PrimitiveNotebookBuilder
     private const string PrefabFolder = "Assets/Prefabs/Office";
     private const string MaterialFolder = "Assets/Prefabs/materiais";
     private const string PrefabPath = PrefabFolder + "/Notebook.prefab";
-    private const string ScenePath = "Assets/Scenes/SampleScene.unity";
+    private const string ScenePath = SceneNames.OfficePath;
     private const string NotebookInstanceName = "Notebook_Sala_3";
 
     [MenuItem("Tools/RedeLabEscola/Prefabs/Create Primitive Notebook")]
@@ -48,7 +48,7 @@ public static class PrimitiveNotebookBuilder
         {
             if (!canOpenScene)
             {
-                Debug.Log("Primitive notebook prefab created. Open SampleScene or use Tools/RedeLabEscola/Scene/Add Notebook To Room 3 to place it.");
+                Debug.Log("Primitive notebook prefab created. Open O_escritorio or use Tools/RedeLabEscola/Scene/Add Notebook To Room 3 to place it.");
                 return false;
             }
 

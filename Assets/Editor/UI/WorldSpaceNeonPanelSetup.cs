@@ -8,7 +8,7 @@ using UnityEngine.UI;
 public static class WorldSpaceNeonPanelSetup
 {
     private const string MenuPath = "Tools/RedeLab/Create Control Room Router Neon Panel";
-    private const string Stage2ScenePath = "Assets/Scenes/Stage2/Stage2_Factory.unity";
+    private const string Stage2ScenePath = SceneNames.FactoryPath;
     private const string FrameSpritePath = "Assets/Imagens/Molduras/moldura3.png";
     private const string RootName = "RouterWorldStatusAnchor";
     private const string LegacyRootName = "WorldPanel_Test";

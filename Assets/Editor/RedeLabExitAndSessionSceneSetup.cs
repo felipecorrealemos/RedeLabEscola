@@ -13,8 +13,9 @@ public static class RedeLabExitAndSessionSceneSetup
     private const string PrefabPath = PrefabDirectory + "/GameplayExitUI.prefab";
     private static readonly string[] GameplayScenes =
     {
-        "Assets/Scenes/SampleScene.unity",
-        "Assets/Scenes/Stage2/Stage2_Factory.unity"
+        SceneNames.OfficePath,
+        SceneNames.FactoryPath,
+        SceneNames.ProviderPath
     };
 
     [MenuItem("Tools/RedeLabEscola/Online/Setup Exit And Session UI")]
@@ -106,7 +107,7 @@ public static class RedeLabExitAndSessionSceneSetup
 
     private static void InstallMainMenuFallback()
     {
-        Scene scene = EditorSceneManager.OpenScene("Assets/Scenes/MainMenu.unity", OpenSceneMode.Single);
+        Scene scene = EditorSceneManager.OpenScene(SceneNames.MainMenuPath, OpenSceneMode.Single);
         MainMenuController controller = Object.FindObjectOfType<MainMenuController>(true);
         Canvas canvas = Object.FindObjectOfType<Canvas>(true);
         if (controller == null || canvas == null) throw new System.InvalidOperationException("MainMenu sem controller/canvas.");

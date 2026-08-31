@@ -11,6 +11,7 @@ public class DeviceDropZone : MonoBehaviour
     [SerializeField] private string placementTaskId;
     [SerializeField] private bool acceptsAnyDevice = true;
     [SerializeField] private string acceptedDeviceName = "Device";
+    [SerializeField] private ComputerWorkstation computerWorkstation;
     [SerializeField] private Vector2 indicatorSize = new Vector2(1f, 1f);
     [SerializeField] private Color validColor = new Color(0.1f, 0.9f, 0.35f, 0.35f);
     [SerializeField] private Color occupiedColor = new Color(0.25f, 0.5f, 1f, 0.22f);
@@ -34,6 +35,7 @@ public class DeviceDropZone : MonoBehaviour
     public int MissionNumber => missionNumber > 0 ? missionNumber : InferMissionNumber();
     public string PlacementTaskId => !string.IsNullOrWhiteSpace(placementTaskId) ? placementTaskId : InferPlacementTaskId();
     public bool IsComputerPlacementZone => LooksLikeComputerPlacementZoneForMission(MissionNumber);
+    public ComputerWorkstation ComputerWorkstation => computerWorkstation != null ? computerWorkstation : GetComponentInParent<ComputerWorkstation>();
     public MovableDevice CurrentDevice { get; private set; }
 
     private Transform indicator;
@@ -58,6 +60,12 @@ public class DeviceDropZone : MonoBehaviour
     public bool CanReceive(MovableDevice device)
     {
         if (device == null || CurrentDevice != null || IsOccupiedByAnotherDevice(device))
+        {
+            return false;
+        }
+
+        ComputerWorkstation workstation = ComputerWorkstation;
+        if (workstation != null && !device.IsComputerCabinetDevice())
         {
             return false;
         }
@@ -318,6 +326,11 @@ public class DeviceDropZone : MonoBehaviour
 
     private bool LooksLikeComputerPlacementZoneForMission(int targetMissionNumber)
     {
+        if (ComputerWorkstation != null)
+        {
+            return MissionNumber == targetMissionNumber;
+        }
+
         string lowerName = GetHierarchyName().ToLowerInvariant();
         bool isComputerDropPoint = lowerName.Contains("computer_base_droppoint")
             || lowerName.Contains("computer base droppoint")

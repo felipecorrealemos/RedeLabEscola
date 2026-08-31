@@ -7,7 +7,7 @@ using UnityEngine.UI;
 public sealed class QuitConfirmationDialog : MonoBehaviour
 {
     [Header("Destino")]
-    [SerializeField] private string mainMenuSceneName = "MainMenu";
+    [SerializeField] private string mainMenuSceneName = SceneNames.MainMenu;
 
     [Header("UI serializada")]
     [SerializeField] private GameObject menuPanel;

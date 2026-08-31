@@ -5,7 +5,7 @@ using UnityEngine.SceneManagement;
 
 public static class Stage2PalletMachineSceneSetup
 {
-    private const string ScenePath = "Assets/Scenes/Stage2/Stage2_Factory.unity";
+    private const string ScenePath = SceneNames.FactoryPath;
     private const string MachineRootName = "PalletMachine";
     private const string PalletPrefabPath = "Assets/Modelos 3D/Stage2_Factory/Prefabs/IndustrialProps/Pallet com caixas.prefab";
 

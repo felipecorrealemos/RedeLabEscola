@@ -4,9 +4,9 @@ using UnityEngine;
 public sealed class RedeLabAudioSettings : ScriptableObject
 {
     [Header("Cenas")]
-    [SerializeField] private string mainMenuScene = "MainMenu";
-    [SerializeField] private string stage01Scene = "SampleScene";
-    [SerializeField] private string stage02Scene = "Stage2_Factory";
+    [SerializeField] private string mainMenuScene = SceneNames.MainMenu;
+    [SerializeField] private string stage01Scene = SceneNames.Office;
+    [SerializeField] private string stage02Scene = SceneNames.Factory;
 
     [Header("Musicas")]
     [SerializeField] private AudioClip mainMenuMusic;

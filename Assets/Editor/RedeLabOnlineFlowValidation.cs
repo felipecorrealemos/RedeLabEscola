@@ -64,12 +64,12 @@ public static class RedeLabOnlineFlowValidation
 
         ValidateMissionPersistenceGuards();
 
-        CharacterSelectionState.SetPendingGameplayScene("Stage2_Factory");
+        CharacterSelectionState.SetPendingGameplayScene(SceneNames.Factory);
         Require(
-            CharacterSelectionState.ConsumePendingGameplayScene("SampleScene") == "Stage2_Factory",
+            CharacterSelectionState.ConsumePendingGameplayScene(SceneNames.Office) == SceneNames.Factory,
             "Destino pendente da selecao de personagem");
         Require(
-            CharacterSelectionState.ConsumePendingGameplayScene("SampleScene") == "SampleScene",
+            CharacterSelectionState.ConsumePendingGameplayScene(SceneNames.Office) == SceneNames.Office,
             "Destino pendente e consumido somente uma vez");
 
         Debug.Log("Validacao dos fluxos online RedeLab concluida com sucesso.");

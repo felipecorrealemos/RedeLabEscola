@@ -52,6 +52,7 @@ public class PlayerTopDownController : MonoBehaviour
     private RouterInteractable highlightedRouter;
     private ComputerInteractable highlightedComputer;
     private KeyboardTerminalInteractable highlightedComputerTerminal;
+    private FallenChairInteractable highlightedChair;
     private RouterInteractable openRouter;
     private ComputerInteractable openComputer;
     // Desks contain many small colliders (monitor, keyboard, chair, props, etc.).
@@ -69,6 +70,7 @@ public class PlayerTopDownController : MonoBehaviour
         Router,
         Computer,
         ComputerTerminal,
+        Chair,
         Document,
         Device
     }
@@ -80,6 +82,7 @@ public class PlayerTopDownController : MonoBehaviour
         public RouterInteractable Router;
         public ComputerInteractable Computer;
         public KeyboardTerminalInteractable ComputerTerminal;
+        public FallenChairInteractable Chair;
         public PrintedDocumentInteractable Document;
         public MovableDevice Device;
     }
@@ -161,6 +164,13 @@ public class PlayerTopDownController : MonoBehaviour
         }
 
         PromptTarget target = FindNearestPromptTarget();
+        if (target.Type == PromptTargetType.Chair && target.Chair != null)
+        {
+            SetHighlightedChair(null);
+            target.Chair.TryRaise();
+            return;
+        }
+
         if (target.Type == PromptTargetType.Document && target.Document != null)
         {
             PickUpDocument(target.Document);
@@ -309,6 +319,7 @@ public class PlayerTopDownController : MonoBehaviour
             SetHighlightedRouter(null);
             SetHighlightedComputer(null);
             SetHighlightedComputerTerminal(null);
+            SetHighlightedChair(null);
             return;
         }
 
@@ -319,6 +330,7 @@ public class PlayerTopDownController : MonoBehaviour
             SetHighlightedRouter(null);
             SetHighlightedComputer(null);
             SetHighlightedComputerTerminal(null);
+            SetHighlightedChair(null);
             SetHighlightedProfessor(FindNearestProfessorDocumentReceiver(out _));
             return;
         }
@@ -329,6 +341,7 @@ public class PlayerTopDownController : MonoBehaviour
         SetHighlightedRouter(target.Type == PromptTargetType.Router ? target.Router : null);
         SetHighlightedComputer(target.Type == PromptTargetType.Computer ? target.Computer : null);
         SetHighlightedComputerTerminal(target.Type == PromptTargetType.ComputerTerminal ? target.ComputerTerminal : null);
+        SetHighlightedChair(target.Type == PromptTargetType.Chair ? target.Chair : null);
         SetHighlightedDocument(target.Type == PromptTargetType.Document ? target.Document : null);
         SetHighlightedDevice(target.Device);
     }
@@ -361,6 +374,7 @@ public class PlayerTopDownController : MonoBehaviour
             SetHighlightedRouter(null);
             SetHighlightedComputer(null);
             SetHighlightedComputerTerminal(null);
+            SetHighlightedChair(null);
         }
         else if (!movementLocked)
         {
@@ -531,6 +545,35 @@ public class PlayerTopDownController : MonoBehaviour
         }
     }
 
+    private void SetHighlightedChair(FallenChairInteractable chair)
+    {
+        if (highlightedChair == chair)
+        {
+            if (highlightedChair != null)
+            {
+                highlightedChair.SetPromptVisible(highlightedChair.CanInteract);
+            }
+            else
+            {
+                highlightedChair = null;
+            }
+
+            return;
+        }
+
+        if (highlightedChair != null)
+        {
+            highlightedChair.SetPromptVisible(false);
+        }
+
+        highlightedChair = chair;
+
+        if (highlightedChair != null)
+        {
+            highlightedChair.SetPromptVisible(true);
+        }
+    }
+
     private bool IsDeviceForRouter(MovableDevice device, RouterInteractable router)
     {
         if (device == null || router == null)
@@ -632,6 +675,13 @@ public class PlayerTopDownController : MonoBehaviour
                 continue;
             }
 
+            FallenChairInteractable chair = hit.GetComponentInParent<FallenChairInteractable>();
+            if (chair != null && chair.CanInteract)
+            {
+                TrySelectPromptTarget(ref target, PromptTargetType.Chair, distance, null, null, null, null, null, chair);
+                continue;
+            }
+
             RouterInteractable router = hit.GetComponentInParent<RouterInteractable>();
             if (router != null)
             {
@@ -704,6 +754,7 @@ public class PlayerTopDownController : MonoBehaviour
                 target.Router = null;
                 target.Computer = null;
                 target.ComputerTerminal = null;
+                target.Chair = null;
                 target.Document = fallbackDocument;
                 target.Device = null;
             }
@@ -720,7 +771,8 @@ public class PlayerTopDownController : MonoBehaviour
         ComputerInteractable computer,
         KeyboardTerminalInteractable computerTerminal,
         PrintedDocumentInteractable document,
-        MovableDevice device)
+        MovableDevice device,
+        FallenChairInteractable chair = null)
     {
         if (distance >= target.Distance)
         {
@@ -732,6 +784,7 @@ public class PlayerTopDownController : MonoBehaviour
         target.Router = router;
         target.Computer = computer;
         target.ComputerTerminal = computerTerminal;
+        target.Chair = chair;
         target.Document = document;
         target.Device = device;
     }
@@ -798,6 +851,7 @@ public class PlayerTopDownController : MonoBehaviour
         SetHighlightedRouter(null);
         SetHighlightedComputer(null);
         SetHighlightedComputerTerminal(null);
+        SetHighlightedChair(null);
         openRouter = router;
         openRouter.Open(this);
     }
@@ -813,6 +867,7 @@ public class PlayerTopDownController : MonoBehaviour
         SetHighlightedRouter(null);
         SetHighlightedComputer(null);
         SetHighlightedComputerTerminal(null);
+        SetHighlightedChair(null);
         openComputer = computer;
         openComputer.Open(this);
     }
@@ -828,6 +883,7 @@ public class PlayerTopDownController : MonoBehaviour
         SetHighlightedRouter(null);
         SetHighlightedComputer(null);
         SetHighlightedComputerTerminal(null);
+        SetHighlightedChair(null);
         openComputer = computer.Computer;
         computer.Open(this);
     }
@@ -843,6 +899,7 @@ public class PlayerTopDownController : MonoBehaviour
         SetHighlightedRouter(null);
         SetHighlightedComputer(null);
         SetHighlightedComputerTerminal(null);
+        SetHighlightedChair(null);
         openComputer = computer;
         openComputer.OpenTerminal(this);
     }

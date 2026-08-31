@@ -27,8 +27,8 @@ public class MissionManager : MonoBehaviour
 
     private const string MissionCanvasName = "MissionCanvas";
     private const string MissionPanelName = "MissionPanel";
-    private const string GameplaySceneName = "SampleScene";
-    private const string Stage2SceneName = "Stage2_Factory";
+    private const string GameplaySceneName = SceneNames.Office;
+    private const string Stage2SceneName = SceneNames.Factory;
 
     [SerializeField] private List<Mission> missions = new List<Mission>();
     [SerializeField] private int startingMissionNumber = 1;
@@ -486,10 +486,20 @@ public class MissionManager : MonoBehaviour
             return;
         }
 
-        if (!complete && persistentlyCompletedTaskIds.Contains(taskId))
+        if (!complete)
         {
-            return;
+            RedeLabProgressService progressService = RedeLabProgressService.Instance;
+            if (progressService != null && progressService.IsRestoringSave)
+            {
+                return;
+            }
+
+            if (persistentlyCompletedTaskIds.Contains(taskId) && !IsLocallyReversibleTask(taskId))
+            {
+                return;
+            }
         }
+
 
         RebuildMissionLookup();
         if (!missionsByNumber.TryGetValue(missionNumber, out Mission mission))
@@ -507,8 +517,8 @@ public class MissionManager : MonoBehaviour
         task.IsComplete = complete;
         if (IsNewCompletionTransition(wasComplete, complete))
         {
-            // A conclusao e monotona: depois do primeiro false -> true, reavaliacoes
-            // de objetos reversiveis nao podem apagar uma unidade de progresso.
+            // O estado visual pode regredir em tarefas reversiveis, mas a persistencia
+            // continua monotona e deduplicada pelo RedeLabProgressService.
             persistentlyCompletedTaskIds.Add(taskId);
             RedeLabProgressService.Instance?.TryQueueMissionCompletion(taskId);
         }
@@ -524,6 +534,26 @@ public class MissionManager : MonoBehaviour
     {
         return !previousState && nextState;
     }
+    private static bool IsLocallyReversibleTask(string taskId)
+    {
+        switch (taskId)
+        {
+            case "sala1_colocar_gabinete":
+            case "sala1_configurar_ip_pc":
+            case "sala2_colocar_gabinete":
+            case "sala2_configurar_ip_pc":
+            case "sala2_configurar_ip_portas":
+            case "sala3_colocar_gabinete":
+            case "sala3_configurar_ip_pc":
+            case "sala3_colocar_impressora":
+            case "sala3_configurar_ip_impressora":
+            case "sala3_configurar_ip_porta":
+                return true;
+            default:
+                return false;
+        }
+    }
+
 
     public void RestoreCompletedMissions(IEnumerable<string> completedTaskIds)
     {

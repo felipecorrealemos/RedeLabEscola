@@ -11,8 +11,7 @@ using UnityEngine.UI;
 
 public static class MainMenuSceneBuilder
 {
-    private const string ScenePath = "Assets/Scenes/MainMenu.unity";
-    private const string SampleScenePath = "Assets/Scenes/SampleScene.unity";
+    private const string ScenePath = SceneNames.MainMenuPath;
     private const string ProfessorPath = "Assets/Modelos 3D/Personagem/Professor/animacoes/professor@Standing W_Briefcase Idle.fbx";
     private const string ProfessorControllerPath = "Assets/Modelos 3D/Personagem/Professor/animacoes/Animator Controller professor.controller";
     private const string MaterialsFolder = "Assets/Materials/Menu";
@@ -31,7 +30,7 @@ public static class MainMenuSceneBuilder
         EnsureFolder("Assets/Materials", "Menu");
 
         Scene scene = EditorSceneManager.NewScene(NewSceneSetup.EmptyScene, NewSceneMode.Single);
-        scene.name = "MainMenu";
+        scene.name = SceneNames.MainMenu;
 
         Material floorMaterial = GetOrCreateMaterial("Menu_Floor", new Color(0.58f, 0.62f, 0.60f));
         Material wallMaterial = GetOrCreateMaterial("Menu_Wall", new Color(0.78f, 0.84f, 0.86f));
@@ -313,13 +312,20 @@ public static class MainMenuSceneBuilder
     {
         List<EditorBuildSettingsScene> scenes = new List<EditorBuildSettingsScene>
         {
-            new EditorBuildSettingsScene(ScenePath, true),
-            new EditorBuildSettingsScene(SampleScenePath, true)
+            new EditorBuildSettingsScene(SceneNames.MainMenuPath, true),
+            new EditorBuildSettingsScene(SceneNames.CharacterSelectionPath, true),
+            new EditorBuildSettingsScene(SceneNames.OfficePath, true),
+            new EditorBuildSettingsScene(SceneNames.FactoryPath, true),
+            new EditorBuildSettingsScene(SceneNames.ProviderPath, true)
         };
 
         foreach (EditorBuildSettingsScene scene in EditorBuildSettings.scenes)
         {
-            if (scene.path == ScenePath || scene.path == SampleScenePath)
+            if (scene.path == SceneNames.MainMenuPath
+                || scene.path == SceneNames.CharacterSelectionPath
+                || scene.path == SceneNames.OfficePath
+                || scene.path == SceneNames.FactoryPath
+                || scene.path == SceneNames.ProviderPath)
             {
                 continue;
             }

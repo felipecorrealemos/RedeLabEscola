@@ -8,7 +8,7 @@ public static class PrimitivePrinterBuilder
 {
     private const string PrefabFolder = "Assets/Prefabs/Office";
     private const string PrefabPath = PrefabFolder + "/Printer.prefab";
-    private const string ScenePath = "Assets/Scenes/SampleScene.unity";
+    private const string ScenePath = SceneNames.OfficePath;
     private const string PrinterInstanceName = "Impressora_Sala_3";
     [MenuItem("Tools/RedeLabEscola/Prefabs/Create Primitive Printer")]
     public static void CreatePrimitivePrinterPrefab()
@@ -39,7 +39,7 @@ public static class PrimitivePrinterBuilder
         {
             if (!canOpenScene)
             {
-                Debug.Log("Primitive printer prefab created. Open SampleScene or use Tools/RedeLabEscola/Scene/Add Printer To Room 3 to place it.");
+                Debug.Log("Primitive printer prefab created. Open O_escritorio or use Tools/RedeLabEscola/Scene/Add Printer To Room 3 to place it.");
                 return false;
             }
 

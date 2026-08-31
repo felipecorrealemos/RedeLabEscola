@@ -3923,7 +3923,7 @@ MonoBehaviour:
   m_EditorClassIdentifier: 
   stageLabel: "Est\xE1gio 2"
   stageName: "A f\xE1brica"
-  nextSceneName: 
+  nextSceneName: O_provedor
   announcementGroup: {fileID: 1906983613}
   stageLabelText: {fileID: 306621184}
   stageNameText: {fileID: 442347312}

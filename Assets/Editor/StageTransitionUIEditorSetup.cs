@@ -8,17 +8,17 @@ public static class StageTransitionUIEditorSetup
 {
     private const string CanvasName = "StageTransitionCanvas";
     private const string ExitTriggerName = "Stage1ExitTrigger_AJUSTAR_POSICAO";
-    private const string Stage2ScenePath = "Assets/Scenes/Stage2/Stage2_Factory.unity";
+    private const string Stage2ScenePath = SceneNames.FactoryPath;
 
     [MenuItem("Tools/RedeLabEscola/Stages/Ensure Stage Transition UI")]
     public static void EnsureInActiveScene()
     {
         if (Application.isPlaying || EditorApplication.isPlayingOrWillChangePlaymode) return;
         Scene scene = SceneManager.GetActiveScene();
-        if (!scene.IsValid() || (scene.name != "SampleScene" && scene.name != "Stage2_Factory")) return;
+        if (!scene.IsValid() || (scene.name != SceneNames.Office && scene.name != SceneNames.Factory)) return;
         if (HasStageTransition(scene)) return;
 
-        CreateStageCanvas(scene, scene.name == "Stage2_Factory");
+        CreateStageCanvas(scene, scene.name == SceneNames.Factory);
         EditorSceneManager.MarkSceneDirty(scene);
         Debug.Log("StageTransitionCanvas criado. Ajuste seus elementos diretamente no Canvas e salve a cena.");
     }
@@ -38,7 +38,7 @@ public static class StageTransitionUIEditorSetup
         {
             CreateStageCanvas(stage2, true);
             EditorSceneManager.SaveScene(stage2);
-            Debug.Log("StageTransitionCanvas com fade de entrada gravado na cena Stage2_Factory.");
+            Debug.Log("StageTransitionCanvas com fade de entrada gravado na cena A_fabrica.");
         }
 
         if (openedTemporarily && stage2.IsValid())
@@ -103,7 +103,7 @@ public static class StageTransitionUIEditorSetup
         serialized.FindProperty("stageLabel").stringValue = stage2 ? "Estágio 2" : "Estágio 1";
         serialized.FindProperty("stageName").stringValue = stage2 ? "A fábrica" : "O escritório";
         serialized.FindProperty("portugueseTextVersion").intValue = 1;
-        serialized.FindProperty("nextSceneName").stringValue = stage2 ? string.Empty : "Stage2_Factory";
+        serialized.FindProperty("nextSceneName").stringValue = stage2 ? SceneNames.Provider : SceneNames.Factory;
         serialized.FindProperty("announcementGroup").objectReferenceValue = announcementGroup;
         serialized.FindProperty("stageLabelText").objectReferenceValue = eyebrow;
         serialized.FindProperty("stageNameText").objectReferenceValue = title;

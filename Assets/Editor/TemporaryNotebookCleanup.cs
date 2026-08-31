@@ -6,11 +6,11 @@ using UnityEngine.SceneManagement;
 public static class TemporaryNotebookCleanup
 {
     [MenuItem("Tools/RedeLabEscola/Scene/Remove Temporary Notebook Duplicates")]
-    public static void CleanupActiveSampleScene()
+    public static void CleanupActiveOfficeScene()
     {
         if (Application.isPlaying || EditorApplication.isPlayingOrWillChangePlaymode) return;
         Scene scene = SceneManager.GetActiveScene();
-        if (!scene.IsValid() || scene.name != "SampleScene") return;
+        if (!scene.IsValid() || scene.name != SceneNames.Office) return;
 
         int removed = 0;
         foreach (GameObject root in scene.GetRootGameObjects())

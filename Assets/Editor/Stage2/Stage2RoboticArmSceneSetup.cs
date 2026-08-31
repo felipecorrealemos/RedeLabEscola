@@ -5,7 +5,7 @@ using UnityEngine.SceneManagement;
 
 public static class Stage2RoboticArmSceneSetup
 {
-    private const string ScenePath = "Assets/Scenes/Stage2/Stage2_Factory.unity";
+    private const string ScenePath = SceneNames.FactoryPath;
 
     [MenuItem("Tools/RedeLabEscola/Stage2/Setup Robotic Arms")]
     public static void ApplyToStage2Factory()

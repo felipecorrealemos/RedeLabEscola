@@ -9,7 +9,7 @@ public sealed class StageTransitionUI : MonoBehaviour
     [Header("Conteudo da fase")]
     [SerializeField] private string stageLabel = "Estágio 1";
     [SerializeField] private string stageName = "O escritório";
-    [SerializeField] private string nextSceneName = "Stage2_Factory";
+    [SerializeField] private string nextSceneName = SceneNames.Factory;
 
     [Header("Elementos editaveis da cena")]
     [SerializeField] private CanvasGroup announcementGroup;
@@ -25,7 +25,7 @@ public sealed class StageTransitionUI : MonoBehaviour
     [SerializeField, Min(0f)] private float loadingScreenOverscan = 2f;
 
     [Header("Encerramento da versão de teste")]
-    [SerializeField] private string mainMenuSceneName = "MainMenu";
+    [SerializeField] private string mainMenuSceneName = SceneNames.MainMenu;
     [TextArea(3, 7)]
     [SerializeField] private string testVersionThankYouMessage =
         "Obrigado por participar da experiência Rede Lab Escola!\n\n" +
@@ -104,7 +104,7 @@ public sealed class StageTransitionUI : MonoBehaviour
     private void ApplyFullScreenLayoutMigration()
     {
         if (fullScreenLayoutVersion >= 1) return;
-        showLoadingScreenInEditMode = gameObject.scene.IsValid() && gameObject.scene.name == "Stage2_Factory";
+        showLoadingScreenInEditMode = gameObject.scene.IsValid() && gameObject.scene.name == SceneNames.Factory;
         fullScreenLayoutVersion = 1;
     }
 
@@ -204,8 +204,7 @@ public sealed class StageTransitionUI : MonoBehaviour
 
         yield return WaitRealtime(completionHoldDuration);
 
-        // The factory is the final stage. Keep the completion card visible instead
-        // of trying to load an empty scene name.
+        // Uma fase sem destino configurado encerra a versao jogavel atual.
         if (string.IsNullOrWhiteSpace(nextSceneName))
         {
             yield return ShowTestVersionThankYou();
@@ -395,7 +394,7 @@ public sealed class StageTransitionUI : MonoBehaviour
     private void ApplyPortugueseTextMigration()
     {
         if (portugueseTextVersion >= 1) return;
-        bool isFactory = gameObject.scene.IsValid() && gameObject.scene.name == "Stage2_Factory";
+        bool isFactory = gameObject.scene.IsValid() && gameObject.scene.name == SceneNames.Factory;
         stageLabel = isFactory ? "Estágio 2" : "Estágio 1";
         stageName = isFactory ? "A fábrica" : "O escritório";
         portugueseTextVersion = 1;

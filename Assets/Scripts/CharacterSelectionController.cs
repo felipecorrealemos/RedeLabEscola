@@ -6,8 +6,8 @@ using RedeLabEscola.Auth;
 
 public class CharacterSelectionController : MonoBehaviour
 {
-    [SerializeField] private string gameplaySceneName = "SampleScene";
-    [SerializeField] private string mainMenuSceneName = "MainMenu";
+    [SerializeField] private string gameplaySceneName = SceneNames.Office;
+    [SerializeField] private string mainMenuSceneName = SceneNames.MainMenu;
     [SerializeField] private SceneFadeTransition sceneTransition;
     [SerializeField] private CharacterSelectionOption alunoOption;
     [SerializeField] private CharacterSelectionOption alunaOption;

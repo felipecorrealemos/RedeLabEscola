@@ -5,7 +5,7 @@ using UnityEngine.SceneManagement;
 
 public static class Stage2RawMaterialConveyorSceneSetup
 {
-    private const string ScenePath = "Assets/Scenes/Stage2/Stage2_Factory.unity";
+    private const string ScenePath = SceneNames.FactoryPath;
     private const string ConveyorRootName = "RawMaterialConveyor";
 
     [MenuItem("Tools/RedeLabEscola/Stage2/Setup Raw Material Conveyor")]

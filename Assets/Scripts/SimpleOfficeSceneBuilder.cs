@@ -158,23 +158,28 @@ public class SimpleOfficeSceneBuilder : MonoBehaviour
         CreateCube("Monitor", new Vector3(centerX, 1.75f, deskCenterZ + 0.25f), new Vector3(1.1f, 0.75f, 0.12f), computerMaterial, computer.transform);
         CreateCube("Monitor_Screen", new Vector3(centerX, 1.75f, deskCenterZ + 0.18f), new Vector3(0.9f, 0.55f, 0.04f), screenMaterial, computer.transform);
         CreateCube("Monitor_Stand", new Vector3(centerX, 1.25f, deskCenterZ + 0.25f), new Vector3(0.16f, 0.35f, 0.16f), computerMaterial, computer.transform);
-        GameObject computerBase = CreateCube("Computer_Base", new Vector3(centerX + 1.05f, 1.48f, deskCenterZ + 0.2f), new Vector3(0.55f, 0.65f, 0.5f), computerMaterial, computer.transform);
+        GameObject computerBase = CreateCube("Computer_Base", new Vector3(centerX + 1.05f, 1.48f, deskCenterZ + 0.2f), new Vector3(0.55f, 0.65f, 0.5f), computerMaterial, environmentRoot);
         CreateCube("Keyboard", new Vector3(centerX, 1.2f, deskCenterZ - 0.45f), new Vector3(1.1f, 0.08f, 0.32f), computerMaterial, computer.transform);
 
         computerBase.AddComponent<MovableDevice>();
+        computerBase.AddComponent<ComputerCabinet>();
         computerBase.AddComponent<ComputerInteractable>();
-        CreateComputerDropPoint(computer, computerBase);
+        DeviceDropZone dropZone = CreateComputerDropPoint(computer, computerBase);
+        ComputerWorkstation workstation = computer.AddComponent<ComputerWorkstation>();
+        Transform screen = computer.transform.Find("Monitor_Screen");
+        workstation.Configure(dropZone, screen != null ? screen.GetComponent<Renderer>() : null, screen != null ? screen.GetComponentInChildren<Light>(true) : null);
     }
 
-    private void CreateComputerDropPoint(GameObject computer, GameObject computerBase)
+    private DeviceDropZone CreateComputerDropPoint(GameObject computer, GameObject computerBase)
     {
         GameObject dropPoint = new GameObject("Computer_Base_DropPoint");
         dropPoint.transform.SetParent(computer.transform);
         dropPoint.transform.position = computerBase.transform.position;
         dropPoint.transform.rotation = computerBase.transform.rotation;
 
-        dropPoint.AddComponent<DeviceDropZone>();
+        DeviceDropZone dropZone = dropPoint.AddComponent<DeviceDropZone>();
         dropPoint.AddComponent<BoxCollider>().isTrigger = true;
+        return dropZone;
     }
 
     private void BuildRouter()

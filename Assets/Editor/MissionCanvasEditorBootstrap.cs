@@ -6,8 +6,8 @@ using UnityEngine.UI;
 
 public static class MissionCanvasEditorBootstrap
 {
-    private const string GameplaySceneName = "SampleScene";
-    private const string Stage2SceneName = "Stage2_Factory";
+    private const string GameplaySceneName = SceneNames.Office;
+    private const string Stage2SceneName = SceneNames.Factory;
     private const string MissionManagerName = "MissionManager";
 
     [MenuItem("Tools/RedeLabEscola/Missions/Ensure Mission Canvas In Scene")]

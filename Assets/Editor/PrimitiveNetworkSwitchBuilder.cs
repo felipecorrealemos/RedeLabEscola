@@ -8,7 +8,7 @@ public static class PrimitiveNetworkSwitchBuilder
 {
     private const string PrefabFolder = "Assets/Prefabs/Office";
     private const string PrefabPath = PrefabFolder + "/NetworkSwitch.prefab";
-    private const string ScenePath = "Assets/Scenes/SampleScene.unity";
+    private const string ScenePath = SceneNames.OfficePath;
     private const string SwitchInstanceName = "Switch_Sala_3";
     [MenuItem("Tools/RedeLabEscola/Prefabs/Create Primitive Network Switch")]
     public static void CreatePrimitiveNetworkSwitchPrefab()
@@ -39,7 +39,7 @@ public static class PrimitiveNetworkSwitchBuilder
         {
             if (!canOpenScene)
             {
-                Debug.Log("Primitive network switch prefab created. Open SampleScene or use Tools/RedeLabEscola/Scene/Add Network Switch To Room 3 to place it.");
+                Debug.Log("Primitive network switch prefab created. Open O_escritorio or use Tools/RedeLabEscola/Scene/Add Network Switch To Room 3 to place it.");
                 return false;
             }
 

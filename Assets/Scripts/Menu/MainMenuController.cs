@@ -8,9 +8,9 @@ namespace RedeLabEscola.Menu
 {
     public class MainMenuController : MonoBehaviour
     {
-        [SerializeField] private string gameplaySceneName = "SampleScene";
-        [SerializeField] private string factorySceneName = "Stage2_Factory";
-        [SerializeField] private string characterSelectionSceneName = "CharacterSelection";
+        [SerializeField] private string gameplaySceneName = SceneNames.Office;
+        [SerializeField] private string factorySceneName = SceneNames.Factory;
+        [SerializeField] private string characterSelectionSceneName = SceneNames.CharacterSelection;
         [SerializeField] private SceneFadeTransition sceneTransition;
         [SerializeField] private GameObject quitConfirmationDialog;
         [Header("Saida WebGL")]

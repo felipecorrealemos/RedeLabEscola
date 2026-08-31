@@ -8,8 +8,8 @@ using UnityEngine.UI;
 
 public static class InitialSceneFlowSetup
 {
-    private const string MainMenuPath = "Assets/Scenes/MainMenu.unity";
-    private const string CharacterSelectionPath = "Assets/Scenes/CharacterSelection.unity";
+    private const string MainMenuPath = SceneNames.MainMenuPath;
+    private const string CharacterSelectionPath = SceneNames.CharacterSelectionPath;
 
     [MenuItem("Tools/RedeLabEscola/Setup Initial Scene Fades And Quit Dialog")]
     public static void Apply()

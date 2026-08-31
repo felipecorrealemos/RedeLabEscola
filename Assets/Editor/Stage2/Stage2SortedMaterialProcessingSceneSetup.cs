@@ -5,7 +5,7 @@ using UnityEngine.SceneManagement;
 
 public static class Stage2SortedMaterialProcessingSceneSetup
 {
-    private const string ScenePath = "Assets/Scenes/Stage2/Stage2_Factory.unity";
+    private const string ScenePath = SceneNames.FactoryPath;
     private const string SortedRootName = "SortedMaterialConveyors";
     private const string ProcessedPartPrefabPath = "Assets/Prefabs/Peças/Motor eletrico industrial.prefab";
 

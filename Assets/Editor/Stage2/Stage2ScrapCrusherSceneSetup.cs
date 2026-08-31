@@ -4,7 +4,7 @@ using UnityEngine;
 
 public static class Stage2ScrapCrusherSceneSetup
 {
-    private const string ScenePath = "Assets/Scenes/Stage2/Stage2_Factory.unity";
+    private const string ScenePath = SceneNames.FactoryPath;
     private static readonly Vector3 DefaultIntakeTriggerLocalPosition = new Vector3(0f, 1.2f, 0f);
     private static readonly Vector3 DefaultIntakeTriggerCenter = new Vector3(0.13759f, -0.7868f, -0.0042f);
     private static readonly Vector3 DefaultIntakeTriggerSize = new Vector3(0.938131f, 0.82507f, 0.57663f);
@@ -22,7 +22,7 @@ public static class Stage2ScrapCrusherSceneSetup
         GameObject crusherObject = GameObject.Find("triturador");
         if (crusherObject == null)
         {
-            Debug.LogError("triturador not found in Stage2_Factory.");
+            Debug.LogError("triturador not found in A_fabrica.");
             return;
         }
 
