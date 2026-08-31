@@ -12,6 +12,13 @@
 /[Uu]ser[Ss]ettings/
 *.log
 
+# Node.js dependencies and local environment files
+node_modules/
+.env
+.env.*
+!.env.example
+!**/.env.example
+
 # MemoryCaptures can get excessive in size.
 # They also could contain extremely sensitive data
 /[Mm]emoryCaptures/

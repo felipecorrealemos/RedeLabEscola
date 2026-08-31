@@ -43,10 +43,10 @@ Uma lista de emails no JavaScript não é controle de acesso. A verificação ad
 
 ## Instalação
 
-```powershell
+```bash
 cd redelab-server
-npm install
-Copy-Item .env.example .env
+npm ci
+cp .env.example .env
 ```
 
 A autenticação usa o SDK oficial `express-oauth2-jwt-bearer`; o WebSocket usa a biblioteca leve `ws`. Não existe Client Secret do Google nesta API.

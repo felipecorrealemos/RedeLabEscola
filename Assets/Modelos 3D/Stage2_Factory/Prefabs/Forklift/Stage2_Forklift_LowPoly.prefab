@@ -554,7 +554,6 @@ GameObject:
   m_Component:
   - component: {fileID: 4548764003668378993}
   - component: {fileID: 4843230475914215768}
-  - component: {fileID: 6290099260847513828}
   m_Layer: 0
   m_Name: Stage2_Forklift_LowPoly
   m_TagString: Untagged
@@ -617,74 +616,6 @@ Rigidbody:
   m_Interpolate: 1
   m_Constraints: 80
   m_CollisionDetection: 2
---- !u!114 &6290099260847513828
-MonoBehaviour:
-  m_ObjectHideFlags: 0
-  m_CorrespondingSourceObject: {fileID: 0}
-  m_PrefabInstance: {fileID: 0}
-  m_PrefabAsset: {fileID: 0}
-  m_GameObject: {fileID: 3108318571672251830}
-  m_Enabled: 1
-  m_EditorHideFlags: 0
-  m_Script: {fileID: 11500000, guid: 68da67e0e9334f59b911e95221ba21a0, type: 3}
-  m_Name: 
-  m_EditorClassIdentifier: 
-  maxForwardSpeed: 4.5
-  maxReverseSpeed: 2.3
-  acceleration: 3.2
-  deceleration: 4
-  brakeForce: 8
-  maxSteeringAngle: 32
-  steeringResponseSpeed: 7
-  highSpeedSteeringReduction: 0.55
-  centerOfMass: {x: 0, y: 0.28, z: 0.1}
-  requiresInstalledMotor: 0
-  frontLeftWheel: {fileID: 2762019189199266979}
-  frontRightWheel: {fileID: 2409323543853815075}
-  rearLeftWheel: {fileID: 8647117486847809163}
-  rearRightWheel: {fileID: 6158205906383072206}
-  steeringWheel: {fileID: 6973953618423386226}
-  wheelVisualRotationSpeed: 360
-  steeringWheelMultiplier: 2.4
-  topLampLight: {fileID: 0}
-  topLampRenderer: {fileID: 7782468327880446450}
-  topLampOnMaterial: {fileID: 0}
-  topLampOffMaterial: {fileID: 0}
-  forkLiftTransform: {fileID: 1134666246867468710}
-  forkLocalMinHeight: 0.28
-  forkLocalMaxHeight: 1.95
-  forkLiftSpeed: 1
-  forkLowerSpeed: 1
-  driverSeatPoint: {fileID: 7177525181049832276}
-  playerExitPoint: {fileID: 3361541820504555994}
-  interactionTrigger: {fileID: 3035969133718912160}
-  interactionKey: 101
-  fallbackInteractionRadius: 1.8
-  exitBlockingMask:
-    serializedVersion: 2
-    m_Bits: 4294967295
-  exitCheckRadius: 0.35
-  exitCheckHeight: 1.65
-  exitSearchSteps: 12
-  exitSearchRadius: 1.6
-  forkPickupSensor: {fileID: 1580904368428725669}
-  forkCarryPoint: {fileID: 6768522626835746926}
-  captureDistance: 1.45
-  captureWidth: 1.4
-  angularTolerance: 45
-  autoSnapSpeed: 8
-  validPalletLayers:
-    serializedVersion: 2
-    m_Bits: 4294967295
-  canvas: {fileID: 0}
-  interactionPromptObject: {fileID: 0}
-  interactionPromptLabel: {fileID: 0}
-  drivingPanelObject: {fileID: 0}
-  drivingPanelLabel: {fileID: 0}
-  enterPromptText: Pressione E para dirigir a empilhadeira
-  blockedExitText: Saida bloqueada
-  driverState: 0
-  cargoState: 0
 --- !u!1 &3221781410599533773
 GameObject:
   m_ObjectHideFlags: 0
@@ -1030,7 +961,6 @@ GameObject:
   m_Component:
   - component: {fileID: 1620566390159254602}
   - component: {fileID: 6713005345346978952}
-  - component: {fileID: 1580904368428725669}
   m_Layer: 0
   m_Name: ForkPickupSensor
   m_TagString: Untagged
@@ -1074,19 +1004,6 @@ BoxCollider:
   serializedVersion: 3
   m_Size: {x: 1.5, y: 0.75, z: 1.5}
   m_Center: {x: 0, y: 0, z: 0}
---- !u!114 &1580904368428725669
-MonoBehaviour:
-  m_ObjectHideFlags: 0
-  m_CorrespondingSourceObject: {fileID: 0}
-  m_PrefabInstance: {fileID: 0}
-  m_PrefabAsset: {fileID: 0}
-  m_GameObject: {fileID: 4443523947325115699}
-  m_Enabled: 1
-  m_EditorHideFlags: 0
-  m_Script: {fileID: 11500000, guid: b748d976b9ad4301b92b9334d998fd72, type: 3}
-  m_Name: 
-  m_EditorClassIdentifier: 
-  controller: {fileID: 6290099260847513828}
 --- !u!1 &4482878825424581093
 GameObject:
   m_ObjectHideFlags: 0
