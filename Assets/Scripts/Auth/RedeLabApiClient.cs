@@ -104,6 +104,34 @@ namespace RedeLabEscola.Auth
             return SendJsonRequest("DELETE", "/api/me/novo-jogo", null, onSuccess, onError);
         }
 
+        public IEnumerator SubmitFeedback(
+            string type,
+            string comment,
+            string gameVersion,
+            Action<RedeLabFeedback> onSuccess,
+            Action<string> onError)
+        {
+            RedeLabFeedbackRequest body = new RedeLabFeedbackRequest
+            {
+                tipo = type,
+                comentario = comment,
+                versao_jogo = gameVersion
+            };
+            return SendJsonRequest(
+                "POST",
+                "/api/feedback",
+                JsonUtility.ToJson(body),
+                onSuccess,
+                onError);
+        }
+
+        public IEnumerator GetMyFeedback(
+            Action<RedeLabFeedbackHistory> onSuccess,
+            Action<string> onError)
+        {
+            return SendJsonRequest("GET", "/api/feedback/me", null, onSuccess, onError);
+        }
+
         public IEnumerator GetMissionsForPhase(
             int phaseId,
             Action<RedeLabMission[]> onSuccess,

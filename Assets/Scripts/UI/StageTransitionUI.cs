@@ -1,4 +1,5 @@
 using System.Collections;
+using RedeLabEscola.UI;
 using UnityEngine;
 using UnityEngine.SceneManagement;
 using UnityEngine.UI;
@@ -279,7 +280,7 @@ public sealed class StageTransitionUI : MonoBehaviour
         cardRect.anchorMin = new Vector2(0.5f, 0.5f);
         cardRect.anchorMax = new Vector2(0.5f, 0.5f);
         cardRect.pivot = new Vector2(0.5f, 0.5f);
-        cardRect.sizeDelta = new Vector2(760f, 470f);
+        cardRect.sizeDelta = new Vector2(1160f, 700f);
         Image cardImage = card.GetComponent<Image>();
         cardImage.color = new Color(0.12f, 0.14f, 0.16f, 0.97f);
         Outline cardOutline = card.GetComponent<Outline>();
@@ -289,17 +290,17 @@ public sealed class StageTransitionUI : MonoBehaviour
         Text title = CreateEndText(card.transform, "Title", "Obrigado por jogar!", 38, FontStyle.Bold);
         RectTransform titleRect = title.rectTransform;
         titleRect.anchorMin = new Vector2(0f, 1f);
-        titleRect.anchorMax = new Vector2(1f, 1f);
+        titleRect.anchorMax = new Vector2(0.5f, 1f);
         titleRect.pivot = new Vector2(0.5f, 1f);
-        titleRect.anchoredPosition = new Vector2(0f, -42f);
-        titleRect.sizeDelta = new Vector2(-80f, 58f);
+        titleRect.anchoredPosition = new Vector2(0f, -58f);
+        titleRect.sizeDelta = new Vector2(-70f, 58f);
 
         Text message = CreateEndText(card.transform, "Message", testVersionThankYouMessage, 22, FontStyle.Normal);
         RectTransform messageRect = message.rectTransform;
         messageRect.anchorMin = new Vector2(0f, 0f);
-        messageRect.anchorMax = new Vector2(1f, 1f);
-        messageRect.offsetMin = new Vector2(62f, 112f);
-        messageRect.offsetMax = new Vector2(-62f, -118f);
+        messageRect.anchorMax = new Vector2(0.5f, 1f);
+        messageRect.offsetMin = new Vector2(54f, 128f);
+        messageRect.offsetMax = new Vector2(-38f, -132f);
         message.alignment = TextAnchor.MiddleCenter;
         message.horizontalOverflow = HorizontalWrapMode.Wrap;
         message.verticalOverflow = VerticalWrapMode.Overflow;
@@ -310,7 +311,7 @@ public sealed class StageTransitionUI : MonoBehaviour
         buttonRect.anchorMin = new Vector2(0.5f, 0f);
         buttonRect.anchorMax = new Vector2(0.5f, 0f);
         buttonRect.pivot = new Vector2(0.5f, 0f);
-        buttonRect.anchoredPosition = new Vector2(0f, 38f);
+        buttonRect.anchoredPosition = new Vector2(-290f, 42f);
         buttonRect.sizeDelta = new Vector2(260f, 58f);
         Image buttonImage = buttonObject.GetComponent<Image>();
         buttonImage.color = new Color(0.12f, 0.58f, 0.82f, 1f);
@@ -323,6 +324,9 @@ public sealed class StageTransitionUI : MonoBehaviour
         buttonLabel.rectTransform.anchorMax = Vector2.one;
         buttonLabel.rectTransform.offsetMin = Vector2.zero;
         buttonLabel.rectTransform.offsetMax = Vector2.zero;
+
+        RedeLabFeedbackPanel feedbackPanel = card.AddComponent<RedeLabFeedbackPanel>();
+        feedbackPanel.Build();
 
         RuntimeEventSystemUtility.EnsureSingleEventSystem();
         return root.GetComponent<CanvasGroup>();

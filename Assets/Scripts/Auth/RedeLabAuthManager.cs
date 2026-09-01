@@ -231,6 +231,23 @@ namespace RedeLabEscola.Auth
             return RunOperation(apiClient.ResetNewGame, onSuccess, onError, true);
         }
 
+        public IEnumerator SubmitFeedback(
+            string type,
+            string comment,
+            string gameVersion,
+            Action<RedeLabFeedback> onSuccess,
+            Action<string> onError)
+        {
+            return apiClient.SubmitFeedback(type, comment, gameVersion, onSuccess, onError);
+        }
+
+        public IEnumerator GetMyFeedback(
+            Action<RedeLabFeedbackHistory> onSuccess,
+            Action<string> onError)
+        {
+            return apiClient.GetMyFeedback(onSuccess, onError);
+        }
+
         private IEnumerator RunOperation(
             Func<Action<RedeLabOperationResponse>, Action<string>, IEnumerator> operation,
             Action onSuccess,

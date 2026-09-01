@@ -81,6 +81,23 @@ namespace RedeLabEscola.Auth
     }
 
     [Serializable]
+    public sealed class RedeLabFeedback
+    {
+        public long id_feedback;
+        public string tipo;
+        public string comentario;
+        public string versao_jogo;
+        public string data_envio;
+    }
+
+    [Serializable]
+    public sealed class RedeLabFeedbackHistory
+    {
+        public int id_usuario;
+        public RedeLabFeedback[] feedbacks;
+    }
+
+    [Serializable]
     internal sealed class RedeLabMissionList
     {
         public RedeLabMission[] items;
@@ -96,6 +113,14 @@ namespace RedeLabEscola.Auth
     internal sealed class RedeLabCompleteMissionRequest
     {
         public string codigo_missao;
+    }
+
+    [Serializable]
+    internal sealed class RedeLabFeedbackRequest
+    {
+        public string tipo;
+        public string comentario;
+        public string versao_jogo;
     }
 
     [Serializable]
