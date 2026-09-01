@@ -1,6 +1,6 @@
 # RedeLab Server
 
-API REST e presença WebSocket em Node.js para o RedeLab Escola. O catálogo de fases e missões é público; dados pessoais, progresso e presença usam Access Tokens emitidos pelo Auth0. O MySQL deve existir previamente: esta aplicação não cria nem altera o esquema.
+API REST e presença WebSocket em Node.js para o RedeLab Escola. O catálogo de fases e missões é público; dados pessoais, progresso, feedback e presença usam Access Tokens emitidos pelo Auth0. O MySQL deve existir previamente. A inicialização comum não altera o esquema; mudanças versionadas são aplicadas explicitamente com `npm run migrate`.
 
 REST e WebSocket compartilham um único processo e a mesma porta. Não há senha local, autenticação própria nem alterações na Unity.
 
@@ -14,17 +14,19 @@ http://localhost:3000/monitor
 
 O painel usa HTML, CSS e JavaScript puros, com Bootstrap 5 e Bootstrap Icons instalados pelo npm e servidos localmente. Ele não depende de CDN ou internet externa para carregar a interface.
 
-O filtro da tabela começa em **Todos os alunos** e também oferece **Apenas online**. Os cards permanecem globais. No filtro online, entradas usam fade/zoom de 360 ms e saídas usam fade/zoom de 320 ms, implementados no CSS local sem Animate.css. O último aluno só é removido depois da animação; então aparece o estado “Nenhum aluno online”.
+Na aba **Alunos**, o filtro da tabela começa em **Todos os alunos** e também oferece **Apenas online**. Os cards permanecem globais. No filtro online, entradas usam fade/zoom de 360 ms e saídas usam fade/zoom de 320 ms, implementados no CSS local sem Animate.css. O último aluno só é removido depois da animação; então aparece o estado “Nenhum aluno online”.
+
+A aba **Feedback** lista os envios permanentes em ordem decrescente de data, com jogador, tipo, comentário, versão do jogo e horário. É possível filtrar por tipo e por jogador. `GET /api/monitor/feedback` aceita os parâmetros opcionais `tipo` e `id_usuario`; as consultas usam parâmetros do driver e não interpolam esses valores no SQL.
 
 `GET /api/monitor/alunos` monta uma visão agregada somente de leitura com nome, presença, `ultimo_acesso`, fase, progresso e missões. A presença vem da mesma instância `Presenca` alimentada pelo `/ws` autenticado do jogo. Como o banco não possui uma coluna de fase atual, o monitor considera a primeira fase ativa ainda incompleta; quando todas estão concluídas, mostra a última fase ativa. Fases e missões sem registros ativos não são inventadas.
 
-O navegador do monitor se conecta a `ws://HOST/ws/monitor` (ou `wss://` em HTTPS). Esse canal envia apenas `monitor_ready` e `monitor_update`, não recebe comandos, não entra na contagem de presença e não altera o protocolo `/ws` do jogo. Os eventos identificam `id_usuario` e usam os motivos `usuario_online`, `usuario_offline`, `cadastro`, `missao_concluida` e `progresso_reset`. Conclusões, exclusões de progresso e `DELETE /api/me/novo-jogo` publicam a notificação somente depois da gravação/commit. A página reconsulta a API agregada, atualiza apenas a área de dados — nunca recarrega a página — e usa o ID para animar a linha afetada. Eventos próximos são consolidados por um debounce curto de 120 ms. A reconexão usa atrasos de 1, 2, 5 e 10 segundos, limitados em 10 segundos.
+O navegador do monitor se conecta a `ws://HOST/ws/monitor` (ou `wss://` em HTTPS). Esse canal envia apenas `monitor_ready` e `monitor_update`, não recebe comandos, não entra na contagem de presença e não altera o protocolo `/ws` do jogo. Os eventos identificam `id_usuario` e usam os motivos `usuario_online`, `usuario_offline`, `cadastro`, `missao_concluida`, `missao_revertida`, `feedback_criado` e `progresso_reset`. Conclusões, reversões, feedbacks, exclusões de progresso e `DELETE /api/me/novo-jogo` publicam a notificação somente depois da gravação/commit. A página reconsulta somente a visão afetada, atualiza apenas a área de dados — nunca recarrega a página — e usa o ID para animar a linha afetada. Eventos próximos são consolidados por um debounce curto de 120 ms. A reconexão usa atrasos de 1, 2, 5 e 10 segundos, limitados em 10 segundos.
 
 O espaço de marca do cabeçalho possui `#brandLogo` e o fallback Bootstrap atual. O caminho e os dois ajustes de classe para instalar o logo oficial estão documentados em `public/monitor/img/README.md`.
 
 ### Segurança temporária do monitor
 
-Nesta primeira versão, conforme o requisito da sala de aula, `/monitor`, `GET /api/monitor/alunos` e `/ws/monitor` abrem sem login. Isso expõe nomes e progresso a quem puder alcançar o servidor, portanto restrinja a aplicação à rede confiável da escola até implementar a autorização administrativa.
+Nesta primeira versão, conforme o requisito da sala de aula, `/monitor`, `GET /api/monitor/alunos`, `GET /api/monitor/feedback` e `/ws/monitor` abrem sem login. Isso expõe nomes, progresso e comentários a quem puder alcançar o servidor, portanto restrinja a aplicação à rede confiável da escola até implementar a autorização administrativa.
 
 A próxima etapa de produção deve proteger **no servidor** tanto o endpoint REST quanto o handshake do canal do monitor:
 
@@ -47,6 +49,7 @@ Uma lista de emails no JavaScript não é controle de acesso. A verificação ad
 cd redelab-server
 npm ci
 cp .env.example .env
+npm run migrate
 ```
 
 A autenticação usa o SDK oficial `express-oauth2-jwt-bearer`; o WebSocket usa a biblioteca leve `ws`. Não existe Client Secret do Google nesta API.
@@ -121,9 +124,12 @@ CORS_ORIGIN=https://HOST:8081
 ```bash
 npm start
 npm run dev
+npm run migrate
 npm test
 npm run unity-webgl-auth
 ```
+
+`npm run migrate` cria a tabela de controle `schema_migration` e aplica, em ordem, os arquivos ainda não registrados de `database/migrations/`. O comando usa um lock nomeado do MySQL para impedir duas execuções concorrentes e pode ser repetido sem reaplicar migrações concluídas. Execute-o antes de iniciar uma versão que contenha novas migrações.
 
 O teste automatizado usa o MySQL configurado no `.env`, verifica as rotas públicas, confirma `401` para rotas protegidas sem token, testa o protocolo WebSocket, timeout, múltiplas abas, heartbeat e comprova que as rotas DEV aparecem somente quando habilitadas. Um token Auth0 real não é fabricado pelos testes.
 
@@ -277,6 +283,7 @@ Invoke-RestMethod `
 | GET | `/api/missoes/fase/:id_fase` | Listar missões da fase |
 | GET | `/api/missoes/codigo/:codigo` | Buscar missão pelo código da Unity |
 | GET | `/api/monitor/alunos` | Visão agregada temporariamente pública do Monitor de Turma |
+| GET | `/api/monitor/feedback` | Feedbacks e jogadores para filtros do monitor temporariamente público |
 
 ## Endpoints autenticados
 
@@ -287,9 +294,14 @@ Invoke-RestMethod `
 | PUT | `/api/me/personagem` | `{"id_personagem":1}` | Selecionar personagem do próprio usuário |
 | GET | `/api/progresso/me` | vazio | Consultar o próprio progresso |
 | POST | `/api/progresso/concluir` | `{"codigo_missao":"codigo"}` | Concluir missão para o próprio usuário |
+| DELETE | `/api/progresso/concluir` | `{"codigo_missao":"codigo"}` | Reverter a conclusão da missão para o próprio usuário |
 | DELETE | `/api/progresso/me` | vazio | Apagar apenas o próprio progresso |
+| POST | `/api/feedback` | `{"tipo":"sugestao","comentario":"texto","versao_jogo":"1.0.0"}` | Registrar feedback permanente do próprio usuário |
+| GET | `/api/feedback/me` | vazio | Consultar o histórico de feedback do próprio usuário |
 
-`GET /api/me` e as rotas de progresso retornam `404` com orientação para chamar `/api/auth/sync` quando o token é válido, mas o `sub` ainda não existe no MySQL. A conclusão continua idempotente: repetir a mesma missão não duplica `missao_concluida`.
+`GET /api/me`, as rotas de progresso e as rotas de feedback retornam `404` com orientação para chamar `/api/auth/sync` quando o token é válido, mas o `sub` ainda não existe no MySQL. Concluir e reverter são idempotentes: repetir a mesma operação mantém o estado desejado sem duplicar registros nem transformar ausência em erro.
+
+O feedback é append-only: não há rota para editar ou apagar envios. `tipo` aceita somente `sugestao`, `bug` ou `comentario`; `comentario` é obrigatório e limitado a 1000 caracteres, e `versao_jogo` é opcional e limitada a 50. A API sempre deriva o usuário do token e a data do servidor. O reset de progresso e `DELETE /api/me/novo-jogo` não acessam `feedback_usuario`, portanto o histórico permanece depois de um novo jogo.
 
 ## Rotas DEV/LEGACY
 
@@ -343,10 +355,10 @@ Consulte a documentação oficial sobre [`express-oauth2-jwt-bearer`](https://gi
 2. Copiar o código sem `node_modules` e sem o `.env` local.
 3. Criar o `.env` do servidor com credenciais próprias do MySQL, configurações HTTPS, `AUTH0_DOMAIN`, `AUTH0_AUDIENCE`, `ENABLE_DEV_ROUTES=false`, `CORS_ORIGIN` restrito e o caminho real de `UNITY_WEBGL_BUILD_DIR`.
 4. Garantir acesso HTTPS à API e à WebGL e manter o MySQL protegido da internet pública. Uma página WebGL em HTTPS deve usar `wss://`; navegadores bloqueiam `ws://` como conteúdo misto.
-5. Iniciar a API com um gerenciador de processos/serviço e conferir `/api/health`.
+5. Executar `npm run migrate`, iniciar a API com um gerenciador de processos/serviço e conferir `/api/health`.
 6. Reproduzir no Auth0 as URLs reais de callback, logout e origem do WebGL.
 7. Liberar no firewall somente a porta pública usada pelo HTTP/HTTPS. REST e WebSocket usam o mesmo processo e a mesma porta; não é necessária uma segunda porta para `/ws`.
 8. Se houver Nginx, Apache, IIS ou outro reverse proxy, encaminhar `/ws` com HTTP/1.1 e preservar os headers `Upgrade` e `Connection`. Configurar timeouts do proxy acima do intervalo de heartbeat.
 9. Testar com um Access Token real, confirmar que uma requisição REST sem token recebe `401` e que um socket sem autenticação fecha após o timeout.
 
-Painel do professor, mensagens entre jogadores, gameplay via socket, multiplayer, posição do jogador, histórico de sessão e mudanças na Unity permanecem para etapas posteriores.
+Autorização administrativa do monitor, formulário de feedback dentro do jogo, mensagens entre jogadores, gameplay via socket, multiplayer, posição do jogador e histórico de sessão permanecem para etapas posteriores.

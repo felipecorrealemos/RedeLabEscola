@@ -12,6 +12,7 @@ namespace RedeLabEscola.Auth
         private sealed class PendingMission
         {
             public string Code;
+            public bool Complete;
             public int AttemptsInCycle;
         }
 
@@ -44,15 +45,16 @@ namespace RedeLabEscola.Auth
         private const int MaxQueuedMissions = 32;
 
         private static RedeLabProgressService instance;
-        private readonly Queue<PendingMission> pending = new Queue<PendingMission>();
-        private readonly HashSet<string> pendingCodes = new HashSet<string>(StringComparer.Ordinal);
+        private readonly Queue<string> pendingOrder = new Queue<string>();
+        private readonly Dictionary<string, PendingMission> pendingByCode =
+            new Dictionary<string, PendingMission>(StringComparer.Ordinal);
         private readonly HashSet<string> synchronizedCodes = new HashSet<string>(StringComparer.Ordinal);
         private Coroutine worker;
         private bool onlineGameplaySession;
         private bool restoringSave;
 
         public static RedeLabProgressService Instance => instance;
-        public int PendingCount => pending.Count;
+        public int PendingCount => pendingByCode.Count;
         public bool IsOnlineGameplaySession => onlineGameplaySession;
         public bool IsRestoringSave => restoringSave;
 
@@ -126,7 +128,6 @@ namespace RedeLabEscola.Auth
                 {
                     if (!IsKnownMissionCode(code)) continue;
                     synchronizedCodes.Add(code);
-                    pendingCodes.Remove(code);
                 }
             }
 
@@ -148,8 +149,8 @@ namespace RedeLabEscola.Auth
         {
             onlineGameplaySession = false;
             restoringSave = false;
-            pending.Clear();
-            pendingCodes.Clear();
+            pendingOrder.Clear();
+            pendingByCode.Clear();
             synchronizedCodes.Clear();
             if (worker != null)
             {
@@ -160,16 +161,39 @@ namespace RedeLabEscola.Auth
 
         public bool TryQueueMissionCompletion(string missionCode)
         {
-            if (!CanAcceptGameplayCompletion(missionCode)) return false;
-            if (synchronizedCodes.Contains(missionCode) || pendingCodes.Contains(missionCode)) return false;
-            if (pending.Count >= MaxQueuedMissions)
+            return TryQueueMissionState(missionCode, true);
+        }
+
+        public bool TryQueueMissionReversal(string missionCode)
+        {
+            return TryQueueMissionState(missionCode, false);
+        }
+
+        private bool TryQueueMissionState(string missionCode, bool complete)
+        {
+            if (!CanAcceptGameplayState(missionCode)) return false;
+            if (pendingByCode.TryGetValue(missionCode, out PendingMission existing))
             {
-                Debug.LogWarning("Fila de sincronizacao de progresso cheia; a missao permaneceu concluida apenas localmente.");
+                if (existing.Complete == complete) return false;
+                existing.Complete = complete;
+                existing.AttemptsInCycle = 0;
+                EnsureWorkerRunning();
+                return true;
+            }
+
+            if (synchronizedCodes.Contains(missionCode) == complete) return false;
+            if (pendingByCode.Count >= MaxQueuedMissions)
+            {
+                Debug.LogWarning("Fila de sincronizacao de progresso cheia; o estado da missao permaneceu apenas localmente.");
                 return false;
             }
 
-            pending.Enqueue(new PendingMission { Code = missionCode });
-            pendingCodes.Add(missionCode);
+            pendingByCode.Add(missionCode, new PendingMission
+            {
+                Code = missionCode,
+                Complete = complete
+            });
+            pendingOrder.Enqueue(missionCode);
             EnsureWorkerRunning();
             return true;
         }
@@ -177,7 +201,9 @@ namespace RedeLabEscola.Auth
         public bool IsKnownAsCompleted(string missionCode)
         {
             return !string.IsNullOrWhiteSpace(missionCode)
-                && (synchronizedCodes.Contains(missionCode) || pendingCodes.Contains(missionCode));
+                && (pendingByCode.TryGetValue(missionCode, out PendingMission pendingMission)
+                    ? pendingMission.Complete
+                    : synchronizedCodes.Contains(missionCode));
         }
 
         public static bool IsKnownMissionCode(string missionCode)
@@ -185,7 +211,7 @@ namespace RedeLabEscola.Auth
             return !string.IsNullOrWhiteSpace(missionCode) && ValidMissionCodes.Contains(missionCode);
         }
 
-        private bool CanAcceptGameplayCompletion(string missionCode)
+        private bool CanAcceptGameplayState(string missionCode)
         {
             if (!IsRuntimePersistencePlatform || !onlineGameplaySession || restoringSave || !IsKnownMissionCode(missionCode))
             {
@@ -205,16 +231,22 @@ namespace RedeLabEscola.Auth
 
         private void EnsureWorkerRunning()
         {
-            if (worker != null || pending.Count == 0 || !IsRuntimePersistencePlatform) return;
+            if (worker != null || pendingByCode.Count == 0 || !IsRuntimePersistencePlatform) return;
             worker = StartCoroutine(ProcessQueue());
         }
 
         private IEnumerator ProcessQueue()
         {
-            while (pending.Count > 0)
+            while (pendingOrder.Count > 0)
             {
-                PendingMission item = pending.Peek();
-                if (synchronizedCodes.Contains(item.Code))
+                string code = pendingOrder.Peek();
+                if (!pendingByCode.TryGetValue(code, out PendingMission item))
+                {
+                    pendingOrder.Dequeue();
+                    continue;
+                }
+
+                if (synchronizedCodes.Contains(item.Code) == item.Complete)
                 {
                     RemoveHead(item.Code);
                     continue;
@@ -227,23 +259,43 @@ namespace RedeLabEscola.Auth
                     continue;
                 }
 
-                RedeLabCompleteMissionResponse response = null;
+                bool requestedComplete = item.Complete;
+                bool success = false;
                 string error = null;
-                yield return auth.CompleteMission(
-                    item.Code,
-                    value => response = value,
-                    value => error = value);
-
-                if (string.IsNullOrEmpty(error) && response != null && response.success)
+                if (requestedComplete)
                 {
-                    synchronizedCodes.Add(item.Code);
-                    RemoveHead(item.Code);
+                    yield return auth.CompleteMission(
+                        item.Code,
+                        value => success = value != null && value.success,
+                        value => error = value);
+                }
+                else
+                {
+                    yield return auth.RevertMission(
+                        item.Code,
+                        value => success = value != null && value.success,
+                        value => error = value);
+                }
+
+                if (string.IsNullOrEmpty(error) && success)
+                {
+                    if (requestedComplete) synchronizedCodes.Add(item.Code);
+                    else synchronizedCodes.Remove(item.Code);
+
+                    if (item.Complete == requestedComplete) RemoveHead(item.Code);
+                    else item.AttemptsInCycle = 0;
+                    continue;
+                }
+
+                if (item.Complete != requestedComplete)
+                {
+                    item.AttemptsInCycle = 0;
                     continue;
                 }
 
                 item.AttemptsInCycle++;
                 Debug.LogWarning(
-                    $"Nao foi possivel sincronizar a missao '{item.Code}' (tentativa {item.AttemptsInCycle}/{MaxAttemptsPerCycle}). " +
+                    $"Nao foi possivel sincronizar o estado da missao '{item.Code}' (tentativa {item.AttemptsInCycle}/{MaxAttemptsPerCycle}). " +
                     "O progresso local foi mantido e a sincronizacao sera repetida.");
 
                 if (item.AttemptsInCycle >= MaxAttemptsPerCycle)
@@ -267,24 +319,25 @@ namespace RedeLabEscola.Auth
 
         private void RemoveHead(string missionCode)
         {
-            if (pending.Count > 0) pending.Dequeue();
-            pendingCodes.Remove(missionCode);
+            if (pendingOrder.Count > 0) pendingOrder.Dequeue();
+            pendingByCode.Remove(missionCode);
         }
 
         private void RemoveSynchronizedEntriesFromQueue()
         {
-            if (pending.Count == 0) return;
-            int count = pending.Count;
+            if (pendingOrder.Count == 0) return;
+            int count = pendingOrder.Count;
             for (int index = 0; index < count; index++)
             {
-                PendingMission item = pending.Dequeue();
-                if (synchronizedCodes.Contains(item.Code))
+                string code = pendingOrder.Dequeue();
+                if (!pendingByCode.TryGetValue(code, out PendingMission item)) continue;
+                if (synchronizedCodes.Contains(item.Code) == item.Complete)
                 {
-                    pendingCodes.Remove(item.Code);
+                    pendingByCode.Remove(item.Code);
                 }
                 else
                 {
-                    pending.Enqueue(item);
+                    pendingOrder.Enqueue(code);
                 }
             }
         }

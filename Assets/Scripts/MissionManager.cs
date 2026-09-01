@@ -517,10 +517,13 @@ public class MissionManager : MonoBehaviour
         task.IsComplete = complete;
         if (IsNewCompletionTransition(wasComplete, complete))
         {
-            // O estado visual pode regredir em tarefas reversiveis, mas a persistencia
-            // continua monotona e deduplicada pelo RedeLabProgressService.
             persistentlyCompletedTaskIds.Add(taskId);
             RedeLabProgressService.Instance?.TryQueueMissionCompletion(taskId);
+        }
+        else if (IsReversalTransition(wasComplete, complete))
+        {
+            persistentlyCompletedTaskIds.Remove(taskId);
+            RedeLabProgressService.Instance?.TryQueueMissionReversal(taskId);
         }
         if (currentMission == mission)
         {
@@ -533,6 +536,11 @@ public class MissionManager : MonoBehaviour
     public static bool IsNewCompletionTransition(bool previousState, bool nextState)
     {
         return !previousState && nextState;
+    }
+
+    public static bool IsReversalTransition(bool previousState, bool nextState)
+    {
+        return previousState && !nextState;
     }
     private static bool IsLocallyReversibleTask(string taskId)
     {

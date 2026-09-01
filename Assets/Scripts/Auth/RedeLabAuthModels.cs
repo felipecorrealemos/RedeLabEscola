@@ -39,6 +39,17 @@ namespace RedeLabEscola.Auth
     }
 
     [Serializable]
+    public sealed class RedeLabRevertMissionResponse
+    {
+        public bool success;
+        public bool alreadyPending;
+        public int id_usuario;
+        public int id_fase;
+        public int id_missao;
+        public string codigo_missao;
+    }
+
+    [Serializable]
     public sealed class RedeLabCompletedMission
     {
         public int id_fase;

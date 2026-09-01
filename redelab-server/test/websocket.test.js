@@ -163,6 +163,22 @@ test('canal do monitor identifica o usuário em atualizações de progresso e re
     reason: 'progresso_reset',
     id_usuario: 77,
   });
+
+  const reversao = proximaMensagem(monitor);
+  notificarMonitor('missao_revertida', 77);
+  assert.deepEqual(await reversao, {
+    type: 'monitor_update',
+    reason: 'missao_revertida',
+    id_usuario: 77,
+  });
+
+  const feedback = proximaMensagem(monitor);
+  notificarMonitor('feedback_criado', 77);
+  assert.deepEqual(await feedback, {
+    type: 'monitor_update',
+    reason: 'feedback_criado',
+    id_usuario: 77,
+  });
   await fecharSocket(monitor);
 });
 

@@ -106,6 +106,48 @@ async function concluirMissao(req, res, next) {
   }
 }
 
+async function desfazerMissao(req, res, next) {
+  const idUsuario = req.usuario.id_usuario;
+  const codigoMissao =
+    typeof req.body.codigo_missao === 'string' ? req.body.codigo_missao.trim() : '';
+
+  if (!codigoMissao) {
+    return res.status(400).json({ error: 'Informe codigo_missao válido.' });
+  }
+
+  try {
+    const [missoes] = await pool.query(
+      'SELECT id_missao, id_fase, codigo FROM missao WHERE codigo = ?',
+      [codigoMissao]
+    );
+    if (missoes.length === 0) {
+      return res.status(404).json({ error: 'Missão não encontrada.' });
+    }
+
+    const missao = missoes[0];
+    const [resultado] = await pool.execute(
+      `DELETE FROM missao_concluida
+        WHERE id_usuario = ? AND id_fase = ? AND id_missao = ?`,
+      [idUsuario, missao.id_fase, missao.id_missao]
+    );
+    const alreadyPending = resultado.affectedRows === 0;
+    if (!alreadyPending) {
+      notificarMonitor('missao_revertida', idUsuario);
+    }
+
+    return res.json({
+      success: true,
+      alreadyPending,
+      id_usuario: idUsuario,
+      id_fase: missao.id_fase,
+      id_missao: missao.id_missao,
+      codigo_missao: missao.codigo,
+    });
+  } catch (error) {
+    return next(error);
+  }
+}
+
 async function buscarMeuProgresso(req, res, next) {
   const idUsuario = req.usuario.id_usuario;
 
@@ -184,6 +226,7 @@ async function apagarProgresso(req, res, next) {
 module.exports = {
   buscarProgresso,
   concluirMissao,
+  desfazerMissao,
   apagarProgresso,
   buscarMeuProgresso,
   apagarMeuProgresso,

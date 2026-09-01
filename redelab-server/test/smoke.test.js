@@ -30,12 +30,24 @@ after(async () => {
 });
 
 test('rotas públicas continuam acessíveis com o MySQL real', async () => {
-  const [health, fases, missoes, monitor, pagina, css, javascript, bootstrap, icons] =
+  const [
+    health,
+    fases,
+    missoes,
+    monitor,
+    feedbackMonitor,
+    pagina,
+    css,
+    javascript,
+    bootstrap,
+    icons,
+  ] =
     await Promise.all([
       fetch(`${baseUrl}/api/health`),
       fetch(`${baseUrl}/api/fases`),
       fetch(`${baseUrl}/api/missoes`),
       fetch(`${baseUrl}/api/monitor/alunos`),
+      fetch(`${baseUrl}/api/monitor/feedback`),
       fetch(`${baseUrl}/monitor`),
       fetch(`${baseUrl}/monitor/css/monitor.css`),
       fetch(`${baseUrl}/monitor/js/monitor.js`),
@@ -47,6 +59,7 @@ test('rotas públicas continuam acessíveis com o MySQL real', async () => {
   assert.equal(fases.status, 200);
   assert.equal(missoes.status, 200);
   assert.equal(monitor.status, 200);
+  assert.equal(feedbackMonitor.status, 200);
   assert.equal(pagina.status, 200);
   assert.equal(css.status, 200);
   assert.equal(javascript.status, 200);
@@ -57,6 +70,8 @@ test('rotas públicas continuam acessíveis com o MySQL real', async () => {
   assert.match(monitorHtml, /id="filterAll"/);
   assert.match(monitorHtml, /id="filterOnline"/);
   assert.match(monitorHtml, /id="brandLogo"/);
+  assert.match(monitorHtml, /id="feedbackTab"/);
+  assert.match(monitorHtml, /id="feedbackTypeFilter"/);
   assert.doesNotMatch(monitorHtml, /id="offlineStudents"/);
   assert.doesNotMatch(monitorHtml, /id="completedMissions"/);
   assert.doesNotMatch(monitorHtml, /animate\.css/i);
@@ -65,6 +80,9 @@ test('rotas públicas continuam acessíveis com o MySQL real', async () => {
   assert.equal(typeof dadosMonitor.resumo.alunos_cadastrados, 'number');
   assert.equal(Array.isArray(dadosMonitor.alunos), true);
   assert.equal(monitor.headers.get('cache-control'), 'no-store');
+  const dadosFeedback = await feedbackMonitor.json();
+  assert.equal(Array.isArray(dadosFeedback.feedbacks), true);
+  assert.equal(feedbackMonitor.headers.get('cache-control'), 'no-store');
 });
 
 test('rotas protegidas sem Bearer token retornam 401 padronizado', async () => {
@@ -76,7 +94,10 @@ test('rotas protegidas sem Bearer token retornam 401 padronizado', async () => {
     ['DELETE', '/api/me/novo-jogo'],
     ['GET', '/api/progresso/me'],
     ['POST', '/api/progresso/concluir'],
+    ['DELETE', '/api/progresso/concluir'],
     ['DELETE', '/api/progresso/me'],
+    ['POST', '/api/feedback'],
+    ['GET', '/api/feedback/me'],
   ];
 
   for (const [method, path] of chamadas) {

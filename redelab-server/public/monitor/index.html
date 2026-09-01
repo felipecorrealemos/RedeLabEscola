@@ -43,7 +43,16 @@
         </div>
       </header>
 
-      <section class="summary-grid" aria-label="Resumo da turma">
+      <nav class="monitor-tabs" aria-label="Áreas do monitor">
+        <button id="studentsTab" type="button" class="btn is-active" aria-controls="studentsPanel" aria-selected="true">
+          <i class="bi bi-people-fill" aria-hidden="true"></i> Alunos
+        </button>
+        <button id="feedbackTab" type="button" class="btn" aria-controls="feedbackPanel" aria-selected="false">
+          <i class="bi bi-chat-left-text-fill" aria-hidden="true"></i> Feedback
+        </button>
+      </nav>
+
+      <section id="summaryGrid" class="summary-grid" aria-label="Resumo da turma">
         <article class="summary-card card border-0">
           <div class="summary-icon icon-students"><i class="bi bi-people-fill"></i></div>
           <div><span>Alunos cadastrados</span><strong id="totalStudents">—</strong></div>
@@ -54,7 +63,7 @@
         </article>
       </section>
 
-      <section class="students-panel card border-0" aria-labelledby="studentsTitle">
+      <section id="studentsPanel" class="students-panel card border-0" aria-labelledby="studentsTitle">
         <div class="panel-heading d-flex flex-wrap align-items-center justify-content-between gap-2">
           <div>
             <h2 id="studentsTitle" class="panel-title mb-0">Alunos</h2>
@@ -91,6 +100,52 @@
               </tr>
             </thead>
             <tbody id="studentsBody"></tbody>
+          </table>
+        </div>
+      </section>
+
+      <section id="feedbackPanel" class="students-panel feedback-panel card border-0 d-none" aria-labelledby="feedbackTitle">
+        <div class="panel-heading d-flex flex-wrap align-items-center justify-content-between gap-3">
+          <div>
+            <h2 id="feedbackTitle" class="panel-title mb-0">Feedback</h2>
+            <p id="feedbackLastUpdate" class="last-update mb-0">Histórico permanente enviado pelos jogadores</p>
+          </div>
+          <div class="feedback-filters d-flex flex-wrap align-items-end gap-2">
+            <label>
+              <span>Tipo</span>
+              <select id="feedbackTypeFilter" class="form-select form-select-sm">
+                <option value="">Todos</option>
+                <option value="sugestao">Sugestões</option>
+                <option value="bug">Bugs</option>
+                <option value="comentario">Comentários</option>
+              </select>
+            </label>
+            <label>
+              <span>Jogador</span>
+              <select id="feedbackUserFilter" class="form-select form-select-sm">
+                <option value="">Todos os jogadores</option>
+              </select>
+            </label>
+          </div>
+        </div>
+
+        <div id="feedbackState" class="interface-state" role="status" aria-live="polite">
+          <div class="spinner-border text-primary" aria-hidden="true"></div>
+          <span>Carregando feedback…</span>
+        </div>
+
+        <div id="feedbackTableContainer" class="table-responsive d-none">
+          <table class="table feedback-table align-middle mb-0">
+            <thead>
+              <tr>
+                <th scope="col">Jogador</th>
+                <th scope="col">Tipo</th>
+                <th scope="col">Comentário</th>
+                <th scope="col">Versão</th>
+                <th scope="col">Data/hora</th>
+              </tr>
+            </thead>
+            <tbody id="feedbackBody"></tbody>
           </table>
         </div>
       </section>

@@ -2,6 +2,7 @@
   'use strict';
 
   const API_URL = '/api/monitor/alunos';
+  const FEEDBACK_API_URL = '/api/monitor/feedback';
   const RECONNECT_DELAYS = [1000, 2000, 5000, 10000];
   const dateFormatter = new Intl.DateTimeFormat('pt-BR', {
     dateStyle: 'short',
@@ -15,6 +16,14 @@
   const elements = {
     filterAll: document.querySelector('#filterAll'),
     filterOnline: document.querySelector('#filterOnline'),
+    feedbackBody: document.querySelector('#feedbackBody'),
+    feedbackLastUpdate: document.querySelector('#feedbackLastUpdate'),
+    feedbackPanel: document.querySelector('#feedbackPanel'),
+    feedbackState: document.querySelector('#feedbackState'),
+    feedbackTab: document.querySelector('#feedbackTab'),
+    feedbackTableContainer: document.querySelector('#feedbackTableContainer'),
+    feedbackTypeFilter: document.querySelector('#feedbackTypeFilter'),
+    feedbackUserFilter: document.querySelector('#feedbackUserFilter'),
     fullscreenButton: document.querySelector('#fullscreenButton'),
     interfaceState: document.querySelector('#interfaceState'),
     lastUpdate: document.querySelector('#lastUpdate'),
@@ -23,6 +32,9 @@
     realtimeStatus: document.querySelector('#realtimeStatus'),
     realtimeText: document.querySelector('#realtimeText'),
     studentsBody: document.querySelector('#studentsBody'),
+    studentsPanel: document.querySelector('#studentsPanel'),
+    studentsTab: document.querySelector('#studentsTab'),
+    summaryGrid: document.querySelector('#summaryGrid'),
     tableContainer: document.querySelector('#tableContainer'),
     totalStudents: document.querySelector('#totalStudents'),
   };
@@ -32,6 +44,9 @@
   let reconnectTimer = null;
   let refreshTimer = null;
   let requestController = null;
+  let feedbackRequestController = null;
+  let feedbackRefreshTimer = null;
+  let activeView = 'students';
   let popovers = [];
   let currentData = null;
   let activeFilter = 'all';
@@ -85,11 +100,16 @@
         const message = JSON.parse(event.data);
         if (message.type === 'monitor_ready') {
           scheduleRefresh(0);
+          scheduleFeedbackRefresh(0);
         } else if (message.type === 'monitor_update') {
-          scheduleRefresh(120, {
-            realtime: true,
-            idUsuario: message.id_usuario,
-          });
+          if (message.reason === 'feedback_criado') {
+            scheduleFeedbackRefresh(120);
+          } else {
+            scheduleRefresh(120, {
+              realtime: true,
+              idUsuario: message.id_usuario,
+            });
+          }
         }
       } catch {
         // Mensagens desconhecidas não afetam a visualização atual.
@@ -122,6 +142,19 @@
     elements.interfaceState.classList.remove('d-none', 'is-error');
     elements.interfaceState.innerHTML =
       '<div class="spinner-border text-primary" aria-hidden="true"></div><span>Carregando alunos…</span>';
+  }
+
+  function showFeedbackState(message, error = false) {
+    elements.feedbackTableContainer.classList.add('d-none');
+    elements.feedbackState.classList.remove('d-none');
+    elements.feedbackState.classList.toggle('is-error', error);
+    elements.feedbackState.replaceChildren();
+    const icon = document.createElement('i');
+    icon.className = error ? 'bi bi-exclamation-triangle-fill' : 'bi bi-chat-left-text';
+    icon.setAttribute('aria-hidden', 'true');
+    const text = document.createElement('span');
+    text.textContent = message;
+    elements.feedbackState.append(icon, text);
   }
 
   function escapeHtml(value) {
@@ -360,6 +393,105 @@
     }
   }
 
+  function feedbackTypeLabel(tipo) {
+    if (tipo === 'sugestao') return 'Sugestão';
+    if (tipo === 'bug') return 'Bug';
+    return 'Comentário';
+  }
+
+  function updateFeedbackPlayers(jogadores) {
+    const selected = elements.feedbackUserFilter.value;
+    const fragment = document.createDocumentFragment();
+    const all = document.createElement('option');
+    all.value = '';
+    all.textContent = 'Todos os jogadores';
+    fragment.append(all);
+    for (const jogador of jogadores) {
+      const option = document.createElement('option');
+      option.value = String(jogador.id_usuario);
+      option.textContent = jogador.nome;
+      fragment.append(option);
+    }
+    elements.feedbackUserFilter.replaceChildren(fragment);
+    if ([...elements.feedbackUserFilter.options].some((option) => option.value === selected)) {
+      elements.feedbackUserFilter.value = selected;
+    }
+  }
+
+  function renderFeedback(data) {
+    updateFeedbackPlayers(data.jogadores);
+    elements.feedbackBody.replaceChildren();
+    const updatedAt = new Date(data.atualizado_em);
+    elements.feedbackLastUpdate.textContent = Number.isNaN(updatedAt.getTime())
+      ? 'Histórico atualizado'
+      : `Atualizado às ${timeFormatter.format(updatedAt)}`;
+
+    if (data.feedbacks.length === 0) {
+      showFeedbackState('Nenhum feedback encontrado para os filtros selecionados.');
+      return;
+    }
+
+    const fragment = document.createDocumentFragment();
+    for (const feedback of data.feedbacks) {
+      const row = document.createElement('tr');
+      const playerCell = createCell('student-name', feedback.jogador);
+      const typeCell = createCell();
+      const type = document.createElement('span');
+      type.className = `feedback-type feedback-type-${feedback.tipo}`;
+      type.textContent = feedbackTypeLabel(feedback.tipo);
+      typeCell.append(type);
+      const commentCell = createCell('feedback-comment', feedback.comentario);
+      const versionCell = createCell('', feedback.versao_jogo || '—');
+      const sentAt = new Date(feedback.data_envio);
+      const dateCell = createCell(
+        'last-activity',
+        Number.isNaN(sentAt.getTime()) ? 'Sem registro' : dateFormatter.format(sentAt)
+      );
+      row.append(playerCell, typeCell, commentCell, versionCell, dateCell);
+      fragment.append(row);
+    }
+    elements.feedbackBody.append(fragment);
+    elements.feedbackState.classList.add('d-none');
+    elements.feedbackTableContainer.classList.remove('d-none');
+  }
+
+  async function loadFeedback() {
+    feedbackRequestController?.abort();
+    const controller = new AbortController();
+    feedbackRequestController = controller;
+    const params = new URLSearchParams();
+    if (elements.feedbackTypeFilter.value) params.set('tipo', elements.feedbackTypeFilter.value);
+    if (elements.feedbackUserFilter.value) {
+      params.set('id_usuario', elements.feedbackUserFilter.value);
+    }
+
+    try {
+      const suffix = params.size ? `?${params}` : '';
+      const response = await fetch(`${FEEDBACK_API_URL}${suffix}`, {
+        headers: { Accept: 'application/json' },
+        cache: 'no-store',
+        signal: controller.signal,
+      });
+      if (!response.ok) throw new Error(`HTTP ${response.status}`);
+      const data = await response.json();
+      if (!data || !Array.isArray(data.feedbacks) || !Array.isArray(data.jogadores)) {
+        throw new Error('Resposta inválida');
+      }
+      renderFeedback(data);
+    } catch (error) {
+      if (error.name === 'AbortError') return;
+      elements.feedbackLastUpdate.textContent = 'Não foi possível atualizar o histórico';
+      showFeedbackState('API de feedback indisponível. Tentaremos novamente.', true);
+    } finally {
+      if (feedbackRequestController === controller) feedbackRequestController = null;
+    }
+  }
+
+  function scheduleFeedbackRefresh(delay = 100) {
+    window.clearTimeout(feedbackRefreshTimer);
+    feedbackRefreshTimer = window.setTimeout(loadFeedback, delay);
+  }
+
   function scheduleRefresh(delay = 100, { realtime = false, idUsuario = null } = {}) {
     pendingRealtimeUpdate ||= realtime;
     const numericId = Number(idUsuario);
@@ -373,6 +505,19 @@
     activeFilter = event.target.value;
     renderRevision += 1;
     renderVisibleRows();
+  }
+
+  function changeView(view) {
+    activeView = view;
+    const feedbackVisible = activeView === 'feedback';
+    elements.studentsPanel.classList.toggle('d-none', feedbackVisible);
+    elements.summaryGrid.classList.toggle('d-none', feedbackVisible);
+    elements.feedbackPanel.classList.toggle('d-none', !feedbackVisible);
+    elements.studentsTab.classList.toggle('is-active', !feedbackVisible);
+    elements.feedbackTab.classList.toggle('is-active', feedbackVisible);
+    elements.studentsTab.setAttribute('aria-selected', String(!feedbackVisible));
+    elements.feedbackTab.setAttribute('aria-selected', String(feedbackVisible));
+    if (feedbackVisible) scheduleFeedbackRefresh(0);
   }
 
   function updateFullscreenButton() {
@@ -393,13 +538,19 @@
   }
 
   elements.fullscreenButton.addEventListener('click', toggleFullscreen);
+  elements.studentsTab.addEventListener('click', () => changeView('students'));
+  elements.feedbackTab.addEventListener('click', () => changeView('feedback'));
+  elements.feedbackTypeFilter.addEventListener('change', () => scheduleFeedbackRefresh(0));
+  elements.feedbackUserFilter.addEventListener('change', () => scheduleFeedbackRefresh(0));
   elements.filterAll.addEventListener('change', changeFilter);
   elements.filterOnline.addEventListener('change', changeFilter);
   document.addEventListener('fullscreenchange', updateFullscreenButton);
   window.addEventListener('beforeunload', () => {
     window.clearTimeout(reconnectTimer);
     window.clearTimeout(refreshTimer);
+    window.clearTimeout(feedbackRefreshTimer);
     requestController?.abort();
+    feedbackRequestController?.abort();
     socket?.close(1000, 'page_unload');
   });
 

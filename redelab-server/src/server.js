@@ -14,6 +14,7 @@ const progressoRoutes = require('./routes/progressoRoutes');
 const devProgressoRoutes = require('./routes/devProgressoRoutes');
 const authRoutes = require('./routes/authRoutes');
 const meRoutes = require('./routes/meRoutes');
+const feedbackRoutes = require('./routes/feedbackRoutes');
 const { tratarErroAutenticacao } = require('./middleware/auth');
 const { criarDevPresencaRoutes } = require('./routes/devPresencaRoutes');
 const { Presenca } = require('./websocket/presenca');
@@ -93,6 +94,7 @@ function criarApp({
   app.use('/api/missoes', missaoRoutes);
   app.use('/api/auth', authRoutes);
   app.use('/api/me', meRoutes);
+  app.use('/api/feedback', feedbackRoutes);
   app.use('/api/progresso', progressoRoutes);
   app.use('/api/monitor', criarMonitorRoutes(presenca));
 

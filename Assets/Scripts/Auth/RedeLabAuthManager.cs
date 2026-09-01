@@ -208,6 +208,14 @@ namespace RedeLabEscola.Auth
             return apiClient.CompleteMission(missionCode, onSuccess, onError);
         }
 
+        public IEnumerator RevertMission(
+            string missionCode,
+            Action<RedeLabRevertMissionResponse> onSuccess,
+            Action<string> onError)
+        {
+            return apiClient.RevertMission(missionCode, onSuccess, onError);
+        }
+
         public IEnumerator DeleteProgress(Action onSuccess, Action<string> onError)
         {
             return RunOperation(apiClient.DeleteProgress, onSuccess, onError, false);

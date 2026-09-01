@@ -72,6 +72,23 @@ namespace RedeLabEscola.Auth
                 onError);
         }
 
+        public IEnumerator RevertMission(
+            string missionCode,
+            Action<RedeLabRevertMissionResponse> onSuccess,
+            Action<string> onError)
+        {
+            RedeLabCompleteMissionRequest body = new RedeLabCompleteMissionRequest
+            {
+                codigo_missao = missionCode
+            };
+            return SendJsonRequest(
+                "DELETE",
+                "/api/progresso/concluir",
+                JsonUtility.ToJson(body),
+                onSuccess,
+                onError);
+        }
+
         public IEnumerator DeleteProgress(Action<RedeLabOperationResponse> onSuccess, Action<string> onError)
         {
             return SendJsonRequest("DELETE", "/api/progresso/me", null, onSuccess, onError);

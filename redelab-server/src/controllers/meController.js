@@ -50,6 +50,8 @@ async function reiniciarMeuJogo(req, res, next) {
   const connection = await pool.getConnection();
   try {
     await connection.beginTransaction();
+    // O reset é deliberadamente restrito ao progresso e à escolha de personagem.
+    // feedback_usuario é histórico append-only e não participa desta transação.
     const [resultado] = await connection.execute(
       'DELETE FROM missao_concluida WHERE id_usuario = ?',
       [req.usuario.id_usuario]

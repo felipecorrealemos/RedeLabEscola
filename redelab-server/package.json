@@ -7,6 +7,7 @@
   "scripts": {
     "start": "node src/server.js",
     "dev": "nodemon src/server.js",
+    "migrate": "node scripts/migrate.js",
     "test": "node --test test/*.test.js",
     "auth-test": "node scripts/auth-test-server.js",
     "unity-webgl-auth": "node scripts/unity-webgl-auth-server.js"

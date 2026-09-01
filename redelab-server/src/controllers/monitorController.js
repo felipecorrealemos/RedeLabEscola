@@ -123,7 +123,70 @@ function criarMonitorController(presenca) {
     }
   }
 
-  return { listarAlunos };
+  async function listarFeedbacks(req, res, next) {
+    const tipo = typeof req.query.tipo === 'string' ? req.query.tipo.trim().toLowerCase() : '';
+    const tiposPermitidos = new Set(['sugestao', 'bug', 'comentario']);
+    if (tipo && !tiposPermitidos.has(tipo)) {
+      return res.status(400).json({ error: 'Tipo de feedback inválido.' });
+    }
+
+    const idUsuarioInformado = req.query.id_usuario;
+    const idUsuario = idUsuarioInformado === undefined ? null : Number(idUsuarioInformado);
+    if (idUsuario !== null && (!Number.isInteger(idUsuario) || idUsuario <= 0)) {
+      return res.status(400).json({ error: 'ID de usuário inválido.' });
+    }
+
+    const filtros = [];
+    const parametros = [];
+    if (tipo) {
+      filtros.push('fu.tipo = ?');
+      parametros.push(tipo);
+    }
+    if (idUsuario !== null) {
+      filtros.push('fu.id_usuario = ?');
+      parametros.push(idUsuario);
+    }
+    const where = filtros.length ? `WHERE ${filtros.join(' AND ')}` : '';
+
+    try {
+      const [[feedbacks], [jogadores]] = await Promise.all([
+        pool.query(
+          `SELECT fu.id_feedback, fu.id_usuario, u.nome AS jogador, fu.tipo,
+                  fu.comentario, fu.versao_jogo, fu.data_envio
+             FROM feedback_usuario fu
+             JOIN usuario u ON u.id_usuario = fu.id_usuario
+             ${where}
+            ORDER BY fu.data_envio DESC, fu.id_feedback DESC`,
+          parametros
+        ),
+        pool.query(
+          `SELECT DISTINCT u.id_usuario, u.nome
+             FROM feedback_usuario fu
+             JOIN usuario u ON u.id_usuario = fu.id_usuario
+            ORDER BY u.nome ASC, u.id_usuario ASC`
+        ),
+      ]);
+
+      res.set('Cache-Control', 'no-store');
+      return res.json({
+        atualizado_em: new Date().toISOString(),
+        filtros: { tipo: tipo || null, id_usuario: idUsuario },
+        jogadores: jogadores.map((item) => ({
+          id_usuario: Number(item.id_usuario),
+          nome: item.nome,
+        })),
+        feedbacks: feedbacks.map((item) => ({
+          ...item,
+          id_feedback: Number(item.id_feedback),
+          id_usuario: Number(item.id_usuario),
+        })),
+      });
+    } catch (error) {
+      return next(error);
+    }
+  }
+
+  return { listarAlunos, listarFeedbacks };
 }
 
 module.exports = { criarMonitorController };
