@@ -50,6 +50,9 @@ public class RoboticArmNetworkAdapter : MonoBehaviour
     [Header("Status Light")]
     [SerializeField] private Renderer statusLightRenderer;
     [SerializeField] private Light statusLight;
+    [SerializeField] private Material disconnectedMaterial;
+    [SerializeField] private Material connectedMaterial;
+    [SerializeField] private Material authorizedMaterial;
     [SerializeField] private float blinkFrequency = 3f;
     [SerializeField] private Color disconnectedColor = new Color(1f, 0.08f, 0.04f, 1f);
     [SerializeField] private Color connectedColor = new Color(1f, 0.78f, 0.05f, 1f);
@@ -228,6 +231,7 @@ public class RoboticArmNetworkAdapter : MonoBehaviour
         }
 
         bool wasRunning = operationalAuthorization || currentNetworkState == NetworkState.Operating;
+        restoredPersistentOperation = false;
         InvalidateOperationalAuthorization();
         if (controller != null && controller.IsBusy)
         {
@@ -492,6 +496,7 @@ public class RoboticArmNetworkAdapter : MonoBehaviour
             && !hasNetworkConflict;
         OperationalState nextOperationalState = CurrentOperationalState;
         cachedOperationalState = nextOperationalState;
+        UpdateStatusLight();
 
         if (!changed && previousOperationalState == nextOperationalState)
         {
@@ -582,6 +587,9 @@ public class RoboticArmNetworkAdapter : MonoBehaviour
         Color stateColor = currentNetworkState == NetworkState.Operating ? authorizedColor
             : currentNetworkState == NetworkState.ConnectedWithoutAuthorization || currentNetworkState == NetworkState.Connecting ? connectedColor
             : disconnectedColor;
+        Material stateMaterial = currentNetworkState == NetworkState.Operating ? authorizedMaterial
+            : currentNetworkState == NetworkState.ConnectedWithoutAuthorization || currentNetworkState == NetworkState.Connecting ? connectedMaterial
+            : disconnectedMaterial;
 
         bool shouldBlink = currentNetworkState != NetworkState.Operating;
         bool visible = !shouldBlink || blinkFrequency <= 0f || Mathf.Repeat(Time.time * blinkFrequency, 1f) < 0.5f;
@@ -589,10 +597,25 @@ public class RoboticArmNetworkAdapter : MonoBehaviour
 
         if (statusLightRenderer != null)
         {
-            statusLightRenderer.GetPropertyBlock(propertyBlock);
-            propertyBlock.SetColor("_Color", appliedColor);
-            propertyBlock.SetColor("_EmissionColor", appliedColor);
-            statusLightRenderer.SetPropertyBlock(propertyBlock);
+            statusLightRenderer.enabled = visible;
+            if (stateMaterial != null)
+            {
+                if (statusLightRenderer.sharedMaterial != stateMaterial)
+                {
+                    statusLightRenderer.sharedMaterial = stateMaterial;
+                }
+
+                propertyBlock.Clear();
+                statusLightRenderer.SetPropertyBlock(propertyBlock);
+            }
+            else
+            {
+                statusLightRenderer.GetPropertyBlock(propertyBlock);
+                propertyBlock.SetColor("_BaseColor", appliedColor);
+                propertyBlock.SetColor("_Color", appliedColor);
+                propertyBlock.SetColor("_EmissionColor", appliedColor);
+                statusLightRenderer.SetPropertyBlock(propertyBlock);
+            }
         }
 
         if (statusLight != null)

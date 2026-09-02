@@ -78,8 +78,10 @@ public class RoboticArmController : MonoBehaviour
     [SerializeField, Min(0f)] private float delayBeforeReturn = 0.1f;
 
     [Header("Movement")]
-    [SerializeField, Tooltip("Signed local Y rotation applied from the home base rotation when moving to the drop side. Use negative values to rotate the opposite direction.")]
+    [SerializeField, Tooltip("Signed local rotation applied from the home base rotation when moving to the drop side. Use negative values to rotate the opposite direction.")]
     private float rotationToDropAngle = 180f;
+    [SerializeField, Tooltip("Local axis used to rotate the base toward the drop side.")]
+    private Vector3 baseRotationAxis = Vector3.forward;
     [SerializeField, Min(0.01f)] private float angularTolerance = 1f;
     [SerializeField, Min(0.001f)] private float positionTolerance = 0.03f;
     [SerializeField] private bool invertDropRotation;
@@ -579,13 +581,13 @@ public class RoboticArmController : MonoBehaviour
         while (Mathf.Abs(signedAngle - currentBaseDropOffset) > angularTolerance && elapsed < maxBaseRotationTime)
         {
             currentBaseDropOffset = Mathf.MoveTowards(currentBaseDropOffset, signedAngle, baseRotationSpeed * Time.deltaTime);
-            pivotBaseRotation.localRotation = startRotation * Quaternion.Euler(0f, currentBaseDropOffset, 0f);
+            pivotBaseRotation.localRotation = startRotation * BaseOffsetRotation(currentBaseDropOffset);
             elapsed += Time.deltaTime;
             yield return null;
         }
 
         currentBaseDropOffset = signedAngle;
-        pivotBaseRotation.localRotation = startRotation * Quaternion.Euler(0f, signedAngle, 0f);
+        pivotBaseRotation.localRotation = startRotation * BaseOffsetRotation(signedAngle);
     }
 
     private IEnumerator ReturnBaseHome()
@@ -598,12 +600,18 @@ public class RoboticArmController : MonoBehaviour
         while (Mathf.Abs(currentBaseDropOffset) > angularTolerance)
         {
             currentBaseDropOffset = Mathf.MoveTowards(currentBaseDropOffset, 0f, baseRotationSpeed * Time.deltaTime);
-            pivotBaseRotation.localRotation = homeBaseRotation * Quaternion.Euler(0f, currentBaseDropOffset, 0f);
+            pivotBaseRotation.localRotation = homeBaseRotation * BaseOffsetRotation(currentBaseDropOffset);
             yield return null;
         }
 
         currentBaseDropOffset = 0f;
         pivotBaseRotation.localRotation = homeBaseRotation;
+    }
+
+    private Quaternion BaseOffsetRotation(float angle)
+    {
+        Vector3 axis = baseRotationAxis.sqrMagnitude > 0.0001f ? baseRotationAxis.normalized : Vector3.forward;
+        return Quaternion.AngleAxis(angle, axis);
     }
 
     private void RotateLocal(Transform target, Vector3 eulerAngles, float maxDegreesDelta)

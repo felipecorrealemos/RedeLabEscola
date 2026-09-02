@@ -11,10 +11,6 @@ public class ProfessorDocumentReceiver : MonoBehaviour
     [SerializeField] private Transform documentAnchor;
     [SerializeField] private bool preferHandBoneAnchor = true;
     [SerializeField] private HumanBodyBones documentHandBone = HumanBodyBones.RightHand;
-    [SerializeField] private Vector3 handAnchorLocalPosition = new Vector3(-0.00115f, 0.00169f, 0.00182f);
-    [SerializeField] private Vector3 handAnchorLocalEulerAngles = new Vector3(-36.817f, 88.701f, -18.423f);
-    [SerializeField] private Vector3 generatedAnchorLocalPosition = new Vector3(0.42f, 1.18f, 0.34f);
-    [SerializeField] private Vector3 generatedAnchorLocalEulerAngles = new Vector3(72f, 0f, 12f);
     [SerializeField] private Vector3 triggerSize = new Vector3(2f, 2f, 2f);
     [SerializeField] private Vector3 triggerCenter = new Vector3(0f, 1f, 0f);
     [SerializeField] private Animator animator;
@@ -33,12 +29,14 @@ public class ProfessorDocumentReceiver : MonoBehaviour
     [SerializeField] private GameObject promptObject;
     [SerializeField] private Text promptLabel;
     private InteractionPromptPresenter promptPresenter;
+    private ProfessorSpeechBubbleUI speechBubbleUi;
 
     private BoxCollider triggerCollider;
     private bool hasCarryingParameter;
     private bool isHoldingDocument;
     private Coroutine handIkBlendRoutine;
     private float currentHandIkWeight;
+    private bool hasShownReceivedSpeech;
 
     public Transform DocumentAnchor
     {
@@ -56,6 +54,7 @@ public class ProfessorDocumentReceiver : MonoBehaviour
         EnsureAnimator();
         EnsurePrompt();
         SetPromptVisible(false);
+        speechBubbleUi = FindObjectOfType<ProfessorSpeechBubbleUI>(true);
     }
 
     private void OnValidate()
@@ -70,9 +69,22 @@ public class ProfessorDocumentReceiver : MonoBehaviour
             return;
         }
 
-        document.DeliverTo(DocumentAnchor);
+        Transform receiverAnchor = DocumentAnchor;
+        if (receiverAnchor == null)
+        {
+            Debug.LogError("DocumentHoldPoint não está configurado no Professor.", this);
+            return;
+        }
+
+        document.DeliverTo(receiverAnchor);
+        if (!document.IsDelivered)
+        {
+            return;
+        }
+
         isHoldingDocument = true;
         PlayReceiveDocumentAnimation();
+        ShowReceivedDocumentSpeechOnce();
     }
 
     public void SetPromptVisible(bool visible)
@@ -115,8 +127,7 @@ public class ProfessorDocumentReceiver : MonoBehaviour
 
         if (documentAnchor == null)
         {
-            GameObject anchorObject = new GameObject("DocumentAnchor");
-            documentAnchor = anchorObject.transform;
+            return;
         }
 
         if (anchorParent != null && documentAnchor.parent != anchorParent)
@@ -124,7 +135,6 @@ public class ProfessorDocumentReceiver : MonoBehaviour
             documentAnchor.SetParent(anchorParent, false);
         }
 
-        ApplyDocumentAnchorDefaults(anchorParent);
     }
 
     private Transform FindExistingDocumentAnchor()
@@ -132,7 +142,8 @@ public class ProfessorDocumentReceiver : MonoBehaviour
         Transform[] children = GetComponentsInChildren<Transform>(true);
         for (int i = 0; i < children.Length; i++)
         {
-            if (children[i] != null && children[i].name == "DocumentAnchor")
+            if (children[i] != null
+                && (children[i].name == "DocumentHoldPoint" || children[i].name == "DocumentAnchor"))
             {
                 return children[i];
             }
@@ -161,19 +172,6 @@ public class ProfessorDocumentReceiver : MonoBehaviour
 
         hand = animator.GetBoneTransform(documentHandBone);
         return hand != null;
-    }
-
-    private void ApplyDocumentAnchorDefaults(Transform anchorParent)
-    {
-        if (documentAnchor == null)
-        {
-            return;
-        }
-
-        bool anchoredToHand = anchorParent != null && anchorParent != transform;
-        documentAnchor.localPosition = anchoredToHand ? handAnchorLocalPosition : generatedAnchorLocalPosition;
-        documentAnchor.localRotation = Quaternion.Euler(anchoredToHand ? handAnchorLocalEulerAngles : generatedAnchorLocalEulerAngles);
-        documentAnchor.localScale = Vector3.one;
     }
 
     private void EnsureAnimator()
@@ -279,6 +277,28 @@ public class ProfessorDocumentReceiver : MonoBehaviour
 
         currentHandIkWeight = handIkWeight;
         handIkBlendRoutine = null;
+    }
+
+    private void ShowReceivedDocumentSpeechOnce()
+    {
+        if (hasShownReceivedSpeech)
+        {
+            return;
+        }
+
+        if (speechBubbleUi == null)
+        {
+            speechBubbleUi = FindObjectOfType<ProfessorSpeechBubbleUI>(true);
+        }
+
+        if (speechBubbleUi == null)
+        {
+            Debug.LogWarning("ProfessorSpeechBubbleUI não foi encontrado na cena.", this);
+            return;
+        }
+
+        hasShownReceivedSpeech = true;
+        speechBubbleUi.ShowOnce();
     }
 
     private void EnsurePrompt()
