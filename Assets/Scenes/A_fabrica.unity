@@ -3881,7 +3881,7 @@ MonoBehaviour:
   m_EditorClassIdentifier: 
   stageLabel: "Est\xE1gio 2"
   stageName: "A f\xE1brica"
-  nextSceneName: O_provedor
+  nextSceneName: 
   announcementGroup: {fileID: 1906983613}
   stageLabelText: {fileID: 306621184}
   stageNameText: {fileID: 442347312}
@@ -31531,7 +31531,7 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: 
   m_Material: {fileID: 0}
-  m_Color: {r: 0.1937037, g: 1, b: 0.5303174, a: 1}
+  m_Color: {r: 0.100588135, g: 1, b: 0.4505041, a: 1}
   m_RaycastTarget: 0
   m_RaycastPadding: {x: 0, y: 0, z: 0, w: 0}
   m_Maskable: 1
@@ -34948,7 +34948,7 @@ MonoBehaviour:
   m_fontColor32:
     serializedVersion: 2
     rgba: 4294967295
-  m_fontColor: {r: 0.43940753, g: 1, b: 0.6752264, a: 1}
+  m_fontColor: {r: 0.18213592, g: 1, b: 0.53229773, a: 1}
   m_enableVertexGradient: 0
   m_colorMode: 3
   m_fontColorGradient:
@@ -42401,7 +42401,7 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: 
   m_Material: {fileID: 0}
-  m_Color: {r: 0.28109747, g: 1, b: 0.6052264, a: 0.8}
+  m_Color: {r: 0.11434737, g: 1, b: 0.46229774, a: 0.8}
   m_RaycastTarget: 0
   m_RaycastPadding: {x: 0, y: 0, z: 0, w: 0}
   m_Maskable: 1
@@ -55002,7 +55002,7 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: 
   m_Material: {fileID: 0}
-  m_Color: {r: 0.28109747, g: 1, b: 0.6052264, a: 0.32487798}
+  m_Color: {r: 0.11434737, g: 1, b: 0.46229774, a: 0.1914779}
   m_RaycastTarget: 0
   m_RaycastPadding: {x: 0, y: 0, z: 0, w: 0}
   m_Maskable: 1
@@ -72917,7 +72917,7 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: 
   m_Material: {fileID: 0}
-  m_Color: {r: 0.28109747, g: 1, b: 0.6052264, a: 0.504878}
+  m_Color: {r: 0.11434737, g: 1, b: 0.46229774, a: 0.3714779}
   m_RaycastTarget: 0
   m_RaycastPadding: {x: 0, y: 0, z: 0, w: 0}
   m_Maskable: 1

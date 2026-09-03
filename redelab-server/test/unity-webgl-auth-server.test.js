@@ -1,5 +1,7 @@
 const assert = require('node:assert/strict');
 const { once } = require('node:events');
+const fs = require('node:fs');
+const os = require('node:os');
 const path = require('node:path');
 const test = require('node:test');
 const {
@@ -51,6 +53,39 @@ test('servidor Unity entrega pagina, SDK Auth0 local e headers WebGL', async () 
     assert.equal(wasm.headers.get('content-encoding'), 'gzip');
     assert.match(wasm.headers.get('content-type'), /application\/wasm/);
   });
+});
+
+test('página de certificado orienta instalação e entrega somente o certificado público', async (t) => {
+  const temporaryBuild = fs.mkdtempSync(path.join(os.tmpdir(), 'redelab-webgl-cert-'));
+  t.after(() => fs.rmSync(temporaryBuild, { recursive: true, force: true }));
+  fs.mkdirSync(path.join(temporaryBuild, 'downloads'));
+  fs.writeFileSync(
+    path.join(temporaryBuild, 'downloads', 'redelab.crt'),
+    'CERTIFICADO PUBLICO DE TESTE'
+  );
+
+  const config = { ...webGlConfig, buildDirectory: temporaryBuild };
+  const server = createUnityWebGLApp(config).listen(0, '127.0.0.1');
+  await once(server, 'listening');
+  try {
+    const { port } = server.address();
+    const baseUrl = `http://127.0.0.1:${port}`;
+    const page = await fetch(`${baseUrl}/certificado`);
+    assert.equal(page.status, 200);
+    const html = await page.text();
+    assert.match(html, /<title>Certificado de segurança RedeLab<\/title>/);
+    assert.match(html, /Baixar certificado RedeLab/);
+    assert.match(html, /Autoridades de Certificação Raiz Confiáveis/);
+    assert.match(html, /href="\/downloads\/redelab\.crt"/);
+
+    const download = await fetch(`${baseUrl}/downloads/redelab.crt`);
+    assert.equal(download.status, 200);
+    assert.match(download.headers.get('content-disposition'), /attachment; filename="redelab\.crt"/);
+    assert.match(download.headers.get('content-type'), /application\/x-x509-ca-cert/);
+    assert.equal(await download.text(), 'CERTIFICADO PUBLICO DE TESTE');
+  } finally {
+    await new Promise((resolve) => server.close(resolve));
+  }
 });
 
 test('configuração WebGL usa ambiente para HTTPS, host, portas e CSP', () => {

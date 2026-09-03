@@ -8,6 +8,7 @@
 - [ ] Levar `redelab-server/`, incluindo `package.json`, `package-lock.json`, `src/`, `public/` e `database/`.
 - [ ] Levar a pasta `Build_WebGL/` completa, preferencialmente em um ZIP no pendrive para preservar todos os arquivos.
 - [ ] Levar `redelab-server/.env.example`, mas nunca o `.env` real.
+- [ ] Levar somente o certificado público `redelab.crt` por um meio seguro; nunca copiar ou distribuir `redelab.key`.
 - [ ] Não levar `Library/`, `Temp/`, `Logs/`, `obj/`, `UserSettings/` nem `node_modules/`.
 
 ## Requisitos no Ubuntu
@@ -40,7 +41,31 @@ npm start
 npm run unity-webgl-auth
 ```
 
-No servidor, preencha `HTTPS_*`, `UNITY_WEBGL_HTTPS_*`, `UNITY_WEBGL_BUILD_DIR`, `API_PUBLIC_URL`, `WS_PUBLIC_URL` e `CORS_ORIGIN` com os caminhos e origens reais antes de iniciar os processos.
+No servidor, preencha `HTTPS_*`, `UNITY_WEBGL_HTTPS_*`, `UNITY_WEBGL_BUILD_DIR`, `API_PUBLIC_URL`, `WS_PUBLIC_URL` e `CORS_ORIGIN` com os caminhos e origens reais antes de iniciar os processos. Na escola, use `CORS_ORIGIN=https://redelab.escola:8081,https://redelab.escola:3001` para autorizar tanto o jogo quanto o monitor.
+
+### Certificado público para os navegadores
+
+O certificado autoassinado da escola deve ter CN/SAN `redelab.escola` e SAN IP `192.168.1.59`. Mantenha os originais em `/etc/redelab/ssl/redelab.crt` e `/etc/redelab/ssl/redelab.key`; nunca versione nenhum deles e nunca copie a chave privada para o WebGL.
+
+Depois da primeira instalação e novamente após cada deploy que substituir `WEBGL_DIR`, publique somente o certificado público:
+
+```bash
+sudo install -d -m 0755 /var/www/redelab-webgl/downloads
+sudo install -m 0644 /etc/redelab/ssl/redelab.crt /var/www/redelab-webgl/downloads/redelab.crt
+```
+
+Confirme `https://redelab.escola:8081/certificado` e o download em `/downloads/redelab.crt`. Até o `.crt` ser instalado em **Usuário Atual > Autoridades de Certificação Raiz Confiáveis**, o navegador poderá indicar “Não seguro”. O certificado público pode ser distribuído; `/etc/redelab/ssl/redelab.key` nunca pode ser distribuído ou exposto.
+
+### DNS da escola — pendente
+
+Foi configurado manualmente `/etc/systemd/resolved.conf.d/redelab-dns.conf` com `DNSStubListenerExtra=192.168.1.59`, e `nslookup redelab.escola 192.168.1.59` resolveu o nome para `192.168.1.59`. A resolução de domínios externos ainda está **pendente de validação no ambiente da escola**:
+
+```bash
+resolvectl query google.com
+dig @192.168.1.59 google.com
+```
+
+Somente após esses testes será decidido entre manter `systemd-resolved` ou configurar `dnsmasq`. Não alterar DHCP ou DNS pelo projeto.
 
 ## Atualizações depois da primeira instalação
 

@@ -86,7 +86,7 @@ WS_PUBLIC_URL=ws://localhost:3000
 - `AUTH0_DOMAIN`: domínio do tenant, sem caminhos. A API monta o issuer HTTPS e valida o claim `iss`.
 - `AUTH0_AUDIENCE`: Identifier da API cadastrada no Auth0; deve coincidir com o claim `aud`.
 - `ENABLE_DEV_ROUTES`: habilita rotas antigas que aceitam `id_usuario`. Use `true` somente no computador de desenvolvimento e `false` em qualquer servidor publicado.
-- `CORS_ORIGIN`: aceita `*` ou uma lista separada por vírgulas. Restrinja à origem do WebGL quando ela existir.
+- `CORS_ORIGIN`: aceita `*` ou uma lista separada por vírgulas. Em produção na escola, autorize o jogo e o monitor com `https://redelab.escola:8081,https://redelab.escola:3001`; o monitor tem origem própria na porta 3001.
 - `HTTPS_ENABLED`: quando `true`, a API lê `HTTPS_KEY_PATH` e `HTTPS_CERT_PATH` e publica REST e WebSocket no mesmo servidor TLS. Arquivo ausente encerra a inicialização; não há fallback para HTTP.
 - `UNITY_WEBGL_*`: configura porta, interface, TLS e caminho da build servida por `npm run unity-webgl-auth`.
 - `API_PUBLIC_URL` e `WS_PUBLIC_URL`: origens inseridas na CSP da página WebGL. Use respectivamente `https://...` e `wss://...` quando o servidor WebGL estiver em HTTPS.
@@ -112,12 +112,27 @@ UNITY_WEBGL_HTTPS_KEY_PATH=/etc/redelab/ssl/redelab.key
 UNITY_WEBGL_HTTPS_CERT_PATH=/etc/redelab/ssl/redelab.crt
 UNITY_WEBGL_BUILD_DIR=/var/www/redelab-webgl
 
-API_PUBLIC_URL=https://HOST:3001
-WS_PUBLIC_URL=wss://HOST:3001
-CORS_ORIGIN=https://HOST:8081
+API_PUBLIC_URL=https://redelab.escola:3001
+WS_PUBLIC_URL=wss://redelab.escola:3001
+CORS_ORIGIN=https://redelab.escola:8081,https://redelab.escola:3001
 ```
 
 `UNITY_WEBGL_BUILD_DIR` é opcional no layout normal do repositório. Quando backend e build forem copiados para diretórios independentes no servidor, defina-o com o caminho absoluto que contém `index.html`.
+
+### Certificado HTTPS da escola
+
+A produção usa um certificado autoassinado com CN/SAN `redelab.escola` e SAN IP `192.168.1.59`. Os arquivos privados da instalação ficam somente no servidor:
+
+- certificado público: `/etc/redelab/ssl/redelab.crt`;
+- chave privada: `/etc/redelab/ssl/redelab.key`.
+
+O navegador pode mostrar “Não seguro” até que o certificado público seja instalado em **Usuário Atual > Autoridades de Certificação Raiz Confiáveis**. O servidor WebGL publica `GET /certificado`, com instruções para Windows, e entrega `GET /downloads/redelab.crt` a partir de `UNITY_WEBGL_BUILD_DIR/downloads/redelab.crt`.
+
+Somente o certificado público pode ser copiado para a pasta WebGL. Nunca copie, distribua ou versione `redelab.key`, nem exponha `/etc/redelab/ssl` como diretório estático. Como a atualização da Build WebGL substitui o diretório publicado, repita a cópia segura do `.crt` depois de cada atualização da build conforme o `DEPLOY_CHECKLIST.md`.
+
+### DNS do laboratório
+
+O servidor Ubuntu foi configurado manualmente para responder por `redelab.escola` em `192.168.1.59:53`, usando `/etc/systemd/resolved.conf.d/redelab-dns.conf`. A consulta local do nome RedeLab foi validada, mas a resolução de domínios externos pelo servidor ainda está **pendente de validação no ambiente da escola** com `resolvectl query google.com` e `dig @192.168.1.59 google.com`. Somente depois será decidido se a infraestrutura continuará com `systemd-resolved` ou usará `dnsmasq`; o projeto não altera DHCP ou DNS.
 
 ## Execução e testes
 
@@ -353,7 +368,7 @@ Consulte a documentação oficial sobre [`express-oauth2-jwt-bearer`](https://gi
 
 1. Instalar uma versão suportada do Node.js e executar `npm ci --omit=dev` dentro de `redelab-server`. O `ws` será instalado pelo `package-lock.json`.
 2. Copiar o código sem `node_modules` e sem o `.env` local.
-3. Criar o `.env` do servidor com credenciais próprias do MySQL, configurações HTTPS, `AUTH0_DOMAIN`, `AUTH0_AUDIENCE`, `ENABLE_DEV_ROUTES=false`, `CORS_ORIGIN` restrito e o caminho real de `UNITY_WEBGL_BUILD_DIR`.
+3. Criar o `.env` do servidor com credenciais próprias do MySQL, configurações HTTPS, `AUTH0_DOMAIN`, `AUTH0_AUDIENCE`, `ENABLE_DEV_ROUTES=false`, `CORS_ORIGIN=https://redelab.escola:8081,https://redelab.escola:3001` e o caminho real de `UNITY_WEBGL_BUILD_DIR`.
 4. Garantir acesso HTTPS à API e à WebGL e manter o MySQL protegido da internet pública. Uma página WebGL em HTTPS deve usar `wss://`; navegadores bloqueiam `ws://` como conteúdo misto.
 5. Executar `npm run migrate`, iniciar a API com um gerenciador de processos/serviço e conferir `/api/health`.
 6. Reproduzir no Auth0 as URLs reais de callback, logout e origem do WebGL.

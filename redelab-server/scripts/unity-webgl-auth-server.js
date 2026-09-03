@@ -11,6 +11,14 @@ const DEFAULT_UNITY_WEBGL_PORT = 8081;
 const DEFAULT_UNITY_WEBGL_HOST = '127.0.0.1';
 const DEFAULT_API_PUBLIC_URL = 'http://localhost:3000';
 const DEFAULT_WS_PUBLIC_URL = 'ws://localhost:3000';
+const CERTIFICATE_PAGE_FILE = path.join(
+  __dirname,
+  '..',
+  'public',
+  'certificado',
+  'index.html'
+);
+const PUBLIC_CERTIFICATE_RELATIVE_PATH = path.join('downloads', 'redelab.crt');
 const AUTH0_SDK_FILE = path.join(
   __dirname,
   '..',
@@ -138,6 +146,16 @@ function createUnityWebGLApp({
   app.get('/healthz', (req, res) => {
     res.json({ status: 'ok', tool: 'redelab-unity-webgl-auth' });
   });
+  app.get('/certificado', (req, res) => {
+    res.sendFile(CERTIFICATE_PAGE_FILE);
+  });
+  app.get('/downloads/redelab.crt', (req, res) => {
+    res.set({
+      'Content-Disposition': 'attachment; filename="redelab.crt"',
+      'Content-Type': 'application/x-x509-ca-cert',
+    });
+    res.sendFile(path.join(buildDirectory, PUBLIC_CERTIFICATE_RELATIVE_PATH));
+  });
   app.use(
     express.static(buildDirectory, {
       index: 'index.html',
@@ -213,10 +231,12 @@ if (require.main === module) {
 
 module.exports = {
   AUTH0_SDK_FILE,
+  CERTIFICATE_PAGE_FILE,
   DEFAULT_API_PUBLIC_URL,
   DEFAULT_UNITY_WEBGL_HOST,
   DEFAULT_UNITY_WEBGL_PORT,
   DEFAULT_WS_PUBLIC_URL,
+  PUBLIC_CERTIFICATE_RELATIVE_PATH,
   createUnityWebGLApp,
   createUnityWebGLConfig,
   createUnityWebGLServer,

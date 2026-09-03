@@ -1,0 +1,78 @@
+<!doctype html>
+<html lang="pt-BR">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Certificado de segurança RedeLab</title>
+    <style>
+      :root {
+        color-scheme: light;
+        font-family: Inter, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+        background: #f3f7fb;
+        color: #19324d;
+      }
+      * { box-sizing: border-box; }
+      body {
+        margin: 0;
+        min-height: 100vh;
+        display: grid;
+        place-items: center;
+        padding: 32px 18px;
+      }
+      main {
+        width: min(720px, 100%);
+        padding: clamp(28px, 5vw, 48px);
+        border: 1px solid #d9e5ef;
+        border-radius: 18px;
+        background: #fff;
+        box-shadow: 0 18px 48px rgb(25 50 77 / 10%);
+      }
+      h1 { margin: 0 0 18px; color: #124f77; font-size: clamp(1.8rem, 4vw, 2.5rem); }
+      h2 { margin-top: 32px; color: #124f77; font-size: 1.25rem; }
+      p, li { line-height: 1.65; }
+      .button {
+        display: inline-block;
+        margin: 10px 0 4px;
+        padding: 13px 20px;
+        border-radius: 10px;
+        background: #0878b8;
+        color: #fff;
+        font-weight: 700;
+        text-decoration: none;
+      }
+      .button:hover, .button:focus-visible { background: #075f91; }
+      .notice {
+        padding: 14px 16px;
+        border-left: 4px solid #e3a008;
+        border-radius: 6px;
+        background: #fff8df;
+      }
+    </style>
+  </head>
+  <body>
+    <main>
+      <h1>Certificado de segurança RedeLab</h1>
+      <p class="notice">
+        Se o navegador mostrar <strong>“Não seguro”</strong>, instale o certificado
+        público RedeLab como confiável antes de acessar o jogo e o monitor.
+      </p>
+      <p>
+        <a class="button" href="/downloads/redelab.crt" download>
+          Baixar certificado RedeLab
+        </a>
+      </p>
+
+      <h2>Como instalar no Windows</h2>
+      <ol>
+        <li>Baixe o arquivo <strong>redelab.crt</strong>.</li>
+        <li>Abra o certificado.</li>
+        <li>Clique em <strong>Instalar Certificado</strong>.</li>
+        <li>Escolha <strong>Usuário Atual</strong>.</li>
+        <li>Escolha <strong>Colocar todos os certificados no repositório a seguir</strong>.</li>
+        <li>Selecione <strong>Autoridades de Certificação Raiz Confiáveis</strong>.</li>
+        <li>Conclua a instalação.</li>
+        <li>Feche completamente o navegador e abra-o novamente.</li>
+      </ol>
+    </main>
+  </body>
+</html>
